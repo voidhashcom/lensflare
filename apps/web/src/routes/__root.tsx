@@ -32,7 +32,7 @@ function RootLayout() {
         {isMacDesktop ? (
           <div className="desktop-drag h-[var(--desktop-titlebar-height)] shrink-0 border-border/70 border-b bg-background" />
         ) : null}
-        <div className="min-h-0 flex-1">
+        <div className="flex min-h-0 flex-1 flex-col">
           <Outlet />
         </div>
       </SidebarInset>
