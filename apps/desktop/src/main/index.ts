@@ -29,6 +29,11 @@ async function main(): Promise<void> {
     host: config.host,
     port: config.serverPort,
     staticAssetMode: config.desktopDev ? "proxy" : embeddedWebDir ? "embedded" : "none",
+    otel: {
+      enabled: config.otelEnabled,
+      projectSlug: config.otelProjectSlug,
+      datasetSlug: config.otelDatasetSlug,
+    },
     ...(embeddedWebDir ? { staticDir: embeddedWebDir } : {}),
   });
   let stoppingServer: Promise<void> | null = null;

@@ -1,14 +1,10 @@
 import { Context, Effect, Layer } from "effect";
 import { SqlError } from "effect/unstable/sql";
-import {
-  ProjectDatasetMismatch,
-  UnknownDatasetSlug,
-  UnknownProjectSlug,
-} from "./errors.ts";
+import { ProjectDatasetMismatch, UnknownDatasetSlug, UnknownProjectSlug } from "./errors.ts";
 import { IngestTargetResolver } from "./targetResolver.ts";
 import { TelemetryLogsRepository } from "./telemetryLogsRepository.ts";
 import type { DuckDbError } from "./telemetryStore.ts";
-import type { NormalizedIngestBatch } from "./types.ts";
+import type { NormalizedIngestBatch, NormalizedLogRecord } from "./types.ts";
 
 /**
  * Provider-agnostic input to {@link LogIngestService.ingest}.
@@ -34,6 +30,24 @@ export interface IngestResult {
   readonly acceptedRecords: number;
   readonly rejectedRecords: number;
   readonly warnings: ReadonlyArray<string>;
+}
+
+const lensflareDevTarget = {
+  projectSlug: "lensflare",
+  datasetSlug: "dev",
+} as const;
+
+const lensflareSelfServiceNames = new Set(["lensflare-server", "lensflare-desktop"]);
+
+function isLensflareDevSelfRecord(input: IngestInput, record: NormalizedLogRecord): boolean {
+  return false;
+  return (
+    input.batch.providerKind === "otlp_http_logs" &&
+    input.projectSlug === lensflareDevTarget.projectSlug &&
+    input.datasetSlug === lensflareDevTarget.datasetSlug &&
+    record.serviceName !== null &&
+    lensflareSelfServiceNames.has(record.serviceName)
+  );
 }
 
 /**
@@ -67,6 +81,28 @@ export class LogIngestService extends Context.Service<
       const telemetry = yield* TelemetryLogsRepository;
 
       const ingest = Effect.fn("LogIngestService.ingest")(function* (input: IngestInput) {
+        const records = input.batch.records.filter(
+          (record) => !isLensflareDevSelfRecord(input, record),
+        );
+        const ignoredSelfRecords = input.batch.records.length - records.length;
+        const warnings =
+          ignoredSelfRecords > 0
+            ? [
+                ...input.batch.warnings,
+                `Ignored ${ignoredSelfRecords} Lensflare self-telemetry record(s) sent to lensflare/dev to prevent an ingest loop.`,
+              ]
+            : input.batch.warnings;
+        const rejectedRecords = input.batch.droppedRecords + ignoredSelfRecords;
+
+        if (records.length === 0) {
+          return {
+            batchId: crypto.randomUUID(),
+            acceptedRecords: 0,
+            rejectedRecords,
+            warnings,
+          } satisfies IngestResult;
+        }
+
         const target = yield* resolver.resolve(input.projectSlug, input.datasetSlug);
         const { batchId } = yield* telemetry.writeBatch({
           providerKind: input.batch.providerKind,
@@ -80,13 +116,13 @@ export class LogIngestService extends Context.Service<
           requestBytes: input.requestBytes,
           clientAddr: input.clientAddr,
           receivedAt: new Date().toISOString(),
-          records: input.batch.records,
+          records,
         });
         return {
           batchId,
-          acceptedRecords: input.batch.records.length,
-          rejectedRecords: input.batch.droppedRecords,
-          warnings: input.batch.warnings,
+          acceptedRecords: records.length,
+          rejectedRecords,
+          warnings,
         } satisfies IngestResult;
       });
 

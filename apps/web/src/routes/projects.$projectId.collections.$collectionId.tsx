@@ -17,11 +17,19 @@ export const Route = createFileRoute("/projects/$projectId/collections/$collecti
  * back to "Dataset" rather than rendering nothing.
  */
 function DatasetLogStreamRoute() {
-  const { collectionId } = Route.useParams();
+  const { collectionId, projectId } = Route.useParams();
   const datasetQuery = useLiveQuery(selectDataset(collectionId));
   const dataset = (datasetQuery.data?.[0] as Dataset | undefined) ?? undefined;
 
-  return <LogStreamView datasetName={dataset?.name ?? "Dataset"} />;
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <LogStreamView
+        datasetId={collectionId}
+        datasetName={dataset?.name ?? "Dataset"}
+        projectId={projectId}
+      />
+    </div>
+  );
 }
 
 function selectDataset(datasetId: string) {

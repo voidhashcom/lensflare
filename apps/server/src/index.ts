@@ -12,6 +12,11 @@ async function main(): Promise<void> {
     port: config.serverPort,
     staticDir: webDistDir,
     staticAssetMode: "filesystem",
+    otel: {
+      enabled: config.otelEnabled,
+      projectSlug: config.otelProjectSlug,
+      datasetSlug: config.otelDatasetSlug,
+    },
   });
 
   const shutdown = async () => {

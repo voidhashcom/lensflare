@@ -1,5 +1,11 @@
-import { LegendList, type LegendListRef, type LegendListRenderItemProps } from "@legendapp/list/react";
-import { forwardRef, useImperativeHandle, useRef } from "react";
+import {
+  LegendList,
+  type LegendListRef,
+  type LegendListRenderItemProps,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from "@legendapp/list/react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { ColumnsIcon } from "lucide-react";
 
 import { cn } from "~/lib/utils";
@@ -7,6 +13,7 @@ import { cn } from "~/lib/utils";
 import { getLogLevelLabel, getLogLevelText, LogLevelBadge } from "./LogLevelBadge";
 import { SourceBadge } from "./SourceBadge";
 import type { LogEntry } from "./types";
+import { Button } from "../ui/button";
 
 interface LogTableProps {
   logs: ReadonlyArray<LogEntry>;
@@ -43,6 +50,7 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
   ref,
 ) {
   const listRef = useRef<LegendListRef | null>(null);
+  const [showJumpToEnd, setShowJumpToEnd] = useState(false);
 
   useImperativeHandle(
     ref,
@@ -58,20 +66,54 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
     [],
   );
 
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      setShowJumpToEnd(!isNearBottom(listRef.current));
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [logs, waiting]);
+
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    setShowJumpToEnd(!isNearBottomEvent(event));
+  };
+
+  const handleJumpToEnd = () => {
+    setShowJumpToEnd(false);
+    void listRef.current?.scrollToEnd({ animated: true });
+  };
+
   return (
-    <div className={cn("flex min-h-0 flex-1 flex-col", className)}>
+    <div className={cn("relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden", className)}>
       <Header />
       <LegendList
-        className="min-h-0 flex-1"
+        className="min-h-0 min-w-0 flex-1"
         data={logs as Array<LogEntry>}
         estimatedItemSize={ROW_ESTIMATED_SIZE}
         keyExtractor={extractLogKey}
+        alignItemsAtEnd={true}
+        maintainScrollAtEnd={true}
         ListFooterComponent={waiting ? <WaitingFooter /> : null}
+        onScroll={handleScroll}
         recycleItems
         ref={listRef}
         renderItem={renderLogRow}
-        style={{ minHeight: 0 }}
+        style={{ minHeight: 0, width: "100%" }}
       />
+      {showJumpToEnd ? (
+        <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-4">
+          <Button
+            className="pointer-events-auto shadow-lg"
+            onClick={handleJumpToEnd}
+            size="sm"
+            variant="secondary"
+          >
+            Jump to end
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 });
@@ -79,7 +121,6 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
 function extractLogKey(item: LogEntry): string {
   return item.id;
 }
-
 function renderLogRow({ item }: LegendListRenderItemProps<LogEntry>) {
   return <LogRow log={item} />;
 }
@@ -161,7 +202,28 @@ function isNearBottom(list: LegendListRef | null): boolean {
   if (!element) {
     return false;
   }
-  return element.scrollHeight - element.clientHeight - element.scrollTop < 32;
+  return isNearBottomMetrics({
+    clientHeight: element.clientHeight,
+    scrollHeight: element.scrollHeight,
+    scrollTop: element.scrollTop,
+  });
+}
+
+function isNearBottomEvent(event: NativeSyntheticEvent<NativeScrollEvent>): boolean {
+  const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+  return isNearBottomMetrics({
+    clientHeight: layoutMeasurement.height,
+    scrollHeight: contentSize.height,
+    scrollTop: contentOffset.y,
+  });
+}
+
+function isNearBottomMetrics(metrics: {
+  clientHeight: number;
+  scrollHeight: number;
+  scrollTop: number;
+}): boolean {
+  return metrics.scrollHeight - metrics.clientHeight - metrics.scrollTop < 32;
 }
 
 /** Reuses the level palette for the inline dot in the message cell. */

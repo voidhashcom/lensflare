@@ -1,42 +1,83 @@
-import { useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useRef, useState } from "react";
+
+import { listDatasetLogs } from "~/data/logApi";
 
 import { LogStreamHeader } from "./LogStreamHeader";
 import { LogTable, type LogTableHandle } from "./LogTable";
-import { LogVolumeHistogram } from "./LogVolumeHistogram";
-import { generateMockHistogram, generateMockLogs } from "./mockLogs";
-import type { DateRangePreset, SourceIconKind } from "./types";
+import type { DateRangePreset, LogEntry, SourceIconKind } from "./types";
 
 interface LogStreamViewProps {
+  projectId: string;
+  datasetId: string;
   datasetName: string;
   datasetIcon?: SourceIconKind;
 }
 
 /**
  * Full-height live log stream view shown when a dataset is selected.
- * Composition of four pieces: header controls, volume histogram, log table
- * and a waiting-for-logs footer. All data is mocked for now so the visual
- * shell can be reviewed before wiring up the backing query.
+ * Fetches the real dataset log stream from the local server and refreshes
+ * it periodically so recent OTLP ingests show up without a full reload.
  */
-export function LogStreamView({ datasetName, datasetIcon = "js" }: LogStreamViewProps) {
+export function LogStreamView({
+  projectId,
+  datasetId,
+  datasetName,
+  datasetIcon = "js",
+}: LogStreamViewProps) {
   const [searchValue, setSearchValue] = useState("");
   const [dateRange, _setDateRange] = useState<DateRangePreset>("Last 30 days");
+  const [logs, setLogs] = useState<ReadonlyArray<LogEntry>>([]);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const tableRef = useRef<LogTableHandle | null>(null);
+  const deferredSearchValue = useDeferredValue(searchValue);
 
-  const histogram = useMemo(() => generateMockHistogram(96, hashSeed(datasetName)), [datasetName]);
-  // Generate a large, stable corpus of mock rows so the scroll region feels
-  // realistic before the live query backend is wired up.
-  const logs = useMemo(
-    () => generateMockLogs(datasetName, 2_000, datasetIcon),
-    [datasetName, datasetIcon],
-  );
+  useEffect(() => {
+    let cancelled = false;
+    let timerId: number | undefined;
+
+    const load = async () => {
+      try {
+        const entries = await listDatasetLogs(projectId, datasetId, {
+          search: deferredSearchValue || undefined,
+          limit: 500,
+        });
+        if (cancelled) {
+          return;
+        }
+
+        setLogs(entries.map((entry) => toLogEntry(entry, datasetName, datasetIcon)));
+        setErrorMessage(null);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        setErrorMessage(error instanceof Error ? error.message : "Failed to load logs.");
+      } finally {
+        if (cancelled) {
+          return;
+        }
+
+        setIsLoading(false);
+        timerId = window.setTimeout(load, 5_000);
+      }
+    };
+
+    setIsLoading(true);
+    void load();
+
+    return () => {
+      cancelled = true;
+      if (timerId !== undefined) {
+        window.clearTimeout(timerId);
+      }
+    };
+  }, [datasetIcon, datasetId, datasetName, deferredSearchValue, projectId]);
 
   const handleScrollClick = () => {
     const table = tableRef.current;
     if (!table) {
-      return;
-    }
-    if (table.isNearBottom()) {
-      table.scrollToTop();
       return;
     }
     table.scrollToBottom();
@@ -52,16 +93,61 @@ export function LogStreamView({ datasetName, datasetIcon = "js" }: LogStreamView
         onSearchChange={setSearchValue}
         searchValue={searchValue}
       />
-      {/* <LogVolumeHistogram buckets={histogram} /> */}
-      <LogTable logs={logs} ref={tableRef} waiting />
+      {errorMessage ? (
+        <div className="border-b border-rose-500/20 bg-rose-500/8 px-4 py-2 font-mono text-[11px] text-rose-200">
+          {errorMessage}
+        </div>
+      ) : null}
+      <LogTable logs={logs} ref={tableRef} waiting={errorMessage === null || isLoading} />
     </div>
   );
 }
 
-function hashSeed(value: string): number {
-  let hash = 0;
-  for (let i = 0; i < value.length; i++) {
-    hash = (hash * 31 + value.charCodeAt(i)) | 0;
+function toLogEntry(
+  entry: {
+    readonly id: string;
+    readonly timestamp: string;
+    readonly sourceName: string;
+    readonly level: LogEntry["level"];
+    readonly message: string;
+  },
+  datasetName: string,
+  datasetIcon: SourceIconKind,
+): LogEntry {
+  const parsedTimestamp = new Date(entry.timestamp);
+
+  return {
+    id: entry.id,
+    timestamp: Number.isNaN(parsedTimestamp.getTime()) ? new Date() : parsedTimestamp,
+    sourceName: entry.sourceName || datasetName,
+    sourceIcon: inferSourceIcon(entry.sourceName, datasetIcon),
+    level: entry.level,
+    message: entry.message,
+  };
+}
+
+function inferSourceIcon(sourceName: string, fallback: SourceIconKind): SourceIconKind {
+  const normalized = sourceName.trim().toLowerCase();
+  if (normalized.includes("typescript") || normalized.includes("lensflare")) {
+    return "ts";
   }
-  return hash || 1;
+  if (normalized.includes("javascript") || normalized.endsWith("-js")) {
+    return "js";
+  }
+  if (normalized.includes("python") || normalized.endsWith("-py")) {
+    return "py";
+  }
+  if (normalized.includes("ruby") || normalized.endsWith("-rb")) {
+    return "rb";
+  }
+  if (normalized.includes("rust") || normalized.endsWith("-rs")) {
+    return "rs";
+  }
+  if (normalized.includes("golang") || normalized === "go" || normalized.endsWith("-go")) {
+    return "go";
+  }
+  if (normalized.includes("java")) {
+    return "java";
+  }
+  return fallback;
 }

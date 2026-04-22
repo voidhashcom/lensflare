@@ -2,6 +2,7 @@ import type { ServerSnapshot } from "@lensflare/contracts";
 import { APP_NAME, APP_VERSION } from "@lensflare/shared";
 import { Effect, Layer } from "effect";
 import { HttpRouter, HttpServerResponse } from "effect/unstable/http";
+import { TelemetryLogQueryService } from "../ingest/telemetryLogQueryService.ts";
 import { renderFallbackApp, serveStaticFile } from "./static.ts";
 
 export interface HttpRoutesOptions {
@@ -50,6 +51,42 @@ export function makeHttpRoutesLayer(options: HttpRoutesOptions) {
           sqliteDatabaseFile: options.sqliteDatabaseFile,
           duckdbDatabaseFile: options.duckdbDatabaseFile,
         }),
+      );
+
+      yield* router.add(
+        "GET",
+        "/api/projects/:projectId/datasets/:datasetId/logs",
+        (request) =>
+          Effect.gen(function* () {
+            const logs = yield* TelemetryLogQueryService;
+            const params = yield* HttpRouter.params;
+            const url = new URL(request.url, options.origin);
+            const search = url.searchParams.get("search")?.trim() || undefined;
+            const rawLimit = Number.parseInt(url.searchParams.get("limit") ?? "", 10);
+            const limit = Number.isInteger(rawLimit) ? rawLimit : undefined;
+
+            return yield* logs
+              .listDatasetLogs(params.projectId ?? "", params.datasetId ?? "", {
+                search,
+                limit,
+              })
+              .pipe(
+                Effect.map((entries) => HttpServerResponse.jsonUnsafe(entries)),
+                Effect.catchTag("DatasetNotFound", (error) =>
+                  Effect.succeed(
+                    HttpServerResponse.jsonUnsafe(
+                      {
+                        error: {
+                          tag: error._tag,
+                          message: "Dataset not found.",
+                        },
+                      },
+                      { status: 404 },
+                    ),
+                  )
+                ),
+              );
+          }).pipe(Effect.catchTag("SqlError", Effect.die), Effect.catchTag("DuckDbError", Effect.die)),
       );
 
       const apiNotFound = HttpServerResponse.jsonUnsafe(

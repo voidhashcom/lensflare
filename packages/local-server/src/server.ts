@@ -9,7 +9,8 @@ import {
   resolveServerOrigin,
 } from "@lensflare/shared";
 import { Effect, Layer, ManagedRuntime } from "effect";
-import { HttpRouter } from "effect/unstable/http";
+import { FetchHttpClient, HttpRouter } from "effect/unstable/http";
+import { OtlpLogger, OtlpSerialization } from "effect/unstable/observability";
 import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
 import { mkdir } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -20,6 +21,7 @@ import { axiomRouteLayer } from "./ingest/providers/axiom/route.ts";
 import { LogIngestService } from "./ingest/logIngestService.ts";
 import { OtlpLogsDecoder } from "./ingest/providers/otlp/decoder.ts";
 import { otlpRouteLayer } from "./ingest/providers/otlp/route.ts";
+import { TelemetryLogQueryService } from "./ingest/telemetryLogQueryService.ts";
 import { TelemetryLogsRepository } from "./ingest/telemetryLogsRepository.ts";
 import { TelemetryStore } from "./ingest/telemetryStore.ts";
 import { IngestTargetResolver } from "./ingest/targetResolver.ts";
@@ -39,11 +41,45 @@ export interface StartLocalServerOptions {
   readonly staticAssetMode?: ServerSnapshot["staticAssetMode"];
   readonly sqliteDatabaseFile?: string;
   readonly duckdbDatabaseFile?: string;
+  readonly otel?: {
+    readonly enabled: boolean;
+    readonly projectSlug: string;
+    readonly datasetSlug: string;
+  };
 }
 
 export interface LocalServerHandle {
   readonly origin: string;
   readonly stop: () => Promise<void>;
+}
+
+const defaultOtelConfig: NonNullable<StartLocalServerOptions["otel"]> = {
+  enabled: true,
+  projectSlug: "lensflare-internal",
+  datasetSlug: "runtime-logs",
+};
+
+function makeObservabilityLayer(
+  origin: string,
+  mode: StartLocalServerOptions["mode"],
+  otel: NonNullable<StartLocalServerOptions["otel"]>,
+) {
+  if (!otel.enabled) {
+    return Layer.empty;
+  }
+
+  return OtlpLogger.layer({
+    url: `${origin}/ingest/otlp/v1/logs/${otel.projectSlug}/${otel.datasetSlug}`,
+    resource: {
+      serviceName: mode === "desktop" ? "lensflare-desktop" : "lensflare-server",
+      serviceVersion: APP_VERSION,
+      attributes: {
+        "lensflare.mode": mode,
+      },
+    },
+    exportInterval: "1 second",
+    maxBatchSize: 100,
+  }).pipe(Layer.provide(FetchHttpClient.layer), Layer.provide(OtlpSerialization.layerJson));
 }
 
 /**
@@ -86,6 +122,7 @@ export async function startLocalServer(
   const port = options.port ?? DEFAULT_SERVER_PORT;
   const origin = resolveServerOrigin({ host, serverPort: port });
   const startedAt = new Date();
+  const otel = options.otel ?? defaultOtelConfig;
   const dataPaths = resolveDataPaths();
   const sqliteDatabaseFile = options.sqliteDatabaseFile ?? dataPaths.sqliteDatabaseFile;
   const duckdbDatabaseFile = options.duckdbDatabaseFile ?? dataPaths.duckdbDatabaseFile;
@@ -134,6 +171,11 @@ export async function startLocalServer(
     Layer.provide(sqliteDatabaseLayer),
     Layer.provide(telemetryStoreLayer),
   );
+  const telemetryQueryLayer = TelemetryLogQueryService.layer.pipe(
+    Layer.provide(DatasetsRepository.layer),
+    Layer.provide(sqliteDatabaseLayer),
+    Layer.provide(telemetryStoreLayer),
+  );
 
   // Provider plug-in surface: each provider's route layer is mergeAll-ed
   // here, the per-provider decoder services are provided once below, and
@@ -172,12 +214,18 @@ export async function startLocalServer(
     RpcSerialization.layerJson,
     NodeHttpServer.layer(createServer, { host, port }),
   );
-  const servicesLayer = Layer.merge(catalogServicesLayer, ingestServicesLayer);
+  const servicesLayer = Layer.mergeAll(
+    catalogServicesLayer,
+    ingestServicesLayer,
+    telemetryQueryLayer,
+  );
   const infrastructureLayer = Layer.merge(platformLayer, servicesLayer);
+  const observabilityLayer = makeObservabilityLayer(origin, options.mode, otel);
+  const applicationLayer = Layer.merge(infrastructureLayer, observabilityLayer);
 
   const runtimeLayer = Layer.merge(
-    infrastructureLayer,
-    HttpRouter.serve(routesLayer).pipe(Layer.provide(infrastructureLayer)),
+    applicationLayer,
+    HttpRouter.serve(routesLayer).pipe(Layer.provide(applicationLayer)),
   );
 
   const runtime = ManagedRuntime.make(runtimeLayer, {
@@ -193,7 +241,17 @@ export async function startLocalServer(
     }),
   );
 
-  console.log(`[lensflare] ${options.mode} server listening on ${origin}`);
+  await runtime.runPromise(
+    Effect.logInfo("lensflare server listening").pipe(
+      Effect.annotateLogs({
+        mode: options.mode,
+        origin,
+        telemetryProjectSlug: options.otel?.projectSlug ?? "disabled",
+        telemetryDatasetSlug: options.otel?.datasetSlug ?? "disabled",
+        otelEnabled: otel.enabled,
+      }),
+    ),
+  );
 
   return {
     origin,

@@ -14,6 +14,9 @@ export interface RuntimeConfig {
   serverPort: number;
   webDevPort: number;
   desktopDev: boolean;
+  otelEnabled: boolean;
+  otelProjectSlug: string;
+  otelDatasetSlug: string;
 }
 
 function parsePort(rawValue: string | undefined, fallback: number): number {
@@ -33,9 +36,22 @@ function parsePort(rawValue: string | undefined, fallback: number): number {
   );
 }
 
-export function readRuntimeConfigFromEnv(
-  env: Record<string, string | undefined>,
-): RuntimeConfig {
+function parseBoolean(rawValue: string | undefined, fallback: boolean): boolean {
+  if (!rawValue) {
+    return fallback;
+  }
+
+  const value = rawValue.trim().toLowerCase();
+  if (value === "1" || value === "true" || value === "yes" || value === "on") {
+    return true;
+  }
+  if (value === "0" || value === "false" || value === "no" || value === "off") {
+    return false;
+  }
+  return fallback;
+}
+
+export function readRuntimeConfigFromEnv(env: Record<string, string | undefined>): RuntimeConfig {
   const host = env.LENSFLARE_HOST?.trim() || DEFAULT_HOST;
 
   return {
@@ -43,6 +59,9 @@ export function readRuntimeConfigFromEnv(
     serverPort: parsePort(env.LENSFLARE_SERVER_PORT, DEFAULT_SERVER_PORT),
     webDevPort: parsePort(env.LENSFLARE_WEB_PORT, DEFAULT_WEB_DEV_PORT),
     desktopDev: env.LENSFLARE_DESKTOP_DEV === "1",
+    otelEnabled: parseBoolean(env.LENSFLARE_OTEL_ENABLED, true),
+    otelProjectSlug: env.LENSFLARE_OTEL_PROJECT_SLUG?.trim() || "lensflare",
+    otelDatasetSlug: env.LENSFLARE_OTEL_DATASET_SLUG?.trim() || "dev",
   };
 }
 

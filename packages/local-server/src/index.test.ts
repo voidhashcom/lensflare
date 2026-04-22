@@ -15,6 +15,13 @@ import { join } from "node:path";
 import { startLocalServer } from "./index.ts";
 
 const CatalogRpcs = ProjectRpcGroup.merge(DatasetRpcGroup);
+const otelDisabled = {
+  enabled: false,
+  projectName: "Disabled",
+  projectSlug: "disabled",
+  datasetName: "Disabled",
+  datasetSlug: "disabled",
+} as const;
 
 async function getAvailablePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -51,6 +58,7 @@ describe("startLocalServer", () => {
       port,
       sqliteDatabaseFile: join(directory, "lensflare.sqlite"),
       duckdbDatabaseFile: join(directory, "lensflare.duckdb"),
+      otel: otelDisabled,
     });
 
     const clientLayer = RpcClient.layerProtocolSocket().pipe(
@@ -121,6 +129,7 @@ describe("startLocalServer", () => {
       port,
       sqliteDatabaseFile: join(directory, "lensflare.sqlite"),
       duckdbDatabaseFile: join(directory, "lensflare.duckdb"),
+      otel: otelDisabled,
     });
 
     const clientLayer = RpcClient.layerProtocolSocket().pipe(

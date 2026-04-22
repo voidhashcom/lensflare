@@ -159,6 +159,29 @@ export const DatasetChangeEventSchema = Schema.Union([
 
 export type DatasetChangeEvent = Schema.Schema.Type<typeof DatasetChangeEventSchema>;
 
+export const TelemetryLogLevelSchema = Schema.Literals([
+  "trace",
+  "debug",
+  "info",
+  "warn",
+  "error",
+  "fatal",
+]);
+
+export type TelemetryLogLevel = Schema.Schema.Type<typeof TelemetryLogLevelSchema>;
+
+export const TelemetryLogEntrySchema = Schema.Struct({
+  id: Schema.String,
+  timestamp: Schema.String,
+  sourceName: Schema.String,
+  level: TelemetryLogLevelSchema,
+  message: Schema.String,
+});
+
+export type TelemetryLogEntry = Schema.Schema.Type<typeof TelemetryLogEntrySchema>;
+
+export const TelemetryLogEntriesSchema = Schema.Array(TelemetryLogEntrySchema);
+
 const decodeProjectEntitySchema = Schema.decodeUnknownSync(ProjectEntitySchema);
 const decodeProjectSchema = Schema.decodeUnknownSync(ProjectSchema);
 const decodeDatasetSchema = Schema.decodeUnknownSync(DatasetSchema);
@@ -168,6 +191,8 @@ const decodeCreateDatasetInputSchema = Schema.decodeUnknownSync(CreateDatasetInp
 const decodeUpdateDatasetInputSchema = Schema.decodeUnknownSync(UpdateDatasetInputSchema);
 const decodeProjectChangeEventSchema = Schema.decodeUnknownSync(ProjectChangeEventSchema);
 const decodeDatasetChangeEventSchema = Schema.decodeUnknownSync(DatasetChangeEventSchema);
+const decodeTelemetryLogEntrySchema = Schema.decodeUnknownSync(TelemetryLogEntrySchema);
+const decodeTelemetryLogEntriesSchema = Schema.decodeUnknownSync(TelemetryLogEntriesSchema);
 
 export function decodeProjectEntity(input: unknown): ProjectEntity {
   return decodeProjectEntitySchema(input);
@@ -203,6 +228,14 @@ export function decodeProjectChangeEvent(input: unknown): ProjectChangeEvent {
 
 export function decodeDatasetChangeEvent(input: unknown): DatasetChangeEvent {
   return decodeDatasetChangeEventSchema(input);
+}
+
+export function decodeTelemetryLogEntry(input: unknown): TelemetryLogEntry {
+  return decodeTelemetryLogEntrySchema(input);
+}
+
+export function decodeTelemetryLogEntries(input: unknown): Array<TelemetryLogEntry> {
+  return [...decodeTelemetryLogEntriesSchema(input)];
 }
 
 class ListProjectEntities extends Rpc.make("ListProjectEntities", {
