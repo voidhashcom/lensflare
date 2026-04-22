@@ -74,6 +74,8 @@
 :root {
   color-scheme: dark;
   --radius: 0.625rem;
+  --desktop-titlebar-height: 3rem;
+  --desktop-traffic-light-clearance: 5.25rem;
 
   /* Dark theme tuned to match the reference sidebar (zinc base color) */
   --background: oklch(0.18 0.005 285);
@@ -107,6 +109,30 @@
   --sidebar-accent-foreground: var(--accent-foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
+}
+
+html[data-runtime="electron"] {
+  --sidebar: oklch(0.145 0 0 / 58%);
+  --border: oklch(1 0 0 / 10%);
+}
+
+html[data-runtime="electron"] body,
+html[data-runtime="electron"] #root {
+  background: transparent;
+}
+
+html[data-runtime="electron"][data-platform="macos"] body {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.desktop-drag {
+  -webkit-app-region: drag;
+}
+
+.desktop-no-drag,
+.desktop-no-drag * {
+  -webkit-app-region: no-drag;
 }
 
 ::-webkit-scrollbar {

@@ -1,0 +1,18 @@
+appId: dev.lensflare.app
+productName: Lensflare
+directories:
+  output: artifacts
+files:
+  - dist/**
+  - package.json
+extraResources:
+  - from: ../web/dist
+    to: web
+mac:
+  category: public.app-category.developer-tools
+linux:
+  target:
+    - AppImage
+win:
+  target:
+    - nsis

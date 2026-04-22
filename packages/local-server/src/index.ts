@@ -1,5 +1,7 @@
 import { existsSync } from "node:fs";
-import { join, normalize } from "node:path";
+import { readFile } from "node:fs/promises";
+import { createServer } from "node:http";
+import { join, normalize, resolve, sep } from "node:path";
 import { decodeServerEvent, type ServerEvent, type ServerSnapshot } from "@lensflare/contracts";
 import {
   APP_NAME,
@@ -9,6 +11,7 @@ import {
   resolveServerOrigin,
 } from "@lensflare/shared";
 import { Effect } from "effect";
+import WebSocket, { WebSocketServer } from "ws";
 
 export interface StartLocalServerOptions {
   mode: "desktop" | "server";
@@ -21,16 +24,6 @@ export interface StartLocalServerOptions {
 export interface LocalServerHandle {
   origin: string;
   stop: () => Promise<void>;
-}
-
-function json(data: unknown, init?: ResponseInit): Response {
-  return new Response(JSON.stringify(data, null, 2), {
-    ...init,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      ...init?.headers,
-    },
-  });
 }
 
 function inferContentType(pathname: string): string {
@@ -55,35 +48,40 @@ function inferContentType(pathname: string): string {
   return "text/html; charset=utf-8";
 }
 
+interface StaticFileResponse {
+  body: Buffer;
+  contentType: string;
+}
+
 async function serveStaticFile(
   requestPath: string,
   staticDir: string | undefined,
-): Promise<Response | null> {
+): Promise<StaticFileResponse | null> {
   if (!staticDir) {
     return null;
   }
 
+  const rootDir = resolve(staticDir);
   const sanitizedPath = normalize(requestPath).replace(/^(\.\.(\/|\\|$))+/, "");
-  const candidatePath = join(
-    staticDir,
-    sanitizedPath === "/" ? "index.html" : sanitizedPath.replace(/^\//, ""),
-  );
+  const relativePath = sanitizedPath === "/" ? "index.html" : sanitizedPath.replace(/^\//, "");
+  const candidatePath = resolve(rootDir, relativePath);
   const fallbackIndexPath = join(staticDir, "index.html");
 
-  if (existsSync(candidatePath)) {
-    return new Response(Bun.file(candidatePath), {
-      headers: {
-        "content-type": inferContentType(candidatePath),
-      },
-    });
+  const isInsideRoot =
+    candidatePath === rootDir || candidatePath.startsWith(`${rootDir}${sep}`);
+
+  if (isInsideRoot && existsSync(candidatePath)) {
+    return {
+      body: await readFile(candidatePath),
+      contentType: inferContentType(candidatePath),
+    };
   }
 
   if (existsSync(fallbackIndexPath)) {
-    return new Response(Bun.file(fallbackIndexPath), {
-      headers: {
-        "content-type": "text/html; charset=utf-8",
-      },
-    });
+    return {
+      body: await readFile(fallbackIndexPath),
+      contentType: "text/html; charset=utf-8",
+    };
   }
 
   return null;
@@ -152,7 +150,7 @@ export async function startLocalServer(
   const port = options.port ?? DEFAULT_SERVER_PORT;
   const origin = resolveServerOrigin({ host, serverPort: port });
   const startedAt = new Date();
-  const sockets = new Set<Bun.ServerWebSocket<unknown>>();
+  const sockets = new Set<WebSocket>();
 
   const snapshot = (): ServerSnapshot => ({
     name: APP_NAME,
@@ -171,7 +169,9 @@ export async function startLocalServer(
   const broadcast = (event: ServerEvent): void => {
     const encoded = JSON.stringify(event);
     for (const socket of sockets) {
-      socket.send(encoded);
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(encoded);
+      }
     }
   };
 
@@ -186,67 +186,101 @@ export async function startLocalServer(
     Effect.runSync(Effect.sync(() => broadcast(nextEvent)));
   }, 5_000);
 
-  const server = Bun.serve({
-    hostname: host,
-    port,
-    fetch(request, serverInstance) {
-      const url = new URL(request.url);
+  const server = createServer((request, response) => {
+    const url = new URL(request.url ?? "/", origin);
 
-      if (url.pathname === "/ws") {
-        const upgraded = serverInstance.upgrade(request);
-        return upgraded ? undefined : new Response("Upgrade failed", { status: 400 });
-      }
+    void Effect.runPromise(
+      Effect.gen(function* () {
+        if (url.pathname === "/api/health") {
+          response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+          response.end(JSON.stringify(snapshot(), null, 2));
+          return;
+        }
 
-      if (url.pathname === "/api/health") {
-        return json(snapshot());
-      }
-
-      if (url.pathname === "/api/meta") {
-        return json({
-          appName: APP_NAME,
-          appVersion: APP_VERSION,
-          serverOrigin: origin,
-          mode: options.mode,
-        });
-      }
-
-      return Effect.runPromise(
-        Effect.gen(function* () {
-          const staticResponse = yield* Effect.promise(() =>
-            serveStaticFile(url.pathname, options.staticDir),
+        if (url.pathname === "/api/meta") {
+          response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+          response.end(
+            JSON.stringify(
+              {
+                appName: APP_NAME,
+                appVersion: APP_VERSION,
+                serverOrigin: origin,
+                mode: options.mode,
+              },
+              null,
+              2,
+            ),
           );
+          return;
+        }
 
-          if (staticResponse) {
-            return staticResponse;
-          }
-
-          return new Response(renderFallbackApp(origin), {
-            headers: {
-              "content-type": "text/html; charset=utf-8",
-            },
-          });
-        }),
-      );
-    },
-    websocket: {
-      open(socket) {
-        sockets.add(socket);
-        socket.send(
-          JSON.stringify(
-            decodeServerEvent({
-              type: "server.ready",
-              sentAt: new Date().toISOString(),
-              snapshot: snapshot(),
-              detail: `${options.mode} runtime attached`,
-            }),
-          ),
+        const staticResponse = yield* Effect.promise(() =>
+          serveStaticFile(url.pathname, options.staticDir),
         );
-      },
-      close(socket) {
-        sockets.delete(socket);
-      },
-      message() {},
-    },
+
+        if (staticResponse) {
+          response.writeHead(200, { "content-type": staticResponse.contentType });
+          response.end(staticResponse.body);
+          return;
+        }
+
+        response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+        response.end(renderFallbackApp(origin));
+      }).pipe(
+        Effect.catchCause((cause) =>
+          Effect.sync(() => {
+            console.error("[lensflare] local server request failed", cause);
+            if (!response.headersSent) {
+              response.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
+            }
+            response.end("Internal Server Error");
+          }),
+        ),
+      ),
+    );
+  });
+
+  const webSocketServer = new WebSocketServer({ noServer: true });
+
+  server.on("upgrade", (request, socket, head) => {
+    const url = new URL(request.url ?? "/", origin);
+
+    if (url.pathname !== "/ws") {
+      socket.destroy();
+      return;
+    }
+
+    webSocketServer.handleUpgrade(request, socket, head, (webSocket) => {
+      webSocketServer.emit("connection", webSocket, request);
+    });
+  });
+
+  webSocketServer.on("connection", (socket) => {
+    sockets.add(socket);
+    socket.on("close", () => {
+      sockets.delete(socket);
+    });
+    socket.on("error", () => {
+      sockets.delete(socket);
+    });
+    socket.send(
+      JSON.stringify(
+        decodeServerEvent({
+          type: "server.ready",
+          sentAt: new Date().toISOString(),
+          snapshot: snapshot(),
+          detail: `${options.mode} runtime attached`,
+        }),
+      ),
+    );
+  });
+
+  await new Promise<void>((resolvePromise, reject) => {
+    server.once("error", reject);
+    server.listen(port, host, () => {
+      server.off("error", reject);
+      resolvePromise();
+    });
   });
 
   console.log(`[lensflare] ${options.mode} server listening on ${origin}`);
@@ -255,7 +289,31 @@ export async function startLocalServer(
     origin,
     async stop() {
       clearInterval(heartbeatTimer);
-      server.stop(true);
+
+      for (const socket of sockets) {
+        socket.close();
+      }
+
+      await Promise.all([
+        new Promise<void>((resolvePromise, reject) => {
+          webSocketServer.close((error) => {
+            if (error) {
+              reject(error);
+              return;
+            }
+            resolvePromise();
+          });
+        }),
+        new Promise<void>((resolvePromise, reject) => {
+          server.close((error) => {
+            if (error) {
+              reject(error);
+              return;
+            }
+            resolvePromise();
+          });
+        }),
+      ]);
     },
   };
 }

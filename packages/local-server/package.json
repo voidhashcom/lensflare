@@ -14,11 +14,12 @@
   "dependencies": {
     "@lensflare/contracts": "workspace:*",
     "@lensflare/shared": "workspace:*",
-    "effect": "catalog:"
+    "effect": "catalog:",
+    "ws": "^8.20.0"
   },
   "devDependencies": {
-    "@types/bun": "catalog:",
     "@types/node": "catalog:",
+    "@types/ws": "^8.18.1",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

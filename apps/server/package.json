@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --watch src/index.ts",
-    "build": "bun build src/index.ts --target bun --outdir dist",
-    "start": "bun dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsup --config tsup.config.ts",
+    "start": "node dist/index.cjs",
     "typecheck": "tsc --noEmit",
     "test": "pnpm exec vitest run --passWithNoTests",
     "clean": "rm -rf dist"
@@ -17,8 +17,9 @@
     "effect": "catalog:"
   },
   "devDependencies": {
-    "@types/bun": "catalog:",
     "@types/node": "catalog:",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

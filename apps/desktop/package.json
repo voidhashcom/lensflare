@@ -3,24 +3,30 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "dist/index.cjs",
   "scripts": {
-    "dev": "LENSFLARE_DESKTOP_DEV=1 electrobun dev --watch",
-    "build": "pnpm --dir ../.. --filter @lensflare/web build && electrobun build --env stable",
-    "start": "electrobun dev",
+    "dev": "concurrently -k -s first -n bundle,electron \"pnpm run dev:bundle\" \"pnpm run dev:desktop\"",
+    "dev:bundle": "tsup --watch --config tsup.config.ts",
+    "dev:desktop": "wait-on tcp:127.0.0.1:5173 dist/index.cjs && LENSFLARE_DESKTOP_DEV=1 electronmon .",
+    "build": "pnpm --dir ../.. --filter @lensflare/web build && tsup --config tsup.config.ts && electron-builder",
+    "start": "electron .",
     "typecheck": "tsc --noEmit",
     "test": "pnpm exec vitest run --passWithNoTests",
-    "clean": "rm -rf build artifacts"
+    "clean": "rm -rf dist artifacts"
   },
   "dependencies": {
     "@lensflare/local-server": "workspace:*",
-    "@lensflare/shared": "workspace:*",
-    "effect": "catalog:",
-    "electrobun": "^1.16.0"
+    "@lensflare/shared": "workspace:*"
   },
   "devDependencies": {
-    "@types/bun": "catalog:",
     "@types/node": "catalog:",
+    "concurrently": "^9.2.1",
+    "electron": "^41.2.2",
+    "electron-builder": "^26.8.1",
+    "electronmon": "^2.0.4",
+    "tsup": "^8.5.1",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "wait-on": "^9.0.5"
   }
 }

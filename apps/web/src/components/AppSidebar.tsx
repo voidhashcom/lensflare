@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import * as React from "react";
 
+import { Logo } from "~/components/Logo";
 import { Kbd } from "~/components/ui/kbd";
 import {
   SidebarContent,
@@ -37,10 +38,20 @@ const PROJECT_ICONS = {
 } as const;
 
 export function AppSidebar() {
+  const isMacDesktop =
+    typeof document !== "undefined" &&
+    document.documentElement.dataset.runtime === "electron" &&
+    document.documentElement.dataset.platform === "macos";
+
   return (
     <>
-      <SidebarHeader className="gap-3 px-3 py-2 sm:gap-2.5 sm:px-4 sm:py-3">
-        <BrandRow />
+      <SidebarHeader
+        className={cn(
+          "gap-3 px-3 pb-2 sm:gap-2.5 sm:px-4 sm:pb-3",
+          isMacDesktop ? "desktop-drag pt-0" : "pt-2 sm:pt-3",
+        )}
+      >
+        <BrandRow isMacDesktop={isMacDesktop} />
         <SearchRow />
       </SidebarHeader>
 
@@ -52,7 +63,7 @@ export function AppSidebar() {
             </span>
             <button
               aria-label="New project"
-              className="inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+              className="desktop-no-drag inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
               title="New project"
               type="button"
             >
@@ -85,22 +96,32 @@ export function AppSidebar() {
   );
 }
 
-function BrandRow() {
+function BrandRow({ isMacDesktop }: { isMacDesktop: boolean }) {
   return (
-    <div className="flex items-center gap-2">
-      <span className="font-semibold text-base text-sidebar-foreground tracking-tight">
-        Lensflare
-      </span>
-      <span className="rounded-full bg-muted/50 px-1.5 py-0.5 font-medium text-[8px] text-muted-foreground/60 uppercase tracking-[0.18em]">
-        Alpha
-      </span>
+    <div
+      className={cn(
+        "grid items-center",
+        isMacDesktop
+          ? "-ml-3 h-[var(--desktop-titlebar-height)] grid-cols-[var(--desktop-traffic-light-clearance)_minmax(0,1fr)] sm:-ml-4"
+          : "grid-cols-[1fr]",
+        !isMacDesktop && "min-h-8",
+      )}
+    >
+      {isMacDesktop ? <div aria-hidden className="h-full" /> : null}
+      <Logo
+        aria-label="Lensflare"
+        className={cn(
+          "h-4.5 mt-1 w-auto max-w-[11.5rem] text-sidebar-foreground",
+          isMacDesktop ? "justify-self-center" : "justify-self-center",
+        )}
+      />
     </div>
   );
 }
 
 function SearchRow() {
   return (
-    <div className="relative flex h-8 items-center rounded-lg bg-accent/40 pl-2.5 pr-2 ring-ring/24 transition-shadow has-focus-visible:ring-[3px]">
+    <div className="desktop-no-drag relative flex h-8 items-center rounded-lg bg-accent/40 pl-2.5 pr-2 ring-ring/24 transition-shadow has-focus-visible:ring-[3px]">
       <SearchIcon className="pointer-events-none size-3.5 shrink-0 text-muted-foreground" />
       <input
         aria-label="Search projects and collections"
@@ -148,7 +169,7 @@ function ProjectRow({ project }: { project: MockProject }) {
 
           <button
             aria-label={`New collection in ${project.name}`}
-            className="absolute top-1 right-1.5 inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground/70 opacity-0 transition-opacity hover:bg-secondary hover:text-foreground focus-visible:opacity-100 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring group-hover/project-header:opacity-100"
+            className="desktop-no-drag absolute top-1 right-1.5 inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground/70 opacity-0 transition-opacity hover:bg-secondary hover:text-foreground focus-visible:opacity-100 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring group-hover/project-header:opacity-100"
             title="New collection"
             type="button"
           >

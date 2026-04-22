@@ -4,12 +4,12 @@
     "module": "preserve",
     "moduleResolution": "Bundler",
     "exactOptionalPropertyTypes": false,
-    "types": ["bun", "node"]
+    "types": ["node"]
   },
   "include": [
     "src/**/*.ts",
     "src/**/*.d.ts",
-    "electrobun.config.ts",
-    "scripts/**/*.ts"
+    "scripts/**/*.ts",
+    "tsup.config.ts"
   ]
 }
