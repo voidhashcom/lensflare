@@ -1,4 +1,6 @@
 import * as Schema from "effect/Schema";
+import * as Rpc from "effect/unstable/rpc/Rpc";
+import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 
 const AppModeSchema = Schema.Literals(["desktop", "server"]);
 
@@ -100,6 +102,20 @@ export const UpdateDatasetInputSchema = Schema.Struct({
 
 export type UpdateDatasetInput = Schema.Schema.Type<typeof UpdateDatasetInputSchema>;
 
+export class ProjectNotFound extends Schema.TaggedErrorClass<ProjectNotFound>()("ProjectNotFound", {
+  projectId: Schema.String,
+}) {}
+
+export class DatasetNotFound extends Schema.TaggedErrorClass<DatasetNotFound>()("DatasetNotFound", {
+  datasetId: Schema.String,
+  projectId: Schema.String,
+}) {}
+
+export class ValidationError extends Schema.TaggedErrorClass<ValidationError>()("ValidationError", {
+  field: Schema.String,
+  message: Schema.String,
+}) {}
+
 const decodeProjectSchema = Schema.decodeUnknownSync(ProjectSchema);
 const decodeDatasetSchema = Schema.decodeUnknownSync(DatasetSchema);
 const decodeCreateProjectInputSchema = Schema.decodeUnknownSync(CreateProjectInputSchema);
@@ -129,4 +145,106 @@ export function decodeCreateDatasetInput(input: unknown): CreateDatasetInput {
 
 export function decodeUpdateDatasetInput(input: unknown): UpdateDatasetInput {
   return decodeUpdateDatasetInputSchema(input);
+}
+
+class ListProjects extends Rpc.make("ListProjects", {
+  success: Schema.Array(ProjectSchema),
+}) {}
+
+class GetProject extends Rpc.make("GetProject", {
+  payload: {
+    projectId: Schema.String,
+  },
+  success: ProjectSchema,
+  error: ProjectNotFound,
+}) {}
+
+class CreateProject extends Rpc.make("CreateProject", {
+  payload: CreateProjectInputSchema,
+  success: ProjectSchema,
+  error: ValidationError,
+}) {}
+
+class UpdateProject extends Rpc.make("UpdateProject", {
+  payload: {
+    projectId: Schema.String,
+    input: UpdateProjectInputSchema,
+  },
+  success: ProjectSchema,
+  error: Schema.Union([ProjectNotFound, ValidationError]),
+}) {}
+
+class DeleteProject extends Rpc.make("DeleteProject", {
+  payload: {
+    projectId: Schema.String,
+  },
+  error: ProjectNotFound,
+}) {}
+
+class GetDataset extends Rpc.make("GetDataset", {
+  payload: {
+    projectId: Schema.String,
+    datasetId: Schema.String,
+  },
+  success: DatasetSchema,
+  error: DatasetNotFound,
+}) {}
+
+class CreateDataset extends Rpc.make("CreateDataset", {
+  payload: {
+    projectId: Schema.String,
+    input: CreateDatasetInputSchema,
+  },
+  success: DatasetSchema,
+  error: Schema.Union([ProjectNotFound, ValidationError]),
+}) {}
+
+class UpdateDataset extends Rpc.make("UpdateDataset", {
+  payload: {
+    projectId: Schema.String,
+    datasetId: Schema.String,
+    input: UpdateDatasetInputSchema,
+  },
+  success: DatasetSchema,
+  error: Schema.Union([DatasetNotFound, ValidationError]),
+}) {}
+
+class DeleteDataset extends Rpc.make("DeleteDataset", {
+  payload: {
+    projectId: Schema.String,
+    datasetId: Schema.String,
+  },
+  error: DatasetNotFound,
+}) {}
+
+export const CatalogRpcGroup = RpcGroup.make(
+  ListProjects,
+  GetProject,
+  CreateProject,
+  UpdateProject,
+  DeleteProject,
+  GetDataset,
+  CreateDataset,
+  UpdateDataset,
+  DeleteDataset,
+);
+
+export function formatCatalogError(error: unknown): string {
+  if (error instanceof ValidationError) {
+    return error.message;
+  }
+
+  if (error instanceof ProjectNotFound) {
+    return "Project not found.";
+  }
+
+  if (error instanceof DatasetNotFound) {
+    return "Dataset not found.";
+  }
+
+  if (error instanceof Error && error.message.length > 0) {
+    return error.message;
+  }
+
+  return "Request failed.";
 }

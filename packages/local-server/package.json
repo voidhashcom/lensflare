@@ -12,16 +12,15 @@
     "test": "pnpm exec vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@effect/platform-node": "catalog:",
     "@effect/sql-sqlite-node": "catalog:",
     "@lensflare/contracts": "workspace:*",
     "@lensflare/shared": "workspace:*",
-    "effect": "catalog:",
-    "ws": "^8.20.0"
+    "effect": "catalog:"
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",
     "@types/node": "catalog:",
-    "@types/ws": "^8.18.1",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

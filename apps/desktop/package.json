@@ -15,6 +15,7 @@
     "clean": "rm -rf dist artifacts"
   },
   "dependencies": {
+    "@effect/sql-sqlite-node": "catalog:",
     "@lensflare/local-server": "workspace:*",
     "@lensflare/shared": "workspace:*"
   },

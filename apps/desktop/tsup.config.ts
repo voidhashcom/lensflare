@@ -10,7 +10,7 @@ export default defineConfig({
   splitting: false,
   sourcemap: true,
   clean: true,
-  external: ["electron"],
+  external: ["electron", "@effect/sql-sqlite-node", "better-sqlite3", "bindings", "file-uri-to-path"],
   noExternal: [/^@lensflare\//, /^effect/, /^ws$/],
   outExtension() {
     return {

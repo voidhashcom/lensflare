@@ -2,6 +2,7 @@ import type { Dataset, Project } from "@lensflare/contracts";
 import {
   DEFAULT_PROJECT_ICON,
 } from "@lensflare/contracts";
+import { useLiveQuery } from "@tanstack/react-db";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import {
   CompassIcon,
@@ -56,9 +57,7 @@ import {
   createProject,
   deleteDataset,
   deleteProject,
-  emitCatalogChanged,
-  listProjects,
-  subscribeToCatalogChanges,
+  projectsCollection,
   updateDataset,
   updateProject,
 } from "~/data/catalogApi";
@@ -93,10 +92,13 @@ export function AppSidebar() {
   const params = useParams({ strict: false });
   const activeProjectId = params.projectId;
   const activeCollectionId = params.collectionId;
-
-  const [projects, setProjects] = React.useState<ReadonlyArray<Project>>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
+  const projectsQuery = useLiveQuery(projectsCollection);
+  const projects = projectsQuery.data ?? [];
+  const loading = projectsQuery.isLoading;
+  const error =
+    !loading && projectsCollection.utils.lastError instanceof Error
+      ? projectsCollection.utils.lastError.message
+      : null;
 
   const [projectDialogOpen, setProjectDialogOpen] = React.useState(false);
   const [projectDialogMode, setProjectDialogMode] = React.useState<"create" | "edit">("create");
@@ -124,38 +126,6 @@ export function AppSidebar() {
     x: number;
     y: number;
   } | null>(null);
-
-  React.useEffect(() => {
-    let cancelled = false;
-
-    const loadProjects = async () => {
-      try {
-        const nextProjects = await listProjects();
-        if (cancelled) {
-          return;
-        }
-
-        setProjects(nextProjects);
-        setError(null);
-      } catch (loadError) {
-        if (cancelled) {
-          return;
-        }
-
-        setError(loadError instanceof Error ? loadError.message : "Failed to load projects.");
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    void loadProjects();
-
-    return subscribeToCatalogChanges(() => {
-      void loadProjects();
-    });
-  }, []);
 
   const contextMenuAnchor = React.useMemo<CursorAnchor | null>(() => {
     if (!contextMenuPosition || typeof DOMRect === "undefined") {
@@ -288,7 +258,6 @@ export function AppSidebar() {
         });
       }
 
-      emitCatalogChanged();
       setProjectDialogOpen(false);
       resetProjectDialog();
     } catch (submitError) {
@@ -335,7 +304,6 @@ export function AppSidebar() {
         });
       }
 
-      emitCatalogChanged();
       setDatasetDialogOpen(false);
       resetDatasetDialog();
     } catch (submitError) {
@@ -374,7 +342,6 @@ export function AppSidebar() {
         }
       }
 
-      emitCatalogChanged();
       setDeleteTarget(null);
       setDeleteError(null);
     } catch (deleteFailure) {

@@ -1,124 +1,119 @@
-import type {
-  CreateDatasetInput,
-  CreateProjectInput,
-  Dataset,
-  Project,
-  UpdateDatasetInput,
-  UpdateProjectInput,
+import {
+  CatalogRpcGroup,
+  formatCatalogError,
+  type CreateDatasetInput,
+  type CreateProjectInput,
+  type Dataset,
+  type Project,
+  type UpdateDatasetInput,
+  type UpdateProjectInput,
 } from "@lensflare/contracts";
+import { resolveWebSocketOrigin } from "@lensflare/shared";
+import { createCollection } from "@tanstack/db";
+import { QueryClient } from "@tanstack/query-core";
+import { queryCollectionOptions } from "@tanstack/query-db-collection";
+import { Context, Effect, Layer, ManagedRuntime } from "effect";
+import * as RpcClient from "effect/unstable/rpc/RpcClient";
+import type { RpcClientError } from "effect/unstable/rpc/RpcClientError";
+import type * as RpcGroup from "effect/unstable/rpc/RpcGroup";
+import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
+import * as Socket from "effect/unstable/socket/Socket";
 
-const CATALOG_CHANGED_EVENT = "lensflare:catalog-changed";
-
-interface ApiErrorResponse {
-  error?: {
-    message?: string;
-  };
+function resolveCatalogRpcUrl(): string {
+  const url = new URL("/rpc", window.location.href);
+  url.href = resolveWebSocketOrigin(url.href);
+  return url.toString();
 }
 
-async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
-    ...init,
-    headers: {
-      ...(init?.body ? { "content-type": "application/json" } : {}),
-      ...init?.headers,
-    },
-  });
+type CatalogRpcServiceShape = RpcClient.RpcClient<
+  RpcGroup.Rpcs<typeof CatalogRpcGroup>,
+  RpcClientError
+>;
 
-  if (!response.ok) {
-    let message = `${response.status} ${response.statusText}`;
+class CatalogRpcClient extends Context.Service<CatalogRpcClient, CatalogRpcServiceShape>()(
+  "@lensflare/web/CatalogRpcClient",
+) {}
 
-    try {
-      const body = (await response.json()) as ApiErrorResponse;
-      if (body.error?.message) {
-        message = body.error.message;
-      }
-    } catch {
-      // Ignore bodies that are not JSON.
-    }
+const rpcSupportLayer = Layer.merge(
+  RpcSerialization.layerJson,
+  Socket.layerWebSocket(Effect.sync(resolveCatalogRpcUrl)).pipe(
+    Layer.provide(Socket.layerWebSocketConstructorGlobal),
+  ),
+);
 
-    throw new Error(message);
+const rpcClientLayer = Layer.effect(CatalogRpcClient)(RpcClient.make(CatalogRpcGroup)).pipe(
+  Layer.provide(RpcClient.layerProtocolSocket()),
+  Layer.provide(rpcSupportLayer),
+);
+
+const rpcRuntime = ManagedRuntime.make(rpcClientLayer, {
+  memoMap: Layer.makeMemoMapUnsafe(),
+});
+
+async function runCatalogRpc<A>(
+  f: (client: CatalogRpcServiceShape) => Effect.Effect<A, unknown>,
+): Promise<A> {
+  try {
+    return await rpcRuntime.runPromise(Effect.flatMap(CatalogRpcClient.asEffect(), f));
+  } catch (error) {
+    throw new Error(formatCatalogError(error));
   }
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  return (await response.json()) as T;
 }
 
-export function emitCatalogChanged(): void {
-  if (typeof window === "undefined") {
-    return;
-  }
+const queryClient = new QueryClient();
 
-  window.dispatchEvent(new Event(CATALOG_CHANGED_EVENT));
+export const projectsCollection = createCollection(
+  queryCollectionOptions({
+    queryKey: ["catalog", "projects"],
+    queryFn: async () => [...(await listProjects())],
+    queryClient,
+    getKey: (project: Project) => project.id,
+  }),
+);
+
+export async function refetchProjects(): Promise<void> {
+  await projectsCollection.utils.refetch({ throwOnError: true });
 }
 
-export function subscribeToCatalogChanges(listener: () => void): () => void {
-  if (typeof window === "undefined") {
-    return () => {};
-  }
-
-  window.addEventListener(CATALOG_CHANGED_EVENT, listener);
-  return () => {
-    window.removeEventListener(CATALOG_CHANGED_EVENT, listener);
-  };
-}
-
-export async function listProjects(): Promise<ReadonlyArray<Project>> {
-  const body = await requestJson<{ projects: ReadonlyArray<Project> }>("/api/projects");
-  return body.projects;
+export async function listProjects(): Promise<Array<Project>> {
+  return [...(await runCatalogRpc((client) => client.ListProjects()))];
 }
 
 export async function getProject(projectId: string): Promise<Project> {
-  const body = await requestJson<{ project: Project }>(`/api/projects/${projectId}`);
-  return body.project;
+  return runCatalogRpc((client) => client.GetProject({ projectId }));
 }
 
 export async function createProject(input: CreateProjectInput): Promise<Project> {
-  const body = await requestJson<{ project: Project }>("/api/projects", {
-    body: JSON.stringify(input),
-    method: "POST",
-  });
-  return body.project;
+  const project = await runCatalogRpc((client) => client.CreateProject(input));
+  await refetchProjects();
+  return project;
 }
 
 export async function updateProject(
   projectId: string,
   input: UpdateProjectInput,
 ): Promise<Project> {
-  const body = await requestJson<{ project: Project }>(`/api/projects/${projectId}`, {
-    body: JSON.stringify(input),
-    method: "PATCH",
-  });
-  return body.project;
+  const project = await runCatalogRpc((client) => client.UpdateProject({ projectId, input }));
+  await refetchProjects();
+  return project;
 }
 
 export async function deleteProject(projectId: string): Promise<void> {
-  await requestJson<void>(`/api/projects/${projectId}`, {
-    method: "DELETE",
-  });
+  await runCatalogRpc((client) => client.DeleteProject({ projectId }));
+  await refetchProjects();
 }
 
 export async function getDataset(projectId: string, datasetId: string): Promise<Dataset> {
-  const body = await requestJson<{ dataset: Dataset }>(
-    `/api/projects/${projectId}/datasets/${datasetId}`,
-  );
-  return body.dataset;
+  return runCatalogRpc((client) => client.GetDataset({ projectId, datasetId }));
 }
 
 export async function createDataset(
   projectId: string,
   input: CreateDatasetInput,
 ): Promise<Dataset> {
-  const body = await requestJson<{ dataset: Dataset }>(
-    `/api/projects/${projectId}/datasets`,
-    {
-      body: JSON.stringify(input),
-      method: "POST",
-    },
-  );
-  return body.dataset;
+  const dataset = await runCatalogRpc((client) => client.CreateDataset({ projectId, input }));
+  await refetchProjects();
+  return dataset;
 }
 
 export async function updateDataset(
@@ -126,18 +121,14 @@ export async function updateDataset(
   datasetId: string,
   input: UpdateDatasetInput,
 ): Promise<Dataset> {
-  const body = await requestJson<{ dataset: Dataset }>(
-    `/api/projects/${projectId}/datasets/${datasetId}`,
-    {
-      body: JSON.stringify(input),
-      method: "PATCH",
-    },
+  const dataset = await runCatalogRpc((client) =>
+    client.UpdateDataset({ projectId, datasetId, input })
   );
-  return body.dataset;
+  await refetchProjects();
+  return dataset;
 }
 
 export async function deleteDataset(projectId: string, datasetId: string): Promise<void> {
-  await requestJson<void>(`/api/projects/${projectId}/datasets/${datasetId}`, {
-    method: "DELETE",
-  });
+  await runCatalogRpc((client) => client.DeleteDataset({ projectId, datasetId }));
+  await refetchProjects();
 }

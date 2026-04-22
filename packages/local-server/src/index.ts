@@ -1,16 +1,11 @@
-import { existsSync } from "node:fs";
-import { homedir } from "node:os";
-import { mkdir, readFile } from "node:fs/promises";
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { dirname, join, normalize, resolve, sep } from "node:path";
+import { NodeHttpServer } from "@effect/platform-node";
 import {
-  decodeCreateDatasetInput,
-  decodeCreateProjectInput,
-  decodeServerEvent,
-  decodeUpdateDatasetInput,
-  decodeUpdateProjectInput,
-  type ServerEvent,
+  CatalogRpcGroup,
   type ServerSnapshot,
+  type CreateDatasetInput,
+  type CreateProjectInput,
+  type UpdateDatasetInput,
+  type UpdateProjectInput,
 } from "@lensflare/contracts";
 import {
   APP_NAME,
@@ -20,14 +15,17 @@ import {
   resolveServerOrigin,
 } from "@lensflare/shared";
 import { Effect, Layer, ManagedRuntime } from "effect";
-import WebSocket, { WebSocketServer } from "ws";
 import {
-  CatalogStore,
-  DatasetNotFound,
-  makeCatalogStoreLayer,
-  ProjectNotFound,
-  ValidationError,
-} from "./catalog.ts";
+  HttpRouter,
+  HttpServerResponse,
+} from "effect/unstable/http";
+import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
+import { existsSync } from "node:fs";
+import { mkdir, readFile } from "node:fs/promises";
+import { createServer } from "node:http";
+import { homedir } from "node:os";
+import { dirname, join, normalize, resolve, sep } from "node:path";
+import { CatalogStore, makeCatalogStoreLayer } from "./catalog.ts";
 
 export interface StartLocalServerOptions {
   mode: "desktop" | "server";
@@ -154,7 +152,7 @@ function renderFallbackApp(origin: string): string {
   <body>
     <main>
       <h1>${APP_NAME} local server is live</h1>
-      <p>The API is running at <code>${origin}</code>.</p>
+      <p>The RPC server is running at <code>${origin}/rpc</code>.</p>
       <p>No web bundle was found yet. Build or run <code>apps/web</code> and point the desktop shell at it during development.</p>
       <p>Once the web app is built, this same server becomes the shared backend for the desktop shell and the browser client.</p>
     </main>
@@ -162,304 +160,111 @@ function renderFallbackApp(origin: string): string {
 </html>`;
 }
 
-function sendJson(response: ServerResponse, status: number, body: unknown): void {
-  response.writeHead(status, { "content-type": "application/json; charset=utf-8" });
-  response.end(JSON.stringify(body, null, 2));
+function makeCatalogRpcLayer() {
+  return CatalogRpcGroup.toLayer(
+    Effect.gen(function* () {
+      const store = yield* CatalogStore;
+
+      return CatalogRpcGroup.of({
+        ListProjects: () => store.listProjects().pipe(Effect.catchTag("SqlError", Effect.die)),
+        GetProject: ({ projectId }: { projectId: string }) =>
+          store.getProject(projectId).pipe(Effect.catchTag("SqlError", Effect.die)),
+        CreateProject: (input: CreateProjectInput) =>
+          store.createProject(input).pipe(Effect.catchTag("SqlError", Effect.die)),
+        UpdateProject: (
+          { projectId, input }: { projectId: string; input: UpdateProjectInput },
+        ) => store.updateProject(projectId, input).pipe(Effect.catchTag("SqlError", Effect.die)),
+        DeleteProject: ({ projectId }: { projectId: string }) =>
+          store.deleteProject(projectId).pipe(Effect.catchTag("SqlError", Effect.die)),
+        GetDataset: (
+          { projectId, datasetId }: { projectId: string; datasetId: string },
+        ) => store.getDataset(projectId, datasetId).pipe(Effect.catchTag("SqlError", Effect.die)),
+        CreateDataset: (
+          { projectId, input }: { projectId: string; input: CreateDatasetInput },
+        ) => store.createDataset(projectId, input).pipe(Effect.catchTag("SqlError", Effect.die)),
+        UpdateDataset: (
+          {
+            projectId,
+            datasetId,
+            input,
+          }: { projectId: string; datasetId: string; input: UpdateDatasetInput },
+        ) =>
+          store.updateDataset(projectId, datasetId, input).pipe(
+            Effect.catchTag("SqlError", Effect.die),
+          ),
+        DeleteDataset: (
+          { projectId, datasetId }: { projectId: string; datasetId: string },
+        ) => store.deleteDataset(projectId, datasetId).pipe(Effect.catchTag("SqlError", Effect.die)),
+      });
+    }),
+  );
 }
 
-function sendNoContent(response: ServerResponse): void {
-  response.writeHead(204);
-  response.end();
-}
+function makeHttpRoutesLayer(options: {
+  readonly origin: string;
+  readonly snapshot: () => ServerSnapshot;
+  readonly staticDir: string | undefined;
+  readonly mode: StartLocalServerOptions["mode"];
+  readonly databaseFile: string;
+}) {
+  return Layer.effectDiscard(
+    Effect.gen(function* () {
+      const router = yield* HttpRouter.HttpRouter;
 
-async function readJsonBody(request: IncomingMessage): Promise<unknown> {
-  const chunks: Array<Buffer> = [];
+      yield* router.add(
+        "GET",
+        "/api/health",
+        HttpServerResponse.jsonUnsafe(options.snapshot()),
+      );
 
-  for await (const chunk of request) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
+      yield* router.add(
+        "GET",
+        "/api/meta",
+        HttpServerResponse.jsonUnsafe({
+          appName: APP_NAME,
+          appVersion: APP_VERSION,
+          serverOrigin: options.origin,
+          mode: options.mode,
+          databaseFile: options.databaseFile,
+        }),
+      );
 
-  if (chunks.length === 0) {
-    return {};
-  }
+      const apiNotFound = HttpServerResponse.jsonUnsafe(
+        {
+          error: {
+            tag: "NotFound",
+            message: "API route not found.",
+          },
+        },
+        { status: 404 },
+      );
 
-  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
-}
-
-function sendApiError(response: ServerResponse, error: unknown): void {
-  if (error instanceof ProjectNotFound) {
-    sendJson(response, 404, {
-      error: {
-        tag: error._tag,
-        message: "Project not found.",
-        projectId: error.projectId,
-      },
-    });
-    return;
-  }
-
-  if (error instanceof DatasetNotFound) {
-    sendJson(response, 404, {
-      error: {
-        tag: error._tag,
-        message: "Dataset not found.",
-        projectId: error.projectId,
-        datasetId: error.datasetId,
-      },
-    });
-    return;
-  }
-
-  if (error instanceof ValidationError) {
-    sendJson(response, 400, {
-      error: {
-        tag: error._tag,
-        message: error.message,
-        field: error.field,
-      },
-    });
-    return;
-  }
-
-  if (error instanceof SyntaxError) {
-    sendJson(response, 400, {
-      error: {
-        tag: "InvalidJson",
-        message: "Request body must be valid JSON.",
-      },
-    });
-    return;
-  }
-
-  console.error("[lensflare] API request failed", error);
-  sendJson(response, 500, {
-    error: {
-      tag: "InternalServerError",
-      message: "Internal Server Error",
-    },
-  });
-}
-
-async function handleApiRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
-  url: URL,
-  options: StartLocalServerOptions,
-  origin: string,
-  runtime: ManagedRuntime.ManagedRuntime<CatalogStore, unknown>,
-  snapshot: () => ServerSnapshot,
-): Promise<boolean> {
-  const method = request.method ?? "GET";
-  const segments = url.pathname
-    .split("/")
-    .filter(Boolean)
-    .map((segment) => decodeURIComponent(segment));
-
-  if (segments[0] !== "api") {
-    return false;
-  }
-
-  const runCatalog = <A, E>(program: Effect.Effect<A, E, CatalogStore>) =>
-    runtime.runPromise(program);
-
-  if (segments.length === 2 && segments[1] === "health" && method === "GET") {
-    sendJson(response, 200, snapshot());
-    return true;
-  }
-
-  if (segments.length === 2 && segments[1] === "meta" && method === "GET") {
-    sendJson(response, 200, {
-      appName: APP_NAME,
-      appVersion: APP_VERSION,
-      serverOrigin: origin,
-      mode: options.mode,
-      databaseFile: options.databaseFile ?? DEFAULT_DATABASE_FILE,
-    });
-    return true;
-  }
-
-  if (segments.length === 2 && segments[1] === "projects") {
-    try {
-      if (method === "GET") {
-        const projects = await runCatalog(
+      yield* router.add(
+        "GET",
+        "/*",
+        (request) =>
           Effect.gen(function* () {
-            const store = yield* CatalogStore;
-            return yield* store.listProjects();
+            const pathname = new URL(request.url, options.origin).pathname;
+
+            if (pathname === "/api" || pathname.startsWith("/api/")) {
+              return apiNotFound;
+            }
+
+            const staticResponse = yield* Effect.promise(() =>
+              serveStaticFile(pathname, options.staticDir),
+            );
+
+            if (staticResponse) {
+              return HttpServerResponse.uint8Array(staticResponse.body, {
+                contentType: staticResponse.contentType,
+              });
+            }
+
+            return HttpServerResponse.html(renderFallbackApp(options.origin));
           }),
-        );
-        sendJson(response, 200, { projects });
-        return true;
-      }
-
-      if (method === "POST") {
-        const body = await readJsonBody(request);
-        const input = decodeCreateProjectInput(body);
-        const project = await runCatalog(
-          Effect.gen(function* () {
-            const store = yield* CatalogStore;
-            return yield* store.createProject(input);
-          }),
-        );
-        sendJson(response, 201, { project });
-        return true;
-      }
-    } catch (error) {
-      sendApiError(response, error);
-      return true;
-    }
-
-    sendJson(response, 405, {
-      error: { tag: "MethodNotAllowed", message: "Method not allowed." },
-    });
-    return true;
-  }
-
-  if (segments.length === 3 && segments[1] === "projects") {
-    const projectId = segments[2]!;
-
-    try {
-      if (method === "GET") {
-        const project = await runCatalog(
-          Effect.gen(function* () {
-            const store = yield* CatalogStore;
-            return yield* store.getProject(projectId);
-          }),
-        );
-        sendJson(response, 200, { project });
-        return true;
-      }
-
-      if (method === "PATCH") {
-        const body = await readJsonBody(request);
-        const input = decodeUpdateProjectInput(body);
-        const project = await runCatalog(
-          Effect.gen(function* () {
-            const store = yield* CatalogStore;
-            return yield* store.updateProject(projectId, input);
-          }),
-        );
-        sendJson(response, 200, { project });
-        return true;
-      }
-
-      if (method === "DELETE") {
-        await runCatalog(
-          Effect.gen(function* () {
-            const store = yield* CatalogStore;
-            yield* store.deleteProject(projectId);
-          }),
-        );
-        sendNoContent(response);
-        return true;
-      }
-    } catch (error) {
-      sendApiError(response, error);
-      return true;
-    }
-
-    sendJson(response, 405, {
-      error: { tag: "MethodNotAllowed", message: "Method not allowed." },
-    });
-    return true;
-  }
-
-  if (segments.length === 4 && segments[1] === "projects" && segments[3] === "datasets") {
-    const projectId = segments[2]!;
-
-    try {
-      if (method === "GET") {
-        const datasets = await runCatalog(
-          Effect.gen(function* () {
-            const store = yield* CatalogStore;
-            const project = yield* store.getProject(projectId);
-            return project.datasets;
-          }),
-        );
-        sendJson(response, 200, { datasets });
-        return true;
-      }
-
-      if (method === "POST") {
-        const body = await readJsonBody(request);
-        const input = decodeCreateDatasetInput(body);
-        const dataset = await runCatalog(
-          Effect.gen(function* () {
-            const store = yield* CatalogStore;
-            return yield* store.createDataset(projectId, input);
-          }),
-        );
-        sendJson(response, 201, { dataset });
-        return true;
-      }
-    } catch (error) {
-      sendApiError(response, error);
-      return true;
-    }
-
-    sendJson(response, 405, {
-      error: { tag: "MethodNotAllowed", message: "Method not allowed." },
-    });
-    return true;
-  }
-
-  if (
-    segments.length === 5 &&
-    segments[1] === "projects" &&
-    segments[3] === "datasets"
-  ) {
-    const projectId = segments[2]!;
-    const datasetId = segments[4]!;
-
-    try {
-      if (method === "GET") {
-        const dataset = await runCatalog(
-          Effect.gen(function* () {
-            const store = yield* CatalogStore;
-            return yield* store.getDataset(projectId, datasetId);
-          }),
-        );
-        sendJson(response, 200, { dataset });
-        return true;
-      }
-
-      if (method === "PATCH") {
-        const body = await readJsonBody(request);
-        const input = decodeUpdateDatasetInput(body);
-        const dataset = await runCatalog(
-          Effect.gen(function* () {
-            const store = yield* CatalogStore;
-            return yield* store.updateDataset(projectId, datasetId, input);
-          }),
-        );
-        sendJson(response, 200, { dataset });
-        return true;
-      }
-
-      if (method === "DELETE") {
-        await runCatalog(
-          Effect.gen(function* () {
-            const store = yield* CatalogStore;
-            yield* store.deleteDataset(projectId, datasetId);
-          }),
-        );
-        sendNoContent(response);
-        return true;
-      }
-    } catch (error) {
-      sendApiError(response, error);
-      return true;
-    }
-
-    sendJson(response, 405, {
-      error: { tag: "MethodNotAllowed", message: "Method not allowed." },
-    });
-    return true;
-  }
-
-  sendJson(response, 404, {
-    error: { tag: "NotFound", message: "API route not found." },
-  });
-  return true;
+      );
+    }),
+  );
 }
 
 export async function startLocalServer(
@@ -469,22 +274,9 @@ export async function startLocalServer(
   const port = options.port ?? DEFAULT_SERVER_PORT;
   const origin = resolveServerOrigin({ host, serverPort: port });
   const startedAt = new Date();
-  const sockets = new Set<WebSocket>();
   const databaseFile = options.databaseFile ?? DEFAULT_DATABASE_FILE;
 
   await mkdir(dirname(databaseFile), { recursive: true });
-
-  const appLayer = makeCatalogStoreLayer(databaseFile);
-  const runtime = ManagedRuntime.make(appLayer, {
-    memoMap: Layer.makeMemoMapUnsafe(),
-  });
-
-  await runtime.runPromise(
-    Effect.gen(function* () {
-      const store = yield* CatalogStore;
-      yield* store.listProjects();
-    }),
-  );
 
   const snapshot = (): ServerSnapshot => ({
     name: APP_NAME,
@@ -500,143 +292,50 @@ export async function startLocalServer(
       options.staticAssetMode ?? (options.staticDir ? "filesystem" : "none"),
   });
 
-  const broadcast = (event: ServerEvent): void => {
-    const encoded = JSON.stringify(event);
-    for (const socket of sockets) {
-      if (socket.readyState === WebSocket.OPEN) {
-        socket.send(encoded);
-      }
-    }
-  };
+  const routesLayer = Layer.mergeAll(
+    makeHttpRoutesLayer({
+      origin,
+      snapshot,
+      staticDir: options.staticDir,
+      mode: options.mode,
+      databaseFile,
+    }),
+    RpcServer.layerHttp({
+      group: CatalogRpcGroup,
+      path: "/rpc",
+      protocol: "websocket",
+    }).pipe(Layer.provide(makeCatalogRpcLayer())),
+  );
 
-  const heartbeatTimer = setInterval(() => {
-    const nextEvent = decodeServerEvent({
-      type: "server.heartbeat",
-      sentAt: new Date().toISOString(),
-      snapshot: snapshot(),
-      detail: "local server heartbeat",
-    });
+  const infrastructureLayer = Layer.mergeAll(
+    makeCatalogStoreLayer(databaseFile),
+    HttpRouter.layer,
+    RpcSerialization.layerJson,
+    NodeHttpServer.layer(createServer, { host, port }),
+  );
 
-    Effect.runSync(Effect.sync(() => broadcast(nextEvent)));
-  }, 5_000);
+  const runtimeLayer = Layer.merge(
+    infrastructureLayer,
+    HttpRouter.serve(routesLayer).pipe(Layer.provide(infrastructureLayer)),
+  );
 
-  const server = createServer((request, response) => {
-    const url = new URL(request.url ?? "/", origin);
-
-    void Effect.runPromise(
-      Effect.gen(function* () {
-        const apiHandled = yield* Effect.promise(() =>
-          handleApiRequest(request, response, url, options, origin, runtime, snapshot),
-        );
-        if (apiHandled) {
-          return;
-        }
-
-        const staticResponse = yield* Effect.promise(() =>
-          serveStaticFile(url.pathname, options.staticDir),
-        );
-
-        if (staticResponse) {
-          response.writeHead(200, { "content-type": staticResponse.contentType });
-          response.end(staticResponse.body);
-          return;
-        }
-
-        response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-        response.end(renderFallbackApp(origin));
-      }).pipe(
-        Effect.catchCause((cause) =>
-          Effect.sync(() => {
-            console.error("[lensflare] local server request failed", cause);
-            if (!response.headersSent) {
-              response.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
-              response.end("Internal Server Error");
-              return;
-            }
-            if (!response.writableEnded) {
-              response.end("Internal Server Error");
-            }
-          }),
-        ),
-      ),
-    );
+  const runtime = ManagedRuntime.make(runtimeLayer, {
+    memoMap: Layer.makeMemoMapUnsafe(),
   });
 
-  const webSocketServer = new WebSocketServer({ noServer: true });
-
-  server.on("upgrade", (request, socket, head) => {
-    const url = new URL(request.url ?? "/", origin);
-
-    if (url.pathname !== "/ws") {
-      socket.destroy();
-      return;
-    }
-
-    webSocketServer.handleUpgrade(request, socket, head, (webSocket) => {
-      webSocketServer.emit("connection", webSocket, request);
-    });
-  });
-
-  webSocketServer.on("connection", (socket) => {
-    sockets.add(socket);
-    socket.on("close", () => {
-      sockets.delete(socket);
-    });
-    socket.on("error", () => {
-      sockets.delete(socket);
-    });
-    socket.send(
-      JSON.stringify(
-        decodeServerEvent({
-          type: "server.ready",
-          sentAt: new Date().toISOString(),
-          snapshot: snapshot(),
-          detail: `${options.mode} runtime attached`,
-        }),
-      ),
-    );
-  });
-
-  await new Promise<void>((resolvePromise, reject) => {
-    server.once("error", reject);
-    server.listen(port, host, () => {
-      server.off("error", reject);
-      resolvePromise();
-    });
-  });
+  await runtime.runPromise(
+    Effect.gen(function* () {
+      const store = yield* CatalogStore;
+      yield* store.listProjects();
+    }),
+  );
 
   console.log(`[lensflare] ${options.mode} server listening on ${origin}`);
 
   return {
     origin,
-    async stop() {
-      clearInterval(heartbeatTimer);
-
-      for (const socket of sockets) {
-        socket.close();
-      }
-
-      await Promise.all([
-        runtime.dispose(),
-        new Promise<void>((resolvePromise, reject) => {
-          webSocketServer.close((error) => {
-            if (error) {
-              reject(error);
-              return;
-            }
-            resolvePromise();
-          });
-        }),
-        new Promise<void>((resolvePromise, reject) => {
-          server.close((error) => {
-            if (error) {
-              reject(error);
-              return;
-            }
-            resolvePromise();
-          });
-        }),
-      ]);
+    stop() {
+      return runtime.dispose();
     },
   };
 }

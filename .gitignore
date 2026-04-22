@@ -215,5 +215,5 @@ yalc.lock
 **/tsconfig.tsbuildinfo
 
 resources/
-
+artifacts/
 build/

@@ -4,28 +4,17 @@ import {
   type Dataset,
   type CreateDatasetInput,
   type CreateProjectInput,
+  DatasetNotFound,
   PROJECT_ICONS,
   type Project,
+  ProjectNotFound,
   type ProjectIcon,
   type UpdateDatasetInput,
   type UpdateProjectInput,
+  ValidationError,
 } from "@lensflare/contracts";
-import { Effect, Layer, Schema, ServiceMap } from "effect";
+import { Context, Effect, Layer, Schema } from "effect";
 import { SqlClient, SqlError } from "effect/unstable/sql";
-
-class ProjectNotFound extends Schema.TaggedErrorClass("ProjectNotFound")("ProjectNotFound", {
-  projectId: Schema.String,
-}) {}
-
-class DatasetNotFound extends Schema.TaggedErrorClass("DatasetNotFound")("DatasetNotFound", {
-  datasetId: Schema.String,
-  projectId: Schema.String,
-}) {}
-
-class ValidationError extends Schema.TaggedErrorClass("ValidationError")("ValidationError", {
-  field: Schema.String,
-  message: Schema.String,
-}) {}
 
 const ProjectRowSchema = Schema.Struct({
   id: Schema.String,
@@ -93,7 +82,7 @@ function projectFromRow(row: ProjectRow, datasets: ReadonlyArray<Dataset>): Proj
   };
 }
 
-export class CatalogStore extends ServiceMap.Service<
+export class CatalogStore extends Context.Service<
   CatalogStore,
   {
     readonly createDataset: (

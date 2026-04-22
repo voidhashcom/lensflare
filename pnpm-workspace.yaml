@@ -3,12 +3,13 @@ packages:
   - packages/*
 catalog:
   # Effect ecosystem (v4)
-  effect: 4.0.0-beta.23
-  "@effect/sql-sqlite-node": 4.0.0-beta.23
-  "@effect/platform-bun": 4.0.0-beta.23
-  "@effect/platform-node": 4.0.0-beta.23
-  "@effect/vitest": 4.0.0-beta.23
-  "@effect/opentelemetry": 4.0.0-beta.23
+  effect: 4.0.0-beta.55
+  "@effect/sql-sqlite-node": 4.0.0-beta.55
+  "@effect/platform-bun": 4.0.0-beta.55
+  "@effect/platform-node": 4.0.0-beta.55
+  "@effect/platform-node-shared": 4.0.0-beta.55
+  "@effect/vitest": 4.0.0-beta.55
+  "@effect/opentelemetry": 4.0.0-beta.55
 
   # TanStack
   "@tanstack/react-router": ^1.160.0
@@ -41,6 +42,7 @@ catalog:
   vitest: ^4.0.8
   vite-plus: latest
 overrides:
+  "@effect/platform-node-shared": "catalog:"
   vite: "catalog:"
   vitest: "catalog:"
 peerDependencyRules:

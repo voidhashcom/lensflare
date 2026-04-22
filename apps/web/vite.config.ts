@@ -30,7 +30,7 @@ export default defineConfig({
         target: serverOrigin,
         changeOrigin: true,
       },
-      "/ws": {
+      "/rpc": {
         target: serverOrigin.replace(/^http/, "ws"),
         changeOrigin: true,
         ws: true,
