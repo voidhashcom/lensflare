@@ -3,6 +3,7 @@ import {
   DEFAULT_SERVER_PORT,
   DEFAULT_WEB_DEV_PORT,
   readRuntimeConfigFromEnv,
+  resolveDataPaths,
   resolveServerOrigin,
   resolveWebDevUrl,
   resolveWebSocketOrigin,
@@ -26,5 +27,44 @@ describe("@lensflare/shared", () => {
     expect(resolveWebDevUrl({ host: "localhost", webDevPort: 5173 })).toBe(
       "http://localhost:5173",
     );
+  });
+
+  it("resolves standardized data paths per platform", () => {
+    expect(
+      resolveDataPaths({
+        platform: "darwin",
+        homeDirectory: "/Users/tester",
+      }),
+    ).toEqual({
+      dataDir: "/Users/tester/Library/Application Support/Lensflare",
+      sqliteDatabaseFile: "/Users/tester/Library/Application Support/Lensflare/lensflare.sqlite",
+      duckdbDatabaseFile: "/Users/tester/Library/Application Support/Lensflare/lensflare.duckdb",
+    });
+
+    expect(
+      resolveDataPaths({
+        platform: "linux",
+        homeDirectory: "/home/tester",
+        env: {},
+      }),
+    ).toEqual({
+      dataDir: "/home/tester/.local/share/lensflare",
+      sqliteDatabaseFile: "/home/tester/.local/share/lensflare/lensflare.sqlite",
+      duckdbDatabaseFile: "/home/tester/.local/share/lensflare/lensflare.duckdb",
+    });
+
+    expect(
+      resolveDataPaths({
+        platform: "win32",
+        homeDirectory: "C:\\Users\\tester",
+        env: {
+          LOCALAPPDATA: "C:\\Users\\tester\\AppData\\Local",
+        },
+      }),
+    ).toEqual({
+      dataDir: "C:\\Users\\tester\\AppData\\Local/Lensflare",
+      sqliteDatabaseFile: "C:\\Users\\tester\\AppData\\Local/Lensflare/lensflare.sqlite",
+      duckdbDatabaseFile: "C:\\Users\\tester\\AppData\\Local/Lensflare/lensflare.duckdb",
+    });
   });
 });

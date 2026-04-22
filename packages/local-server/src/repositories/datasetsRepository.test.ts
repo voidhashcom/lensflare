@@ -1,15 +1,15 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 import { withTempDirectory } from "../_internal/testSupport.ts";
-import { makeDatabaseLayer } from "../db/database.ts";
+import { makeSqliteDatabaseLayer } from "../db/database.ts";
 import { DatasetsRepository } from "./datasetsRepository.ts";
 import { ProjectsRepository } from "./projectsRepository.ts";
 
 // The datasets table has an FK on projects.id, so every test sets up a
 // project row first. We expose both repositories from the test layer so
 // each spec can manage parent/child rows directly.
-const buildLayer = (databaseFile: string) => {
-  const databaseLayer = makeDatabaseLayer(databaseFile);
+const buildLayer = (sqliteDatabaseFile: string) => {
+  const databaseLayer = makeSqliteDatabaseLayer(sqliteDatabaseFile);
   return Layer.mergeAll(
     ProjectsRepository.layer.pipe(Layer.provide(databaseLayer)),
     DatasetsRepository.layer.pipe(Layer.provide(databaseLayer)),
@@ -22,6 +22,7 @@ const seedProject = (projects: ProjectsRepository["Service"], id: string) =>
     yield* projects.insert({
       id,
       name: `Project ${id}`,
+      slug: `project-${id}`,
       icon: "folder",
       createdAt: now,
       updatedAt: now,
@@ -42,6 +43,7 @@ describe("DatasetsRepository", () => {
           id: "d1",
           projectId: "p1",
           name: "traces",
+          slug: "traces",
           createdAt: now,
           updatedAt: now,
         });
@@ -51,6 +53,7 @@ describe("DatasetsRepository", () => {
           id: "d1",
           project_id: "p1",
           name: "traces",
+          slug: "traces",
           created_at: now,
           updated_at: now,
         });
@@ -72,6 +75,7 @@ describe("DatasetsRepository", () => {
           id: "d1",
           projectId: "p1",
           name: "traces",
+          slug: "traces",
           createdAt: now,
           updatedAt: now,
         });
@@ -79,6 +83,7 @@ describe("DatasetsRepository", () => {
           id: "d2",
           projectId: "p2",
           name: "spans",
+          slug: "spans",
           createdAt: now,
           updatedAt: now,
         });
@@ -105,15 +110,21 @@ describe("DatasetsRepository", () => {
           id: "d1",
           projectId: "p1",
           name: "traces",
+          slug: "traces",
           createdAt: now,
           updatedAt: now,
         });
 
         const later = new Date(Date.now() + 1000).toISOString();
-        yield* datasets.update("p1", "d1", { name: "spans", updatedAt: later });
+        yield* datasets.update("p1", "d1", {
+          name: "spans",
+          slug: "spans",
+          updatedAt: later,
+        });
 
         const found = yield* datasets.findById("p1", "d1");
         expect(found?.name).toBe("spans");
+        expect(found?.slug).toBe("spans");
         expect(found?.updated_at).toBe(later);
       }),
     ),
@@ -132,6 +143,7 @@ describe("DatasetsRepository", () => {
           id: "d1",
           projectId: "p1",
           name: "traces",
+          slug: "traces",
           createdAt: now,
           updatedAt: now,
         });
@@ -157,6 +169,7 @@ describe("DatasetsRepository", () => {
           id: "d1",
           projectId: "p1",
           name: "traces",
+          slug: "traces",
           createdAt: now,
           updatedAt: now,
         });

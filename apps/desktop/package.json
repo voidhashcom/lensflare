@@ -5,11 +5,12 @@
   "type": "module",
   "main": "dist/index.cjs",
   "scripts": {
-    "rebuild:native": "env -u ELECTRON_RUN_AS_NODE electron-builder install-app-deps",
+    "rebuild:native": "node ./scripts/rebuild-native.mjs",
     "predev": "pnpm run rebuild:native",
-    "dev": "concurrently -k -s first -n bundle,electron \"pnpm run dev:bundle\" \"pnpm run dev:desktop\"",
+    "dev": "concurrently -k -s first -n web,bundle,electron \"pnpm --dir ../web run dev\" \"pnpm run dev:bundle\" \"pnpm run dev:electron\"",
     "dev:bundle": "vp pack --watch",
-    "dev:desktop": "wait-on tcp:127.0.0.1:5173 dist/index.cjs && env -u ELECTRON_RUN_AS_NODE LENSFLARE_DESKTOP_DEV=1 electronmon .",
+    "dev:desktop": "pnpm run dev",
+    "dev:electron": "wait-on tcp:127.0.0.1:5173 dist/index.cjs && env -u ELECTRON_RUN_AS_NODE LENSFLARE_DESKTOP_DEV=1 electronmon .",
     "prebuild": "pnpm run rebuild:native",
     "build": "vp pack && env -u ELECTRON_RUN_AS_NODE electron-builder",
     "prestart": "pnpm run rebuild:native",
@@ -19,6 +20,7 @@
     "clean": "rm -rf dist artifacts"
   },
   "dependencies": {
+    "@duckdb/node-api": "catalog:",
     "@effect/sql-sqlite-node": "catalog:",
     "@lensflare/local-server": "workspace:*",
     "@lensflare/shared": "workspace:*"
@@ -30,8 +32,8 @@
     "electron-builder": "^26.8.1",
     "electronmon": "^2.0.4",
     "typescript": "catalog:",
+    "vite-plus": "catalog:",
     "vitest": "catalog:",
-    "wait-on": "^9.0.5",
-    "vite-plus": "catalog:"
+    "wait-on": "^9.0.5"
   }
 }

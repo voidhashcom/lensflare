@@ -13,7 +13,15 @@ export default defineConfig({
       "import.meta": "{}",
     },
     deps: {
-      neverBundle: ["electron", "@effect/sql-sqlite-node", "better-sqlite3", "bindings", "file-uri-to-path"],
+      neverBundle: [
+        "electron",
+        "@effect/sql-sqlite-node",
+        "@duckdb/node-api",
+        "@duckdb/node-bindings",
+        "better-sqlite3",
+        "bindings",
+        "file-uri-to-path",
+      ],
       alwaysBundle: [/^@lensflare\//, /^effect/, /^ws$/],
       onlyBundle: false,
     },

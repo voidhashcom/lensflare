@@ -10,6 +10,7 @@ catalog:
   "@effect/platform-node-shared": 4.0.0-beta.55
   "@effect/vitest": 4.0.0-beta.55
   "@effect/opentelemetry": 4.0.0-beta.55
+  "@duckdb/node-api": ^1.5.2-r.1
 
   # TanStack
   "@tanstack/react-router": ^1.160.0
@@ -38,6 +39,7 @@ catalog:
   "vite-tsconfig-paths": ^5.1.4
   typescript: ^5.7.3
   "@types/node": ^24.10.13
+  protobufjs: ^8.0.1
 
   vitest: npm:@voidzero-dev/vite-plus-test@latest
   vite-plus: latest

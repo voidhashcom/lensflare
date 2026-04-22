@@ -9,6 +9,9 @@ catalogs:
     '@base-ui/react':
       specifier: ^1.2.0
       version: 1.4.1
+    '@duckdb/node-api':
+      specifier: ^1.5.2-r.1
+      version: 1.5.2-r.1
     '@effect/platform-node':
       specifier: 4.0.0-beta.55
       version: 4.0.0-beta.55
@@ -51,6 +54,9 @@ catalogs:
     lucide-react:
       specifier: ^0.555.0
       version: 0.555.0
+    protobufjs:
+      specifier: ^8.0.1
+      version: 8.0.1
     react:
       specifier: ^19.1.0
       version: 19.2.5
@@ -97,9 +103,12 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@duckdb/node-api':
+        specifier: 'catalog:'
+        version: 1.5.2-r.1
       '@effect/sql-sqlite-node':
         specifier: 'catalog:'
-        version: 4.0.0-beta.55(effect@4.0.0-beta.55)
+        version: 4.0.0-beta.55(effect@4.0.0-beta.56)
       '@lensflare/local-server':
         specifier: workspace:*
         version: link:../../packages/local-server
@@ -137,6 +146,9 @@ importers:
 
   apps/server:
     dependencies:
+      '@duckdb/node-api':
+        specifier: 'catalog:'
+        version: 1.5.2-r.1
       '@lensflare/local-server':
         specifier: workspace:*
         version: link:../../packages/local-server
@@ -257,6 +269,9 @@ importers:
 
   packages/local-server:
     dependencies:
+      '@duckdb/node-api':
+        specifier: 'catalog:'
+        version: 1.5.2-r.1
       '@effect/platform-node':
         specifier: 'catalog:'
         version: 4.0.0-beta.55(effect@4.0.0-beta.55)(ioredis@5.10.1)
@@ -272,6 +287,9 @@ importers:
       effect:
         specifier: 'catalog:'
         version: 4.0.0-beta.55
+      protobufjs:
+        specifier: 'catalog:'
+        version: 8.0.1
     devDependencies:
       '@effect/vitest':
         specifier: 'catalog:'
@@ -443,14 +461,50 @@ packages:
     resolution: {integrity: sha512-0cp4PsWQ/9avqTVMCtZ+GirikIA36ikvjtHweU4/j8yLtgObI0+JUPhYFScgwlteveGB1rt3Cm8UhN04XayDig==}
     engines: {node: '>= 8.9.0'}
 
+  '@duckdb/node-api@1.5.2-r.1':
+    resolution: {integrity: sha512-OzBBnS0JGXMoS5mzKNY/Ylr7SshcRQiLFIoxQ4AlePwJ2fNeDL/fbHu/knjxUrXwW1fJBTUgwWftmxDdnZZb3A==}
+
+  '@duckdb/node-bindings-darwin-arm64@1.5.2-r.1':
+    resolution: {integrity: sha512-v35FyKOb8EJCvaiPF7k0gvKiJTXR7PPQDNoWR0Gu+YSX5O9b+DIguzt1348Of3HebHy6ATSMzlUekaVA9YXu+g==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@duckdb/node-bindings-darwin-x64@1.5.2-r.1':
+    resolution: {integrity: sha512-SU9dIJ1BluKkkGxi4UsP4keqkkstB2YDySF9KcYu3EZKIVM3FTv2zc7XO38dXnHOq6+F3WqhWWZvD+XU945p7A==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@duckdb/node-bindings-linux-arm64@1.5.2-r.1':
+    resolution: {integrity: sha512-3Tra9xM3aM3denaER4KhJ6//6PpmPbik9ECBQ+sh9PyKaEgHw/0kAcKnLm5EzWUnXF0qYmZlewvkCrse8KmOYw==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@duckdb/node-bindings-linux-x64@1.5.2-r.1':
+    resolution: {integrity: sha512-pcQvZRHiIfJ9cq8parkSQczQHEml/IeGfnDCMAbEgD6+jaV9Y9Y5Ph1kP9aR+bm6him1S5ZIEr3kZbihjKnWbA==}
+    cpu: [x64]
+    os: [linux]
+
+  '@duckdb/node-bindings-win32-arm64@1.5.2-r.1':
+    resolution: {integrity: sha512-Ji8tym+N3LkrhVt0Up3bsacD/kpg4/JXFJQqxswiYvBaNCQOk+D+aiVS0GN5pcqvmnG7V7TpsDRzkLEFaWp1vw==}
+    cpu: [arm64]
+    os: [win32]
+
+  '@duckdb/node-bindings-win32-x64@1.5.2-r.1':
+    resolution: {integrity: sha512-5XqcqC+4R8ghBEEbnc2a0sqfz1zyPBRb9YcmIWfiuDoCYSYFbKhmHcEyNftZDHcwCoLOHXnUin45jraex4STqQ==}
+    cpu: [x64]
+    os: [win32]
+
+  '@duckdb/node-bindings@1.5.2-r.1':
+    resolution: {integrity: sha512-bUg3bLVj70YVku6fKyQJS8ASORl7kM7YFVFznsEB9pWbtazPj+ME2x2FUk0WiTzjJdutjzSSGXF066mB4bGGZA==}
+
   '@effect/language-service@0.85.1':
     resolution: {integrity: sha512-EXnJjIy6zQ3nUO/MZ+ynWUb8B895KZPotd1++oTs9JjDkplwM7cb6zo8Zq2zU6piwq+KflO7amXbEfj1UMpHkw==}
     hasBin: true
 
-  '@effect/platform-bun@4.0.0-beta.55':
-    resolution: {integrity: sha512-kcquzsXbuueXpJ5+wXIcFAZ+/NzHDtgAii2aNINX5DcrfR1+b+62lYPX2vHE4Fi6d/z/JH6Bh2z6+lBBWicBGw==}
+  '@effect/platform-bun@4.0.0-beta.56':
+    resolution: {integrity: sha512-MsCAS+HDHV7Mbv3e2erOlSz1jKZOv55cppKnWmwN+1R6SgwwWK9PZMFBpckideXVeLynwy85+8fqwuPjF2Anpg==}
     peerDependencies:
-      effect: ^4.0.0-beta.55
+      effect: ^4.0.0-beta.56
 
   '@effect/platform-node-shared@4.0.0-beta.55':
     resolution: {integrity: sha512-oNrYJs1FBvGfpG2+j/87m3Fx0EjQA5lLPKkfEuyzYZ0RS817y0y0WH/eItCv97wAPsODNj2WiilgJIcFrdAFHA==}
@@ -1050,6 +1104,36 @@ packages:
 
   '@polka/url@1.0.0-next.29':
     resolution: {integrity: sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==}
+
+  '@protobufjs/aspromise@1.1.2':
+    resolution: {integrity: sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ==}
+
+  '@protobufjs/base64@1.1.2':
+    resolution: {integrity: sha512-AZkcAA5vnN/v4PDqKyMR5lx7hZttPDgClv83E//FMNhR2TMcLUhfRUBHCmSl0oi9zMgDDqRUJkSxO3wm85+XLg==}
+
+  '@protobufjs/codegen@2.0.4':
+    resolution: {integrity: sha512-YyFaikqM5sH0ziFZCN3xDC7zeGaB/d0IUb9CATugHWbd1FRFwWwt4ld4OYMPWu5a3Xe01mGAULCdqhMlPl29Jg==}
+
+  '@protobufjs/eventemitter@1.1.0':
+    resolution: {integrity: sha512-j9ednRT81vYJ9OfVuXG6ERSTdEL1xVsNgqpkxMsbIabzSo3goCjDIveeGv5d03om39ML71RdmrGNjG5SReBP/Q==}
+
+  '@protobufjs/fetch@1.1.0':
+    resolution: {integrity: sha512-lljVXpqXebpsijW71PZaCYeIcE5on1w5DlQy5WH6GLbFryLUrBD4932W/E2BSpfRJWseIL4v/KPgBFxDOIdKpQ==}
+
+  '@protobufjs/float@1.0.2':
+    resolution: {integrity: sha512-Ddb+kVXlXst9d+R9PfTIxh1EdNkgoRe5tOX6t01f1lYWOvJnSPDBlG241QLzcyPdoNTsblLUdujGSE4RzrTZGQ==}
+
+  '@protobufjs/inquire@1.1.0':
+    resolution: {integrity: sha512-kdSefcPdruJiFMVSbn801t4vFK7KB/5gd2fYvrxhuJYg8ILrmn9SKSX2tZdV6V+ksulWqS7aXjBcRXl3wHoD9Q==}
+
+  '@protobufjs/path@1.1.2':
+    resolution: {integrity: sha512-6JOcJ5Tm08dOHAbdR3GrvP+yUUfkjG5ePsHYczMFLq3ZmMkAD98cDgcT2iA1lJ9NVwFd4tH/iSSoe44YWkltEA==}
+
+  '@protobufjs/pool@1.1.0':
+    resolution: {integrity: sha512-0kELaGSIDBKvcgS4zkjz1PeddatrjYcmMWOlAuAPwAeccUrPHdUqo/J6LiymHHEiJT5NrF1UVwxY14f+fy4WQw==}
+
+  '@protobufjs/utf8@1.1.0':
+    resolution: {integrity: sha512-Vvn3zZrhQZkkBE8LSuW3em98c0FwgO4nxzv6OdSxPKJIEKY2bGbHn+mhGIPerzI4twdxaP8/0+06HBpwf345Lw==}
 
   '@rolldown/binding-android-arm64@1.0.0-rc.16':
     resolution: {integrity: sha512-rhY3k7Bsae9qQfOtph2Pm2jZEA+s8Gmjoz4hhmx70K9iMQ/ddeae+xhRQcM5IuVx5ry1+bGfkvMn7D6MJggVSA==}
@@ -1902,6 +1986,9 @@ packages:
   effect@4.0.0-beta.55:
     resolution: {integrity: sha512-IYhKRXZjooXRkpE7Xbx6WFEBwShnu5yIy8/YjZDvPzWk+KTV3YEIIyGwcltHPayvJGumxza4xIQUZpqwe+CwKw==}
 
+  effect@4.0.0-beta.56:
+    resolution: {integrity: sha512-VToZmpoEkH4hHFHeHDMPRwsPQY7BOCEY7uy8yI1LaFEtjZ5w3T3S4yDbKFA7L63OhPo+kZdSvL3tBLOLLcmrQA==}
+
   ejs@3.1.10:
     resolution: {integrity: sha512-UeJmFfOrAQS8OJWPZ4qtgHyWExa088/MtK5UEyoJGFH67cDEXkZSviOiKRCZ4Xij0zxI3JECgYs3oKx+AizQBA==}
     engines: {node: '>=0.10.0'}
@@ -2418,6 +2505,9 @@ packages:
   lodash@4.18.1:
     resolution: {integrity: sha512-dMInicTPVE8d1e5otfwmmjlxkZoUpiVLwyeTdUsi/Caj/gfzzblBcCE5sRHV/AsjuCmxWrte2TNGSYuCeCq+0Q==}
 
+  long@5.3.2:
+    resolution: {integrity: sha512-mNAgZ1GmyNhD7AuqnTG3/VQ26o760+ZYBPKjPvugO8+nLbYfX6TVpJPseBvopbdY+qpZ/lKUnmEc1LeZYS3QAA==}
+
   lowercase-keys@2.0.0:
     resolution: {integrity: sha512-tqNXrS78oMOE73NMxK4EMLQsQowWf8jKooH9g7xPavRT706R6bkQJ6DY2Te7QukaZsulxa30wQ7bk0pm4XiHmA==}
     engines: {node: '>=8'}
@@ -2692,6 +2782,10 @@ packages:
 
   proper-lockfile@4.1.2:
     resolution: {integrity: sha512-TjNPblN4BwAWMXU8s9AEz4JmQxnD1NNL7bNOY/AKUzyamc379FWASUhc/K1pL2noVb+XmZKLL68cjzLsiOAMaA==}
+
+  protobufjs@8.0.1:
+    resolution: {integrity: sha512-NWWCCscLjs+cOKF/s/XVNFRW7Yih0fdH+9brffR5NZCy8k42yRdl5KlWKMVXuI1vfCoy4o1z80XR/W/QUb3V3w==}
+    engines: {node: '>=12.0.0'}
 
   proxy-from-env@2.1.0:
     resolution: {integrity: sha512-cJ+oHTW1VAEa8cJslgmUZrc+sjRKgAKl3Zyse6+PV38hZe/V6Z14TbCuXcan9F9ghlz4QrFr2c92TNF82UkYHA==}
@@ -3386,12 +3480,43 @@ snapshots:
       ajv: 6.14.0
       ajv-keywords: 3.5.2(ajv@6.14.0)
 
+  '@duckdb/node-api@1.5.2-r.1':
+    dependencies:
+      '@duckdb/node-bindings': 1.5.2-r.1
+
+  '@duckdb/node-bindings-darwin-arm64@1.5.2-r.1':
+    optional: true
+
+  '@duckdb/node-bindings-darwin-x64@1.5.2-r.1':
+    optional: true
+
+  '@duckdb/node-bindings-linux-arm64@1.5.2-r.1':
+    optional: true
+
+  '@duckdb/node-bindings-linux-x64@1.5.2-r.1':
+    optional: true
+
+  '@duckdb/node-bindings-win32-arm64@1.5.2-r.1':
+    optional: true
+
+  '@duckdb/node-bindings-win32-x64@1.5.2-r.1':
+    optional: true
+
+  '@duckdb/node-bindings@1.5.2-r.1':
+    optionalDependencies:
+      '@duckdb/node-bindings-darwin-arm64': 1.5.2-r.1
+      '@duckdb/node-bindings-darwin-x64': 1.5.2-r.1
+      '@duckdb/node-bindings-linux-arm64': 1.5.2-r.1
+      '@duckdb/node-bindings-linux-x64': 1.5.2-r.1
+      '@duckdb/node-bindings-win32-arm64': 1.5.2-r.1
+      '@duckdb/node-bindings-win32-x64': 1.5.2-r.1
+
   '@effect/language-service@0.85.1': {}
 
-  '@effect/platform-bun@4.0.0-beta.55(effect@4.0.0-beta.55)':
+  '@effect/platform-bun@4.0.0-beta.56(effect@4.0.0-beta.56)':
     dependencies:
-      '@effect/platform-node-shared': 4.0.0-beta.55(effect@4.0.0-beta.55)
-      effect: 4.0.0-beta.55
+      '@effect/platform-node-shared': 4.0.0-beta.55(effect@4.0.0-beta.56)
+      effect: 4.0.0-beta.56
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -3400,6 +3525,15 @@ snapshots:
     dependencies:
       '@types/ws': 8.18.1
       effect: 4.0.0-beta.55
+      ws: 8.20.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
+  '@effect/platform-node-shared@4.0.0-beta.55(effect@4.0.0-beta.56)':
+    dependencies:
+      '@types/ws': 8.18.1
+      effect: 4.0.0-beta.56
       ws: 8.20.0
     transitivePeerDependencies:
       - bufferutil
@@ -3420,6 +3554,11 @@ snapshots:
     dependencies:
       better-sqlite3: 12.9.0
       effect: 4.0.0-beta.55
+
+  '@effect/sql-sqlite-node@4.0.0-beta.55(effect@4.0.0-beta.56)':
+    dependencies:
+      better-sqlite3: 12.9.0
+      effect: 4.0.0-beta.56
 
   '@effect/vitest@4.0.0-beta.55(@voidzero-dev/vite-plus-test@0.1.19(@types/node@24.12.2)(esbuild@0.27.7)(jiti@2.6.1)(tsx@4.21.0)(typescript@5.9.3)(vite@8.0.9(@types/node@24.12.2)(esbuild@0.27.7)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))(yaml@2.8.3))(effect@4.0.0-beta.55)':
     dependencies:
@@ -3846,6 +3985,29 @@ snapshots:
     optional: true
 
   '@polka/url@1.0.0-next.29': {}
+
+  '@protobufjs/aspromise@1.1.2': {}
+
+  '@protobufjs/base64@1.1.2': {}
+
+  '@protobufjs/codegen@2.0.4': {}
+
+  '@protobufjs/eventemitter@1.1.0': {}
+
+  '@protobufjs/fetch@1.1.0':
+    dependencies:
+      '@protobufjs/aspromise': 1.1.2
+      '@protobufjs/inquire': 1.1.0
+
+  '@protobufjs/float@1.0.2': {}
+
+  '@protobufjs/inquire@1.1.0': {}
+
+  '@protobufjs/path@1.1.2': {}
+
+  '@protobufjs/pool@1.1.0': {}
+
+  '@protobufjs/utf8@1.1.0': {}
 
   '@rolldown/binding-android-arm64@1.0.0-rc.16':
     optional: true
@@ -4717,8 +4879,8 @@ snapshots:
 
   effect-solutions@0.5.2:
     dependencies:
-      '@effect/platform-bun': 4.0.0-beta.55(effect@4.0.0-beta.55)
-      effect: 4.0.0-beta.55
+      '@effect/platform-bun': 4.0.0-beta.56(effect@4.0.0-beta.56)
+      effect: 4.0.0-beta.56
       gray-matter: 4.0.3
       picocolors: 1.1.1
     transitivePeerDependencies:
@@ -4726,6 +4888,19 @@ snapshots:
       - utf-8-validate
 
   effect@4.0.0-beta.55:
+    dependencies:
+      '@standard-schema/spec': 1.1.0
+      fast-check: 4.7.0
+      find-my-way-ts: 0.1.6
+      ini: 6.0.0
+      kubernetes-types: 1.30.0
+      msgpackr: 1.11.10
+      multipasta: 0.2.7
+      toml: 4.1.1
+      uuid: 13.0.0
+      yaml: 2.8.3
+
+  effect@4.0.0-beta.56:
     dependencies:
       '@standard-schema/spec': 1.1.0
       fast-check: 4.7.0
@@ -5295,6 +5470,8 @@ snapshots:
 
   lodash@4.18.1: {}
 
+  long@5.3.2: {}
+
   lowercase-keys@2.0.0: {}
 
   lru-cache@5.1.1:
@@ -5585,6 +5762,21 @@ snapshots:
       graceful-fs: 4.2.11
       retry: 0.12.0
       signal-exit: 3.0.7
+
+  protobufjs@8.0.1:
+    dependencies:
+      '@protobufjs/aspromise': 1.1.2
+      '@protobufjs/base64': 1.1.2
+      '@protobufjs/codegen': 2.0.4
+      '@protobufjs/eventemitter': 1.1.0
+      '@protobufjs/fetch': 1.1.0
+      '@protobufjs/float': 1.0.2
+      '@protobufjs/inquire': 1.1.0
+      '@protobufjs/path': 1.1.2
+      '@protobufjs/pool': 1.1.0
+      '@protobufjs/utf8': 1.1.0
+      '@types/node': 24.12.2
+      long: 5.3.2
 
   proxy-from-env@2.1.0: {}
 

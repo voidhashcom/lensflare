@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { DEFAULT_PROJECT_ICON } from "@lensflare/contracts";
 import { Effect, Layer } from "effect";
 import { withTempDirectory } from "../_internal/testSupport.ts";
-import { makeDatabaseLayer } from "../db/database.ts";
+import { makeSqliteDatabaseLayer } from "../db/database.ts";
 import { DatasetsRepository } from "../repositories/datasetsRepository.ts";
 import { ProjectsRepository } from "../repositories/projectsRepository.ts";
 import { DatasetService } from "./datasetService.ts";
@@ -13,12 +13,12 @@ import { ProjectService } from "./projectService.ts";
 // resolves the in-layer dependency while keeping both services in the
 // merged output. Repositories, event buses, and the database are sealed
 // below the pair.
-const buildLayer = (databaseFile: string) =>
+const buildLayer = (sqliteDatabaseFile: string) =>
   ProjectService.layer.pipe(
     Layer.provideMerge(DatasetService.layer),
     Layer.provide(ProjectsRepository.layer),
     Layer.provide(DatasetsRepository.layer),
-    Layer.provide(makeDatabaseLayer(databaseFile)),
+    Layer.provide(makeSqliteDatabaseLayer(sqliteDatabaseFile)),
   );
 
 describe("ProjectService", () => {
@@ -30,6 +30,7 @@ describe("ProjectService", () => {
 
         const created = yield* service.createProject({ name: "  Lensflare  " });
         expect(created.name).toBe("Lensflare");
+        expect(created.slug).toBe("lensflare");
         expect(created.icon).toBe(DEFAULT_PROJECT_ICON);
         expect(created.datasets).toEqual([]);
 
@@ -42,6 +43,7 @@ describe("ProjectService", () => {
           name: "Lensflare API",
         });
         expect(updated.name).toBe("Lensflare API");
+        expect(updated.slug).toBe("lensflare");
         expect(updated.icon).toBe("rocket");
 
         yield* service.deleteProject(created.id);

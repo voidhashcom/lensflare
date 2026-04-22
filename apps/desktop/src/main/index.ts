@@ -44,11 +44,9 @@ async function main(): Promise<void> {
   async function createMainWindow(): Promise<void> {
     const isMac = process.platform === "darwin";
     const display = screen.getPrimaryDisplay();
-    const x =
-      Math.round((display.workArea.width - DEFAULT_WINDOW_WIDTH) / 2) + display.workArea.x;
+    const x = Math.round((display.workArea.width - DEFAULT_WINDOW_WIDTH) / 2) + display.workArea.x;
     const y =
-      Math.round((display.workArea.height - DEFAULT_WINDOW_HEIGHT) / 2) +
-      display.workArea.y;
+      Math.round((display.workArea.height - DEFAULT_WINDOW_HEIGHT) / 2) + display.workArea.y;
 
     const windowUrl = config.desktopDev ? resolveWebDevUrl(config) : localServer.origin;
 
@@ -109,9 +107,13 @@ async function main(): Promise<void> {
   await createMainWindow();
 }
 
-const hasSingleInstanceLock = app.requestSingleInstanceLock();
+const shouldEnforceSingleInstanceLock = !config.desktopDev;
+const hasSingleInstanceLock = shouldEnforceSingleInstanceLock
+  ? app.requestSingleInstanceLock()
+  : true;
 
 if (!hasSingleInstanceLock) {
+  console.error("[lensflare] another desktop instance is already running");
   app.quit();
 } else {
   app.on("second-instance", () => {

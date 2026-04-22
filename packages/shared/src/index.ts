@@ -1,61 +1,36 @@
-import { Effect } from "effect";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { APP_NAME } from "./browser.ts";
 
-export const APP_NAME = "Lensflare";
-export const APP_VERSION = "0.1.0";
-export const APP_IDENTIFIER = "com.thespacecompany.lensflare";
-export const DEFAULT_HOST = "127.0.0.1";
-export const DEFAULT_SERVER_PORT = 43110;
-export const DEFAULT_WEB_DEV_PORT = 5173;
-export const DEFAULT_WINDOW_WIDTH = 1400;
-export const DEFAULT_WINDOW_HEIGHT = 920;
+export * from "./browser.ts";
 
-export interface RuntimeConfig {
-  host: string;
-  serverPort: number;
-  webDevPort: number;
-  desktopDev: boolean;
+export interface DataPaths {
+  readonly dataDir: string;
+  readonly sqliteDatabaseFile: string;
+  readonly duckdbDatabaseFile: string;
 }
 
-function parsePort(rawValue: string | undefined, fallback: number): number {
-  return Effect.runSync(
-    Effect.sync(() => {
-      if (!rawValue) {
-        return fallback;
-      }
-
-      const value = Number.parseInt(rawValue, 10);
-      if (!Number.isInteger(value) || value < 1 || value > 65_535) {
-        return fallback;
-      }
-
-      return value;
-    }),
-  );
+export interface ResolveDataPathsOptions {
+  readonly platform?: NodeJS.Platform;
+  readonly env?: Record<string, string | undefined>;
+  readonly homeDirectory?: string;
 }
 
-export function readRuntimeConfigFromEnv(
-  env: Record<string, string | undefined>,
-): RuntimeConfig {
-  const host = env.LENSFLARE_HOST?.trim() || DEFAULT_HOST;
+export function resolveDataPaths(options: ResolveDataPathsOptions = {}): DataPaths {
+  const platform = options.platform ?? process.platform;
+  const env = options.env ?? process.env;
+  const homeDirectory = options.homeDirectory ?? homedir();
+
+  const dataDir =
+    platform === "darwin"
+      ? join(homeDirectory, "Library", "Application Support", APP_NAME)
+      : platform === "win32"
+        ? join(env.LOCALAPPDATA?.trim() || join(homeDirectory, "AppData", "Local"), APP_NAME)
+        : join(env.XDG_DATA_HOME?.trim() || join(homeDirectory, ".local", "share"), "lensflare");
 
   return {
-    host,
-    serverPort: parsePort(env.LENSFLARE_SERVER_PORT, DEFAULT_SERVER_PORT),
-    webDevPort: parsePort(env.LENSFLARE_WEB_PORT, DEFAULT_WEB_DEV_PORT),
-    desktopDev: env.LENSFLARE_DESKTOP_DEV === "1",
+    dataDir,
+    sqliteDatabaseFile: join(dataDir, "lensflare.sqlite"),
+    duckdbDatabaseFile: join(dataDir, "lensflare.duckdb"),
   };
-}
-
-export function resolveServerOrigin(config: Pick<RuntimeConfig, "host" | "serverPort">): string {
-  return `http://${config.host}:${config.serverPort}`;
-}
-
-export function resolveWebSocketOrigin(httpOrigin: string): string {
-  const url = new URL(httpOrigin);
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-  return url.toString();
-}
-
-export function resolveWebDevUrl(config: Pick<RuntimeConfig, "host" | "webDevPort">): string {
-  return `http://${config.host}:${config.webDevPort}`;
 }

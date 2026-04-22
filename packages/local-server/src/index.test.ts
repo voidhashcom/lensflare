@@ -49,7 +49,8 @@ describe("startLocalServer", () => {
       mode: "server",
       host: "127.0.0.1",
       port,
-      databaseFile: join(directory, "catalog.sqlite"),
+      sqliteDatabaseFile: join(directory, "lensflare.sqlite"),
+      duckdbDatabaseFile: join(directory, "lensflare.duckdb"),
     });
 
     const clientLayer = RpcClient.layerProtocolSocket().pipe(
@@ -118,7 +119,8 @@ describe("startLocalServer", () => {
       mode: "server",
       host: "127.0.0.1",
       port,
-      databaseFile: join(directory, "catalog.sqlite"),
+      sqliteDatabaseFile: join(directory, "lensflare.sqlite"),
+      duckdbDatabaseFile: join(directory, "lensflare.duckdb"),
     });
 
     const clientLayer = RpcClient.layerProtocolSocket().pipe(

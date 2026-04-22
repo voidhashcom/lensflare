@@ -1,5 +1,5 @@
 import { DatasetRpcGroup, ProjectRpcGroup } from "@lensflare/contracts";
-import { resolveWebSocketOrigin } from "@lensflare/shared";
+import { resolveWebSocketOrigin } from "@lensflare/shared/browser";
 import { Context, Effect, Layer, ManagedRuntime } from "effect";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import type { RpcClientError } from "effect/unstable/rpc/RpcClientError";

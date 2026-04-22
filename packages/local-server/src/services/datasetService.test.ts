@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 import { withTempDirectory } from "../_internal/testSupport.ts";
-import { makeDatabaseLayer } from "../db/database.ts";
+import { makeSqliteDatabaseLayer } from "../db/database.ts";
 import { DatasetsRepository } from "../repositories/datasetsRepository.ts";
 import { ProjectsRepository } from "../repositories/projectsRepository.ts";
 import { DatasetService } from "./datasetService.ts";
@@ -12,12 +12,12 @@ import { ProjectService } from "./projectService.ts";
 // DatasetService for its cascade wiring, so DatasetService is
 // `provideMerge`-ed underneath ProjectService to resolve the in-layer
 // dependency while keeping both services in the merged output.
-const buildLayer = (databaseFile: string) =>
+const buildLayer = (sqliteDatabaseFile: string) =>
   ProjectService.layer.pipe(
     Layer.provideMerge(DatasetService.layer),
     Layer.provide(ProjectsRepository.layer),
     Layer.provide(DatasetsRepository.layer),
-    Layer.provide(makeDatabaseLayer(databaseFile)),
+    Layer.provide(makeSqliteDatabaseLayer(sqliteDatabaseFile)),
   );
 
 describe("DatasetService", () => {
@@ -35,6 +35,7 @@ describe("DatasetService", () => {
 
         expect(dataset.projectId).toBe(project.id);
         expect(dataset.name).toBe("traces");
+        expect(dataset.slug).toBe("traces");
 
         const fetchedProject = yield* projectService.getProject(project.id);
         expect(fetchedProject.datasets).toHaveLength(1);
@@ -44,6 +45,7 @@ describe("DatasetService", () => {
           name: "spans",
         });
         expect(updated.name).toBe("spans");
+        expect(updated.slug).toBe("traces");
 
         yield* datasetService.deleteDataset(project.id, dataset.id);
 

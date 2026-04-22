@@ -14,9 +14,9 @@ import { catalogMigrations } from "./migrations/index.ts";
  * the SQLite client initialization first, then the PRAGMA + migrations, then
  * exposes the client to downstream services.
  */
-export function makeDatabaseLayer(databaseFile: string) {
+export function makeSqliteDatabaseLayer(sqliteDatabaseFile: string) {
   const clientLayer = SqliteClient.layer({
-    filename: databaseFile,
+    filename: sqliteDatabaseFile,
   });
 
   const initLayer = Layer.effectDiscard(

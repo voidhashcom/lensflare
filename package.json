@@ -7,7 +7,7 @@
     "dev": "vp run --filter @lensflare/server --filter @lensflare/web dev",
     "dev:server": "vp run --filter @lensflare/server dev",
     "dev:web": "vp run --filter @lensflare/web dev",
-    "dev:desktop": "vp run --filter @lensflare/web --filter @lensflare/desktop dev",
+    "dev:desktop": "vp run --filter @lensflare/desktop dev",
     "build": "vp run -r build",
     "build:desktop": "vp run --filter @lensflare/web build && vp run --filter @lensflare/desktop build",
     "prepare": "effect-language-service patch",
@@ -25,5 +25,11 @@
   },
   "engines": {
     "node": ">=24.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "electron"
+    ]
   }
 }

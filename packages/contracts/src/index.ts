@@ -58,6 +58,7 @@ export type ProjectIcon = Schema.Schema.Type<typeof ProjectIconSchema>;
 export const ProjectEntitySchema = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
+  slug: Schema.String,
   icon: ProjectIconSchema,
   createdAt: Schema.String,
   updatedAt: Schema.String,
@@ -69,6 +70,7 @@ export const DatasetSchema = Schema.Struct({
   id: Schema.String,
   projectId: Schema.String,
   name: Schema.String,
+  slug: Schema.String,
   createdAt: Schema.String,
   updatedAt: Schema.String,
 });
@@ -78,6 +80,7 @@ export type Dataset = Schema.Schema.Type<typeof DatasetSchema>;
 export const ProjectSchema = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
+  slug: Schema.String,
   icon: ProjectIconSchema,
   createdAt: Schema.String,
   updatedAt: Schema.String,
@@ -88,6 +91,7 @@ export type Project = Schema.Schema.Type<typeof ProjectSchema>;
 
 export const CreateProjectInputSchema = Schema.Struct({
   name: Schema.String,
+  slug: Schema.optional(Schema.String),
   icon: Schema.optional(ProjectIconSchema),
 });
 
@@ -95,6 +99,7 @@ export type CreateProjectInput = Schema.Schema.Type<typeof CreateProjectInputSch
 
 export const UpdateProjectInputSchema = Schema.Struct({
   name: Schema.optional(Schema.String),
+  slug: Schema.optional(Schema.String),
   icon: Schema.optional(ProjectIconSchema),
 });
 
@@ -102,12 +107,14 @@ export type UpdateProjectInput = Schema.Schema.Type<typeof UpdateProjectInputSch
 
 export const CreateDatasetInputSchema = Schema.Struct({
   name: Schema.String,
+  slug: Schema.optional(Schema.String),
 });
 
 export type CreateDatasetInput = Schema.Schema.Type<typeof CreateDatasetInputSchema>;
 
 export const UpdateDatasetInputSchema = Schema.Struct({
   name: Schema.optional(Schema.String),
+  slug: Schema.optional(Schema.String),
 });
 
 export type UpdateDatasetInput = Schema.Schema.Type<typeof UpdateDatasetInputSchema>;

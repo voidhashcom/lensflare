@@ -1,5 +1,6 @@
 import { SqliteMigrator } from "@effect/sql-sqlite-node";
 import migration0001 from "./0001_create_catalog_tables.ts";
+import migration0002 from "./0002_add_slugs.ts";
 
 /**
  * Loader for catalog database migrations.
@@ -13,4 +14,5 @@ import migration0001 from "./0001_create_catalog_tables.ts";
  */
 export const catalogMigrations = SqliteMigrator.fromRecord({
   "0001_create_catalog_tables": migration0001,
+  "0002_add_slugs": migration0002,
 });

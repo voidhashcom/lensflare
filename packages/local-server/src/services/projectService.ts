@@ -7,10 +7,11 @@ import {
   type ProjectEntity,
   ProjectNotFound,
   type UpdateProjectInput,
-  type ValidationError,
+  ValidationError,
 } from "@lensflare/contracts";
 import { Context, Effect, Layer, PubSub, Stream } from "effect";
 import { SqlError } from "effect/unstable/sql";
+import { makeUniqueSlug, slugify } from "../domain/slug.ts";
 import { datasetFromRow, DatasetsRepository } from "../repositories/datasetsRepository.ts";
 import {
   type ProjectRow,
@@ -18,7 +19,11 @@ import {
   projectEntityFromRow,
 } from "../repositories/projectsRepository.ts";
 import { DatasetService } from "./datasetService.ts";
-import { normalizeOptionalName, normalizeRequiredName } from "./validation.ts";
+import {
+  normalizeOptionalName,
+  normalizeOptionalSlug,
+  normalizeRequiredName,
+} from "./validation.ts";
 
 function projectFromRow(row: ProjectRow, datasets: ReadonlyArray<Dataset>): Project {
   return {
@@ -132,17 +137,51 @@ export class ProjectService extends Context.Service<
         return yield* assembleProject(row);
       });
 
+      const ensureProjectSlug = Effect.fn("ProjectService.ensureProjectSlug")(function* (
+        slug: string,
+        currentProjectId?: string,
+      ) {
+        const existing = yield* projects.findBySlug(slug);
+        if (existing !== undefined && existing.id !== currentProjectId) {
+          return yield* new ValidationError({
+            field: "projectSlug",
+            message: "Slug is already in use.",
+          });
+        }
+
+        return slug;
+      });
+
+      const resolveProjectSlug = Effect.fn("ProjectService.resolveProjectSlug")(function* (
+        name: string,
+        explicitSlug: string | undefined,
+        currentProjectId?: string,
+      ) {
+        const normalizedExplicit = yield* normalizeOptionalSlug("projectSlug", explicitSlug);
+        if (normalizedExplicit !== undefined) {
+          return yield* ensureProjectSlug(normalizedExplicit, currentProjectId);
+        }
+
+        const existing = yield* projects.findAll();
+        const usedSlugs = new Set(
+          existing.filter((row) => row.id !== currentProjectId).map((row) => row.slug),
+        );
+        return makeUniqueSlug(slugify(name), usedSlugs);
+      });
+
       const createProject = Effect.fn("ProjectService.createProject")(function* (
         input: CreateProjectInput,
       ) {
         const name = yield* normalizeRequiredName("projectName", input.name);
         const now = new Date().toISOString();
         const id = crypto.randomUUID();
+        const slug = yield* resolveProjectSlug(name, input.slug);
         const icon = input.icon ?? DEFAULT_PROJECT_ICON;
 
         yield* projects.insert({
           id,
           name,
+          slug,
           icon,
           createdAt: now,
           updatedAt: now,
@@ -151,6 +190,7 @@ export class ProjectService extends Context.Service<
         const project: Project = {
           id,
           name,
+          slug,
           icon,
           createdAt: now,
           updatedAt: now,
@@ -162,6 +202,7 @@ export class ProjectService extends Context.Service<
           value: {
             id: project.id,
             name: project.name,
+            slug: project.slug,
             icon: project.icon,
             createdAt: project.createdAt,
             updatedAt: project.updatedAt,
@@ -178,11 +219,16 @@ export class ProjectService extends Context.Service<
         const current = yield* requireProjectRow(projectId);
         const trimmed = yield* normalizeOptionalName("projectName", input.name);
         const nextName = trimmed ?? current.name;
+        const nextSlug =
+          input.slug === undefined
+            ? current.slug
+            : yield* resolveProjectSlug(nextName, input.slug, projectId);
         const nextIcon = input.icon ?? current.icon;
         const now = new Date().toISOString();
 
         yield* projects.update(projectId, {
           name: nextName,
+          slug: nextSlug,
           icon: nextIcon,
           updatedAt: now,
         });
@@ -190,6 +236,7 @@ export class ProjectService extends Context.Service<
         const updated = yield* assembleProject({
           ...current,
           name: nextName,
+          slug: nextSlug,
           icon: nextIcon,
           updated_at: now,
         });
@@ -199,6 +246,7 @@ export class ProjectService extends Context.Service<
           value: {
             id: updated.id,
             name: updated.name,
+            slug: updated.slug,
             icon: updated.icon,
             createdAt: updated.createdAt,
             updatedAt: updated.updatedAt,

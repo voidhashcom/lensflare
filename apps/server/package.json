@@ -12,6 +12,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@duckdb/node-api": "catalog:",
     "@lensflare/local-server": "workspace:*",
     "@lensflare/shared": "workspace:*",
     "effect": "catalog:"

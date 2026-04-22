@@ -9,7 +9,8 @@ export interface HttpRoutesOptions {
   readonly snapshot: () => ServerSnapshot;
   readonly staticDir: string | undefined;
   readonly mode: "desktop" | "server";
-  readonly databaseFile: string;
+  readonly sqliteDatabaseFile: string;
+  readonly duckdbDatabaseFile: string;
 }
 
 /**
@@ -46,7 +47,8 @@ export function makeHttpRoutesLayer(options: HttpRoutesOptions) {
           appVersion: APP_VERSION,
           serverOrigin: options.origin,
           mode: options.mode,
-          databaseFile: options.databaseFile,
+          sqliteDatabaseFile: options.sqliteDatabaseFile,
+          duckdbDatabaseFile: options.duckdbDatabaseFile,
         }),
       );
 

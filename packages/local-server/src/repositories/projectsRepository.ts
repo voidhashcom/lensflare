@@ -5,6 +5,7 @@ import { SqlClient, SqlError } from "effect/unstable/sql";
 const ProjectRowSchema = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
+  slug: Schema.String,
   icon: Schema.Literals(PROJECT_ICONS),
   created_at: Schema.String,
   updated_at: Schema.String,
@@ -23,6 +24,7 @@ export function projectEntityFromRow(row: ProjectRow): ProjectEntity {
   return {
     id: row.id,
     name: row.name,
+    slug: row.slug,
     icon: row.icon,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -32,6 +34,7 @@ export function projectEntityFromRow(row: ProjectRow): ProjectEntity {
 export interface InsertProjectInput {
   readonly id: string;
   readonly name: string;
+  readonly slug: string;
   readonly icon: ProjectIcon;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -39,6 +42,7 @@ export interface InsertProjectInput {
 
 export interface UpdateProjectFields {
   readonly name: string;
+  readonly slug: string;
   readonly icon: ProjectIcon;
   readonly updatedAt: string;
 }
@@ -55,6 +59,7 @@ export class ProjectsRepository extends Context.Service<
   {
     readonly findAll: () => Effect.Effect<ReadonlyArray<ProjectRow>, SqlError.SqlError>;
     readonly findById: (id: string) => Effect.Effect<ProjectRow | undefined, SqlError.SqlError>;
+    readonly findBySlug: (slug: string) => Effect.Effect<ProjectRow | undefined, SqlError.SqlError>;
     readonly insert: (input: InsertProjectInput) => Effect.Effect<void, SqlError.SqlError>;
     readonly update: (
       id: string,
@@ -70,7 +75,7 @@ export class ProjectsRepository extends Context.Service<
 
       const findAll = Effect.fn("ProjectsRepository.findAll")(function* () {
         const rows = yield* sql`
-          SELECT id, name, icon, created_at, updated_at
+          SELECT id, name, slug, icon, created_at, updated_at
           FROM projects
           ORDER BY updated_at DESC, name ASC
         `;
@@ -79,9 +84,19 @@ export class ProjectsRepository extends Context.Service<
 
       const findById = Effect.fn("ProjectsRepository.findById")(function* (id: string) {
         const rows = yield* sql`
-          SELECT id, name, icon, created_at, updated_at
+          SELECT id, name, slug, icon, created_at, updated_at
           FROM projects
           WHERE id = ${id}
+          LIMIT 1
+        `;
+        return rows[0] === undefined ? undefined : decodeProjectRow(rows[0]);
+      });
+
+      const findBySlug = Effect.fn("ProjectsRepository.findBySlug")(function* (slug: string) {
+        const rows = yield* sql`
+          SELECT id, name, slug, icon, created_at, updated_at
+          FROM projects
+          WHERE slug = ${slug}
           LIMIT 1
         `;
         return rows[0] === undefined ? undefined : decodeProjectRow(rows[0]);
@@ -92,6 +107,7 @@ export class ProjectsRepository extends Context.Service<
           INSERT INTO projects ${sql.insert({
             id: input.id,
             name: input.name,
+            slug: input.slug,
             icon: input.icon,
             created_at: input.createdAt,
             updated_at: input.updatedAt,
@@ -106,6 +122,7 @@ export class ProjectsRepository extends Context.Service<
         yield* sql`
           UPDATE projects
           SET name = ${fields.name},
+              slug = ${fields.slug},
               icon = ${fields.icon},
               updated_at = ${fields.updatedAt}
           WHERE id = ${id}
@@ -122,6 +139,7 @@ export class ProjectsRepository extends Context.Service<
       return ProjectsRepository.of({
         findAll,
         findById,
+        findBySlug,
         insert,
         update,
         remove,

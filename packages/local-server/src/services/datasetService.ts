@@ -5,13 +5,18 @@ import {
   DatasetNotFound,
   ProjectNotFound,
   type UpdateDatasetInput,
-  type ValidationError,
+  ValidationError,
 } from "@lensflare/contracts";
 import { Context, Effect, Layer, PubSub, Stream } from "effect";
 import { SqlError } from "effect/unstable/sql";
+import { makeUniqueSlug, slugify } from "../domain/slug.ts";
 import { datasetFromRow, DatasetsRepository } from "../repositories/datasetsRepository.ts";
 import { ProjectsRepository } from "../repositories/projectsRepository.ts";
-import { normalizeOptionalName, normalizeRequiredName } from "./validation.ts";
+import {
+  normalizeOptionalName,
+  normalizeOptionalSlug,
+  normalizeRequiredName,
+} from "./validation.ts";
 
 /**
  * Domain-level façade over the datasets repository.
@@ -109,6 +114,38 @@ export class DatasetService extends Context.Service<
         return datasetFromRow(row);
       });
 
+      const ensureDatasetSlug = Effect.fn("DatasetService.ensureDatasetSlug")(function* (
+        slug: string,
+        currentDatasetId?: string,
+      ) {
+        const existing = yield* datasets.findBySlug(slug);
+        if (existing !== undefined && existing.id !== currentDatasetId) {
+          return yield* new ValidationError({
+            field: "datasetSlug",
+            message: "Slug is already in use.",
+          });
+        }
+
+        return slug;
+      });
+
+      const resolveDatasetSlug = Effect.fn("DatasetService.resolveDatasetSlug")(function* (
+        name: string,
+        explicitSlug: string | undefined,
+        currentDatasetId?: string,
+      ) {
+        const normalizedExplicit = yield* normalizeOptionalSlug("datasetSlug", explicitSlug);
+        if (normalizedExplicit !== undefined) {
+          return yield* ensureDatasetSlug(normalizedExplicit, currentDatasetId);
+        }
+
+        const existing = yield* datasets.findAll();
+        const usedSlugs = new Set(
+          existing.filter((row) => row.id !== currentDatasetId).map((row) => row.slug),
+        );
+        return makeUniqueSlug(slugify(name), usedSlugs);
+      });
+
       const createDataset = Effect.fn("DatasetService.createDataset")(function* (
         projectId: string,
         input: CreateDatasetInput,
@@ -120,11 +157,13 @@ export class DatasetService extends Context.Service<
         const name = yield* normalizeRequiredName("datasetName", input.name);
         const now = new Date().toISOString();
         const id = crypto.randomUUID();
+        const slug = yield* resolveDatasetSlug(name, input.slug);
 
         yield* datasets.insert({
           id,
           projectId,
           name,
+          slug,
           createdAt: now,
           updatedAt: now,
         });
@@ -133,6 +172,7 @@ export class DatasetService extends Context.Service<
           id,
           projectId,
           name,
+          slug,
           createdAt: now,
           updatedAt: now,
         };
@@ -153,16 +193,22 @@ export class DatasetService extends Context.Service<
         const current = yield* requireDatasetRow(projectId, datasetId);
         const trimmed = yield* normalizeOptionalName("datasetName", input.name);
         const nextName = trimmed ?? current.name;
+        const nextSlug =
+          input.slug === undefined
+            ? current.slug
+            : yield* resolveDatasetSlug(nextName, input.slug, datasetId);
         const now = new Date().toISOString();
 
         yield* datasets.update(projectId, datasetId, {
           name: nextName,
+          slug: nextSlug,
           updatedAt: now,
         });
 
         const dataset = datasetFromRow({
           ...current,
           name: nextName,
+          slug: nextSlug,
           updated_at: now,
         });
 

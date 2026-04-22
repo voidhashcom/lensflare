@@ -1,11 +1,11 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 import { withTempDirectory } from "../_internal/testSupport.ts";
-import { makeDatabaseLayer } from "../db/database.ts";
+import { makeSqliteDatabaseLayer } from "../db/database.ts";
 import { ProjectsRepository } from "./projectsRepository.ts";
 
-const buildLayer = (databaseFile: string) =>
-  ProjectsRepository.layer.pipe(Layer.provide(makeDatabaseLayer(databaseFile)));
+const buildLayer = (sqliteDatabaseFile: string) =>
+  ProjectsRepository.layer.pipe(Layer.provide(makeSqliteDatabaseLayer(sqliteDatabaseFile)));
 
 describe("ProjectsRepository", () => {
   it.effect("inserts and reads back a project row", () =>
@@ -18,6 +18,7 @@ describe("ProjectsRepository", () => {
         yield* repo.insert({
           id: "p1",
           name: "Lensflare",
+          slug: "lensflare",
           icon: "rocket",
           createdAt: now,
           updatedAt: now,
@@ -27,6 +28,7 @@ describe("ProjectsRepository", () => {
         expect(found).toEqual({
           id: "p1",
           name: "Lensflare",
+          slug: "lensflare",
           icon: "rocket",
           created_at: now,
           updated_at: now,
@@ -57,6 +59,7 @@ describe("ProjectsRepository", () => {
         yield* repo.insert({
           id: "p1",
           name: "Beta",
+          slug: "beta",
           icon: "folder",
           createdAt: "2024-01-01T00:00:00Z",
           updatedAt: "2024-01-01T00:00:00Z",
@@ -64,6 +67,7 @@ describe("ProjectsRepository", () => {
         yield* repo.insert({
           id: "p2",
           name: "Alpha",
+          slug: "alpha",
           icon: "folder",
           createdAt: "2024-01-02T00:00:00Z",
           updatedAt: "2024-01-02T00:00:00Z",
@@ -71,6 +75,7 @@ describe("ProjectsRepository", () => {
         yield* repo.insert({
           id: "p3",
           name: "Gamma",
+          slug: "gamma",
           icon: "folder",
           createdAt: "2024-01-02T00:00:00Z",
           updatedAt: "2024-01-02T00:00:00Z",
@@ -92,6 +97,7 @@ describe("ProjectsRepository", () => {
         yield* repo.insert({
           id: "p1",
           name: "Lensflare",
+          slug: "lensflare",
           icon: "folder",
           createdAt: now,
           updatedAt: now,
@@ -100,12 +106,14 @@ describe("ProjectsRepository", () => {
         const later = new Date(Date.now() + 1000).toISOString();
         yield* repo.update("p1", {
           name: "Lensflare API",
+          slug: "lensflare-api",
           icon: "rocket",
           updatedAt: later,
         });
 
         const found = yield* repo.findById("p1");
         expect(found?.name).toBe("Lensflare API");
+        expect(found?.slug).toBe("lensflare-api");
         expect(found?.icon).toBe("rocket");
         expect(found?.updated_at).toBe(later);
       }),
@@ -122,6 +130,7 @@ describe("ProjectsRepository", () => {
         yield* repo.insert({
           id: "p1",
           name: "Lensflare",
+          slug: "lensflare",
           icon: "folder",
           createdAt: now,
           updatedAt: now,

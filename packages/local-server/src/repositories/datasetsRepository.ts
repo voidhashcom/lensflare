@@ -6,6 +6,7 @@ const DatasetRowSchema = Schema.Struct({
   id: Schema.String,
   project_id: Schema.String,
   name: Schema.String,
+  slug: Schema.String,
   created_at: Schema.String,
   updated_at: Schema.String,
 });
@@ -24,6 +25,7 @@ export function datasetFromRow(row: DatasetRow): Dataset {
     id: row.id,
     projectId: row.project_id,
     name: row.name,
+    slug: row.slug,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -33,12 +35,14 @@ export interface InsertDatasetInput {
   readonly id: string;
   readonly projectId: string;
   readonly name: string;
+  readonly slug: string;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
 
 export interface UpdateDatasetFields {
   readonly name: string;
+  readonly slug: string;
   readonly updatedAt: string;
 }
 
@@ -61,6 +65,7 @@ export class DatasetsRepository extends Context.Service<
       projectId: string,
       datasetId: string,
     ) => Effect.Effect<DatasetRow | undefined, SqlError.SqlError>;
+    readonly findBySlug: (slug: string) => Effect.Effect<DatasetRow | undefined, SqlError.SqlError>;
     readonly insert: (input: InsertDatasetInput) => Effect.Effect<void, SqlError.SqlError>;
     readonly update: (
       projectId: string,
@@ -82,12 +87,12 @@ export class DatasetsRepository extends Context.Service<
         const rows =
           projectId === undefined
             ? yield* sql`
-                SELECT id, project_id, name, created_at, updated_at
+                SELECT id, project_id, name, slug, created_at, updated_at
                 FROM datasets
                 ORDER BY updated_at DESC, name ASC
               `
             : yield* sql`
-                SELECT id, project_id, name, created_at, updated_at
+                SELECT id, project_id, name, slug, created_at, updated_at
                 FROM datasets
                 WHERE project_id = ${projectId}
                 ORDER BY updated_at DESC, name ASC
@@ -101,10 +106,21 @@ export class DatasetsRepository extends Context.Service<
         datasetId: string,
       ) {
         const rows = yield* sql`
-          SELECT id, project_id, name, created_at, updated_at
+          SELECT id, project_id, name, slug, created_at, updated_at
           FROM datasets
           WHERE project_id = ${projectId}
             AND id = ${datasetId}
+          LIMIT 1
+        `;
+
+        return rows[0] === undefined ? undefined : decodeDatasetRow(rows[0]);
+      });
+
+      const findBySlug = Effect.fn("DatasetsRepository.findBySlug")(function* (slug: string) {
+        const rows = yield* sql`
+          SELECT id, project_id, name, slug, created_at, updated_at
+          FROM datasets
+          WHERE slug = ${slug}
           LIMIT 1
         `;
 
@@ -117,6 +133,7 @@ export class DatasetsRepository extends Context.Service<
             id: input.id,
             project_id: input.projectId,
             name: input.name,
+            slug: input.slug,
             created_at: input.createdAt,
             updated_at: input.updatedAt,
           })}
@@ -131,6 +148,7 @@ export class DatasetsRepository extends Context.Service<
         yield* sql`
           UPDATE datasets
           SET name = ${fields.name},
+              slug = ${fields.slug},
               updated_at = ${fields.updatedAt}
           WHERE id = ${datasetId}
             AND project_id = ${projectId}
@@ -151,6 +169,7 @@ export class DatasetsRepository extends Context.Service<
       return DatasetsRepository.of({
         findAll,
         findById,
+        findBySlug,
         insert,
         update,
         remove,
