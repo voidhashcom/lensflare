@@ -17,3 +17,31 @@ export type DeleteTarget =
 export interface CursorAnchor {
   getBoundingClientRect: () => DOMRect;
 }
+
+export function createProjectContextMenuTarget(project: Project): SidebarContextMenuTarget {
+  return { kind: "project", project };
+}
+
+export function createDatasetContextMenuTarget(
+  project: Project,
+  dataset: Dataset,
+): SidebarContextMenuTarget {
+  return { dataset, kind: "dataset", project };
+}
+
+export function createDeleteProjectTarget(project: Project): DeleteTarget {
+  return {
+    kind: "project",
+    name: project.name,
+    projectId: project.id,
+  };
+}
+
+export function createDeleteDatasetTarget(project: Project, dataset: Dataset): DeleteTarget {
+  return {
+    datasetId: dataset.id,
+    kind: "dataset",
+    name: dataset.name,
+    projectId: project.id,
+  };
+}

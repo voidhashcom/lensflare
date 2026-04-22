@@ -25,7 +25,7 @@ export interface DeleteDialogProps {
  * owns the lifecycle (target, submitting, errors) and passes this component
  * pure view data; it only needs to call back on confirm/close.
  */
-export component DeleteDialog({
+export function DeleteDialog({
   open,
   target,
   error,
@@ -39,25 +39,25 @@ export component DeleteDialog({
     : "This will permanently delete the selected item.";
   const confirmLabel = submitting ? "Deleting..." : "Delete";
 
-  <AlertDialog {onOpenChange} {open}>
-    <AlertDialogPopup>
-      <AlertDialogHeader>
-        <AlertDialogTitle>{title}</AlertDialogTitle>
-        <AlertDialogDescription>{description}</AlertDialogDescription>
-      </AlertDialogHeader>
+  return (
+    <AlertDialog onOpenChange={onOpenChange} open={open}>
+      <AlertDialogPopup>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
+        </AlertDialogHeader>
 
-      if (error) {
-        <p class="px-6 text-destructive text-sm">{error}</p>
-      }
+        {error ? <p className="px-6 text-destructive text-sm">{error}</p> : null}
 
-      <AlertDialogFooter>
-        <AlertDialogClose disabled={submitting} render={<tsx><Button variant="outline" /></tsx>}>
-          {"Cancel"}
-        </AlertDialogClose>
-        <Button disabled={submitting} onClick={onConfirm} variant="destructive">
-          {confirmLabel}
-        </Button>
-      </AlertDialogFooter>
-    </AlertDialogPopup>
-  </AlertDialog>
+        <AlertDialogFooter>
+          <AlertDialogClose disabled={submitting} render={<Button variant="outline" />}>
+            Cancel
+          </AlertDialogClose>
+          <Button disabled={submitting} onClick={onConfirm} variant="destructive">
+            {confirmLabel}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogPopup>
+    </AlertDialog>
+  );
 }

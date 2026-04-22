@@ -1,7 +1,8 @@
 import { useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 
-import { deleteDataset, deleteProject } from "~/data/catalogApi";
+import { deleteDataset } from "~/data/datasetApi";
+import { deleteProject } from "~/data/projectApi";
 
 import type { DeleteTarget } from "./types";
 

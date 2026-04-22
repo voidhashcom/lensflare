@@ -12,6 +12,7 @@ import {
 } from "@lensflare/shared";
 
 const config = readRuntimeConfigFromEnv(process.env);
+let mainWindow: BrowserWindow | null = null;
 
 function resolveEmbeddedWebDir(): string | undefined {
   const candidate = app.isPackaged
@@ -30,8 +31,6 @@ async function main(): Promise<void> {
     staticAssetMode: config.desktopDev ? "proxy" : embeddedWebDir ? "embedded" : "none",
     ...(embeddedWebDir ? { staticDir: embeddedWebDir } : {}),
   });
-
-  let mainWindow: BrowserWindow | null = null;
   let stoppingServer: Promise<void> | null = null;
 
   function stopLocalServer(): Promise<void> {
@@ -110,7 +109,23 @@ async function main(): Promise<void> {
   await createMainWindow();
 }
 
-void main().catch((error) => {
-  console.error("[lensflare] failed to start desktop runtime", error);
-  app.exit(1);
-});
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
+
+      mainWindow.focus();
+    }
+  });
+
+  void main().catch((error) => {
+    console.error("[lensflare] failed to start desktop runtime", error);
+    app.exit(1);
+  });
+}

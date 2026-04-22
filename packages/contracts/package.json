@@ -9,13 +9,14 @@
   "scripts": {
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "pnpm exec vitest run"
+    "test": "vp test"
   },
   "dependencies": {
     "effect": "catalog:"
   },
   "devDependencies": {
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "vite-plus": "catalog:"
   }
 }

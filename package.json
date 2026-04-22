@@ -4,23 +4,24 @@
   "type": "module",
   "packageManager": "pnpm@10.18.3",
   "scripts": {
-    "dev": "turbo run dev --filter=@lensflare/server --filter=@lensflare/web",
-    "dev:server": "turbo run dev --filter=@lensflare/server",
-    "dev:web": "turbo run dev --filter=@lensflare/web",
-    "dev:desktop": "turbo run dev --filter=@lensflare/web --filter=@lensflare/desktop",
-    "build": "turbo run build",
-    "build:desktop": "turbo run build --filter=@lensflare/desktop",
+    "dev": "vp run --filter @lensflare/server --filter @lensflare/web dev",
+    "dev:server": "vp run --filter @lensflare/server dev",
+    "dev:web": "vp run --filter @lensflare/web dev",
+    "dev:desktop": "vp run --filter @lensflare/web --filter @lensflare/desktop dev",
+    "build": "vp run -r build",
+    "build:desktop": "vp run --filter @lensflare/web build && vp run --filter @lensflare/desktop build",
     "prepare": "effect-language-service patch",
-    "typecheck": "turbo run typecheck",
-    "test": "turbo run test",
-    "clean": "turbo run clean && rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/*/dist apps/*/artifacts"
+    "check": "vp check",
+    "typecheck": "vp run -r typecheck",
+    "test": "vp run -r test",
+    "clean": "vp run -r clean && rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/*/dist apps/*/artifacts"
   },
   "devDependencies": {
     "@effect/language-service": "^0.85.1",
     "effect-solutions": "^0.5.2",
-    "turbo": "^2.5.8",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "vite-plus": "catalog:"
   },
   "engines": {
     "node": ">=24.0.0"

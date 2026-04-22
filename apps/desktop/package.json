@@ -5,13 +5,17 @@
   "type": "module",
   "main": "dist/index.cjs",
   "scripts": {
+    "rebuild:native": "env -u ELECTRON_RUN_AS_NODE electron-builder install-app-deps",
+    "predev": "pnpm run rebuild:native",
     "dev": "concurrently -k -s first -n bundle,electron \"pnpm run dev:bundle\" \"pnpm run dev:desktop\"",
-    "dev:bundle": "tsup --watch --config tsup.config.ts",
-    "dev:desktop": "wait-on tcp:127.0.0.1:5173 dist/index.cjs && LENSFLARE_DESKTOP_DEV=1 electronmon .",
-    "build": "pnpm --dir ../.. --filter @lensflare/web build && tsup --config tsup.config.ts && electron-builder",
-    "start": "electron .",
+    "dev:bundle": "vp pack --watch",
+    "dev:desktop": "wait-on tcp:127.0.0.1:5173 dist/index.cjs && env -u ELECTRON_RUN_AS_NODE LENSFLARE_DESKTOP_DEV=1 electronmon .",
+    "prebuild": "pnpm run rebuild:native",
+    "build": "vp pack && env -u ELECTRON_RUN_AS_NODE electron-builder",
+    "prestart": "pnpm run rebuild:native",
+    "start": "env -u ELECTRON_RUN_AS_NODE electron .",
     "typecheck": "tsc --noEmit",
-    "test": "pnpm exec vitest run --passWithNoTests",
+    "test": "vp test --passWithNoTests",
     "clean": "rm -rf dist artifacts"
   },
   "dependencies": {
@@ -25,9 +29,9 @@
     "electron": "^41.2.2",
     "electron-builder": "^26.8.1",
     "electronmon": "^2.0.4",
-    "tsup": "^8.5.1",
     "typescript": "catalog:",
     "vitest": "catalog:",
-    "wait-on": "^9.0.5"
+    "wait-on": "^9.0.5",
+    "vite-plus": "catalog:"
   }
 }

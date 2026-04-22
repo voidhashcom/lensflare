@@ -18,15 +18,10 @@ The Effect v4 repository is cloned to `~/.local/share/effect-solutions/effect` f
 Use this to explore APIs, find usage examples, and understand implementation
 details when the documentation isn't enough.
 
-## TSRX
+## UI Components
 
-For UI work in this repo, use TSRX and `.tsrx` files instead of JSX/TSX where
-you would normally create React components.
+For UI work in this repo, use standard React JSX/TSX files.
 
-- Prefer `export component Name(...) { ... }` over `function` components that
-  return JSX.
-- Keep markup and scoped styles in TSRX component bodies rather than separate
-  JSX + CSS patterns when adding or rewriting UI.
-- Treat `https://tsrx.dev/llms.txt` as the primary reference for TSRX syntax,
-  control flow, scoped styles, and other language rules before making TSRX
-  changes.
+- Prefer plain React function components and normal JSX control flow.
+- Keep styling consistent with the existing Tailwind and UI wrapper patterns in
+  `apps/web/src/components`.

@@ -55,6 +55,16 @@ export const ProjectIconSchema = Schema.Literals(PROJECT_ICONS);
 
 export type ProjectIcon = Schema.Schema.Type<typeof ProjectIconSchema>;
 
+export const ProjectEntitySchema = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  icon: ProjectIconSchema,
+  createdAt: Schema.String,
+  updatedAt: Schema.String,
+});
+
+export type ProjectEntity = Schema.Schema.Type<typeof ProjectEntitySchema>;
+
 export const DatasetSchema = Schema.Struct({
   id: Schema.String,
   projectId: Schema.String,
@@ -116,12 +126,45 @@ export class ValidationError extends Schema.TaggedErrorClass<ValidationError>()(
   message: Schema.String,
 }) {}
 
+export const ProjectChangeEventSchema = Schema.Union([
+  Schema.Struct({
+    action: Schema.Literal("upsert"),
+    value: ProjectEntitySchema,
+  }),
+  Schema.Struct({
+    action: Schema.Literal("delete"),
+    id: Schema.String,
+  }),
+]);
+
+export type ProjectChangeEvent = Schema.Schema.Type<typeof ProjectChangeEventSchema>;
+
+export const DatasetChangeEventSchema = Schema.Union([
+  Schema.Struct({
+    action: Schema.Literal("upsert"),
+    value: DatasetSchema,
+  }),
+  Schema.Struct({
+    action: Schema.Literal("delete"),
+    id: Schema.String,
+  }),
+]);
+
+export type DatasetChangeEvent = Schema.Schema.Type<typeof DatasetChangeEventSchema>;
+
+const decodeProjectEntitySchema = Schema.decodeUnknownSync(ProjectEntitySchema);
 const decodeProjectSchema = Schema.decodeUnknownSync(ProjectSchema);
 const decodeDatasetSchema = Schema.decodeUnknownSync(DatasetSchema);
 const decodeCreateProjectInputSchema = Schema.decodeUnknownSync(CreateProjectInputSchema);
 const decodeUpdateProjectInputSchema = Schema.decodeUnknownSync(UpdateProjectInputSchema);
 const decodeCreateDatasetInputSchema = Schema.decodeUnknownSync(CreateDatasetInputSchema);
 const decodeUpdateDatasetInputSchema = Schema.decodeUnknownSync(UpdateDatasetInputSchema);
+const decodeProjectChangeEventSchema = Schema.decodeUnknownSync(ProjectChangeEventSchema);
+const decodeDatasetChangeEventSchema = Schema.decodeUnknownSync(DatasetChangeEventSchema);
+
+export function decodeProjectEntity(input: unknown): ProjectEntity {
+  return decodeProjectEntitySchema(input);
+}
 
 export function decodeProject(input: unknown): Project {
   return decodeProjectSchema(input);
@@ -146,6 +189,18 @@ export function decodeCreateDatasetInput(input: unknown): CreateDatasetInput {
 export function decodeUpdateDatasetInput(input: unknown): UpdateDatasetInput {
   return decodeUpdateDatasetInputSchema(input);
 }
+
+export function decodeProjectChangeEvent(input: unknown): ProjectChangeEvent {
+  return decodeProjectChangeEventSchema(input);
+}
+
+export function decodeDatasetChangeEvent(input: unknown): DatasetChangeEvent {
+  return decodeDatasetChangeEventSchema(input);
+}
+
+class ListProjectEntities extends Rpc.make("ListProjectEntities", {
+  success: Schema.Array(ProjectEntitySchema),
+}) {}
 
 class ListProjects extends Rpc.make("ListProjects", {
   success: Schema.Array(ProjectSchema),
@@ -179,6 +234,25 @@ class DeleteProject extends Rpc.make("DeleteProject", {
     projectId: Schema.String,
   },
   error: ProjectNotFound,
+}) {}
+
+class SubscribeProjectEvents extends Rpc.make("SubscribeProjectEvents", {
+  success: ProjectChangeEventSchema,
+  stream: true,
+}) {}
+
+export const ProjectRpcGroup = RpcGroup.make(
+  ListProjectEntities,
+  ListProjects,
+  GetProject,
+  CreateProject,
+  UpdateProject,
+  DeleteProject,
+  SubscribeProjectEvents,
+);
+
+class ListDatasets extends Rpc.make("ListDatasets", {
+  success: Schema.Array(DatasetSchema),
 }) {}
 
 class GetDataset extends Rpc.make("GetDataset", {
@@ -217,19 +291,37 @@ class DeleteDataset extends Rpc.make("DeleteDataset", {
   error: DatasetNotFound,
 }) {}
 
-export const CatalogRpcGroup = RpcGroup.make(
-  ListProjects,
-  GetProject,
-  CreateProject,
-  UpdateProject,
-  DeleteProject,
+class SubscribeDatasetEvents extends Rpc.make("SubscribeDatasetEvents", {
+  success: DatasetChangeEventSchema,
+  stream: true,
+}) {}
+
+export const DatasetRpcGroup = RpcGroup.make(
+  ListDatasets,
   GetDataset,
   CreateDataset,
   UpdateDataset,
   DeleteDataset,
+  SubscribeDatasetEvents,
 );
 
-export function formatCatalogError(error: unknown): string {
+export function formatProjectError(error: unknown): string {
+  if (error instanceof ValidationError) {
+    return error.message;
+  }
+
+  if (error instanceof ProjectNotFound) {
+    return "Project not found.";
+  }
+
+  if (error instanceof Error && error.message.length > 0) {
+    return error.message;
+  }
+
+  return "Request failed.";
+}
+
+export function formatDatasetError(error: unknown): string {
   if (error instanceof ValidationError) {
     return error.message;
   }

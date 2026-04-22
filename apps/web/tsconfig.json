@@ -5,7 +5,7 @@
     "module": "preserve",
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
-    "types": ["vite/client"],
+    "types": ["vite-plus/client"],
     "paths": {
       "~/*": ["./src/*"]
     }

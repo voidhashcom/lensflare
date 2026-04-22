@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import {
   DEFAULT_SERVER_PORT,
   DEFAULT_WEB_DEV_PORT,

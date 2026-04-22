@@ -2,7 +2,7 @@ import { DEFAULT_PROJECT_ICON, type Project } from "@lensflare/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 
-import { createProject, updateProject } from "~/data/catalogApi";
+import { createProject, updateProject } from "~/data/projectApi";
 
 export interface UseProjectDialogResult {
   open: boolean;

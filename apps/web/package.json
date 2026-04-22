@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
+    "dev": "vp dev",
+    "build": "vp build",
+    "preview": "vp preview",
     "typecheck": "tsc --noEmit",
-    "test": "pnpm exec vitest run --passWithNoTests",
+    "test": "vp test --passWithNoTests",
     "clean": "rm -rf dist"
   },
   "dependencies": {
@@ -20,7 +20,6 @@
     "@tanstack/query-db-collection": "^1.0.36",
     "@tanstack/react-db": "^0.1.83",
     "@tanstack/react-router": "catalog:",
-    "@tsrx/react": "^0.0.5",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "effect": "catalog:",
@@ -38,6 +37,6 @@
     "tailwindcss": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-tsconfig-paths": "catalog:"
+    "vite-plus": "catalog:"
   }
 }

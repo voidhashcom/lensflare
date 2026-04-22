@@ -5,10 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsup --config tsup.config.ts",
+    "build": "vp pack",
     "start": "node dist/index.cjs",
     "typecheck": "tsc --noEmit",
-    "test": "pnpm exec vitest run --passWithNoTests",
+    "test": "vp test --passWithNoTests",
     "clean": "rm -rf dist"
   },
   "dependencies": {
@@ -18,9 +18,9 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "tsup": "^8.5.1",
     "tsx": "^4.21.0",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "vite-plus": "catalog:"
   }
 }

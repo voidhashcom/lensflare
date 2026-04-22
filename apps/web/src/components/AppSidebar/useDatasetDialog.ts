@@ -2,7 +2,7 @@ import type { Dataset, Project } from "@lensflare/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 
-import { createDataset, updateDataset } from "~/data/catalogApi";
+import { createDataset, updateDataset } from "~/data/datasetApi";
 
 export interface UseDatasetDialogResult {
   open: boolean;
