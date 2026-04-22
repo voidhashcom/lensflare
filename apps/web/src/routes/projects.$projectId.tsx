@@ -1,13 +1,7 @@
-import { createFileRoute, Outlet } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 
-// Pure layout route: the project itself isn't a destination — collections are.
-// Renders <Outlet /> so the nested collection route can mount; visiting
-// /projects/$projectId directly shows nothing (sidebar still picks the active
-// collection, if any).
+import { WorkspaceEmptyState } from "~/components/WorkspaceEmptyState";
+
 export const Route = createFileRoute("/projects/$projectId")({
-  component: ProjectLayout,
+  component: WorkspaceEmptyState,
 });
-
-function ProjectLayout() {
-  return <Outlet />;
-}

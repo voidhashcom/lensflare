@@ -1,8 +1,17 @@
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
-import { createServer } from "node:http";
-import { join, normalize, resolve, sep } from "node:path";
-import { decodeServerEvent, type ServerEvent, type ServerSnapshot } from "@lensflare/contracts";
+import { homedir } from "node:os";
+import { mkdir, readFile } from "node:fs/promises";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { dirname, join, normalize, resolve, sep } from "node:path";
+import {
+  decodeCreateDatasetInput,
+  decodeCreateProjectInput,
+  decodeServerEvent,
+  decodeUpdateDatasetInput,
+  decodeUpdateProjectInput,
+  type ServerEvent,
+  type ServerSnapshot,
+} from "@lensflare/contracts";
 import {
   APP_NAME,
   APP_VERSION,
@@ -10,8 +19,15 @@ import {
   DEFAULT_SERVER_PORT,
   resolveServerOrigin,
 } from "@lensflare/shared";
-import { Effect } from "effect";
+import { Effect, Layer, ManagedRuntime } from "effect";
 import WebSocket, { WebSocketServer } from "ws";
+import {
+  CatalogStore,
+  DatasetNotFound,
+  makeCatalogStoreLayer,
+  ProjectNotFound,
+  ValidationError,
+} from "./catalog.ts";
 
 export interface StartLocalServerOptions {
   mode: "desktop" | "server";
@@ -19,12 +35,15 @@ export interface StartLocalServerOptions {
   port?: number;
   staticDir?: string;
   staticAssetMode?: ServerSnapshot["staticAssetMode"];
+  databaseFile?: string;
 }
 
 export interface LocalServerHandle {
   origin: string;
   stop: () => Promise<void>;
 }
+
+const DEFAULT_DATABASE_FILE = join(homedir(), ".lensflare", "lensflare.sqlite");
 
 function inferContentType(pathname: string): string {
   if (pathname.endsWith(".js")) {
@@ -143,6 +162,306 @@ function renderFallbackApp(origin: string): string {
 </html>`;
 }
 
+function sendJson(response: ServerResponse, status: number, body: unknown): void {
+  response.writeHead(status, { "content-type": "application/json; charset=utf-8" });
+  response.end(JSON.stringify(body, null, 2));
+}
+
+function sendNoContent(response: ServerResponse): void {
+  response.writeHead(204);
+  response.end();
+}
+
+async function readJsonBody(request: IncomingMessage): Promise<unknown> {
+  const chunks: Array<Buffer> = [];
+
+  for await (const chunk of request) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+
+  if (chunks.length === 0) {
+    return {};
+  }
+
+  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
+function sendApiError(response: ServerResponse, error: unknown): void {
+  if (error instanceof ProjectNotFound) {
+    sendJson(response, 404, {
+      error: {
+        tag: error._tag,
+        message: "Project not found.",
+        projectId: error.projectId,
+      },
+    });
+    return;
+  }
+
+  if (error instanceof DatasetNotFound) {
+    sendJson(response, 404, {
+      error: {
+        tag: error._tag,
+        message: "Dataset not found.",
+        projectId: error.projectId,
+        datasetId: error.datasetId,
+      },
+    });
+    return;
+  }
+
+  if (error instanceof ValidationError) {
+    sendJson(response, 400, {
+      error: {
+        tag: error._tag,
+        message: error.message,
+        field: error.field,
+      },
+    });
+    return;
+  }
+
+  if (error instanceof SyntaxError) {
+    sendJson(response, 400, {
+      error: {
+        tag: "InvalidJson",
+        message: "Request body must be valid JSON.",
+      },
+    });
+    return;
+  }
+
+  console.error("[lensflare] API request failed", error);
+  sendJson(response, 500, {
+    error: {
+      tag: "InternalServerError",
+      message: "Internal Server Error",
+    },
+  });
+}
+
+async function handleApiRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+  url: URL,
+  options: StartLocalServerOptions,
+  origin: string,
+  runtime: ManagedRuntime.ManagedRuntime<CatalogStore, unknown>,
+  snapshot: () => ServerSnapshot,
+): Promise<boolean> {
+  const method = request.method ?? "GET";
+  const segments = url.pathname
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => decodeURIComponent(segment));
+
+  if (segments[0] !== "api") {
+    return false;
+  }
+
+  const runCatalog = <A, E>(program: Effect.Effect<A, E, CatalogStore>) =>
+    runtime.runPromise(program);
+
+  if (segments.length === 2 && segments[1] === "health" && method === "GET") {
+    sendJson(response, 200, snapshot());
+    return true;
+  }
+
+  if (segments.length === 2 && segments[1] === "meta" && method === "GET") {
+    sendJson(response, 200, {
+      appName: APP_NAME,
+      appVersion: APP_VERSION,
+      serverOrigin: origin,
+      mode: options.mode,
+      databaseFile: options.databaseFile ?? DEFAULT_DATABASE_FILE,
+    });
+    return true;
+  }
+
+  if (segments.length === 2 && segments[1] === "projects") {
+    try {
+      if (method === "GET") {
+        const projects = await runCatalog(
+          Effect.gen(function* () {
+            const store = yield* CatalogStore;
+            return yield* store.listProjects();
+          }),
+        );
+        sendJson(response, 200, { projects });
+        return true;
+      }
+
+      if (method === "POST") {
+        const body = await readJsonBody(request);
+        const input = decodeCreateProjectInput(body);
+        const project = await runCatalog(
+          Effect.gen(function* () {
+            const store = yield* CatalogStore;
+            return yield* store.createProject(input);
+          }),
+        );
+        sendJson(response, 201, { project });
+        return true;
+      }
+    } catch (error) {
+      sendApiError(response, error);
+      return true;
+    }
+
+    sendJson(response, 405, {
+      error: { tag: "MethodNotAllowed", message: "Method not allowed." },
+    });
+    return true;
+  }
+
+  if (segments.length === 3 && segments[1] === "projects") {
+    const projectId = segments[2]!;
+
+    try {
+      if (method === "GET") {
+        const project = await runCatalog(
+          Effect.gen(function* () {
+            const store = yield* CatalogStore;
+            return yield* store.getProject(projectId);
+          }),
+        );
+        sendJson(response, 200, { project });
+        return true;
+      }
+
+      if (method === "PATCH") {
+        const body = await readJsonBody(request);
+        const input = decodeUpdateProjectInput(body);
+        const project = await runCatalog(
+          Effect.gen(function* () {
+            const store = yield* CatalogStore;
+            return yield* store.updateProject(projectId, input);
+          }),
+        );
+        sendJson(response, 200, { project });
+        return true;
+      }
+
+      if (method === "DELETE") {
+        await runCatalog(
+          Effect.gen(function* () {
+            const store = yield* CatalogStore;
+            yield* store.deleteProject(projectId);
+          }),
+        );
+        sendNoContent(response);
+        return true;
+      }
+    } catch (error) {
+      sendApiError(response, error);
+      return true;
+    }
+
+    sendJson(response, 405, {
+      error: { tag: "MethodNotAllowed", message: "Method not allowed." },
+    });
+    return true;
+  }
+
+  if (segments.length === 4 && segments[1] === "projects" && segments[3] === "datasets") {
+    const projectId = segments[2]!;
+
+    try {
+      if (method === "GET") {
+        const datasets = await runCatalog(
+          Effect.gen(function* () {
+            const store = yield* CatalogStore;
+            const project = yield* store.getProject(projectId);
+            return project.datasets;
+          }),
+        );
+        sendJson(response, 200, { datasets });
+        return true;
+      }
+
+      if (method === "POST") {
+        const body = await readJsonBody(request);
+        const input = decodeCreateDatasetInput(body);
+        const dataset = await runCatalog(
+          Effect.gen(function* () {
+            const store = yield* CatalogStore;
+            return yield* store.createDataset(projectId, input);
+          }),
+        );
+        sendJson(response, 201, { dataset });
+        return true;
+      }
+    } catch (error) {
+      sendApiError(response, error);
+      return true;
+    }
+
+    sendJson(response, 405, {
+      error: { tag: "MethodNotAllowed", message: "Method not allowed." },
+    });
+    return true;
+  }
+
+  if (
+    segments.length === 5 &&
+    segments[1] === "projects" &&
+    segments[3] === "datasets"
+  ) {
+    const projectId = segments[2]!;
+    const datasetId = segments[4]!;
+
+    try {
+      if (method === "GET") {
+        const dataset = await runCatalog(
+          Effect.gen(function* () {
+            const store = yield* CatalogStore;
+            return yield* store.getDataset(projectId, datasetId);
+          }),
+        );
+        sendJson(response, 200, { dataset });
+        return true;
+      }
+
+      if (method === "PATCH") {
+        const body = await readJsonBody(request);
+        const input = decodeUpdateDatasetInput(body);
+        const dataset = await runCatalog(
+          Effect.gen(function* () {
+            const store = yield* CatalogStore;
+            return yield* store.updateDataset(projectId, datasetId, input);
+          }),
+        );
+        sendJson(response, 200, { dataset });
+        return true;
+      }
+
+      if (method === "DELETE") {
+        await runCatalog(
+          Effect.gen(function* () {
+            const store = yield* CatalogStore;
+            yield* store.deleteDataset(projectId, datasetId);
+          }),
+        );
+        sendNoContent(response);
+        return true;
+      }
+    } catch (error) {
+      sendApiError(response, error);
+      return true;
+    }
+
+    sendJson(response, 405, {
+      error: { tag: "MethodNotAllowed", message: "Method not allowed." },
+    });
+    return true;
+  }
+
+  sendJson(response, 404, {
+    error: { tag: "NotFound", message: "API route not found." },
+  });
+  return true;
+}
+
 export async function startLocalServer(
   options: StartLocalServerOptions,
 ): Promise<LocalServerHandle> {
@@ -151,6 +470,21 @@ export async function startLocalServer(
   const origin = resolveServerOrigin({ host, serverPort: port });
   const startedAt = new Date();
   const sockets = new Set<WebSocket>();
+  const databaseFile = options.databaseFile ?? DEFAULT_DATABASE_FILE;
+
+  await mkdir(dirname(databaseFile), { recursive: true });
+
+  const appLayer = makeCatalogStoreLayer(databaseFile);
+  const runtime = ManagedRuntime.make(appLayer, {
+    memoMap: Layer.makeMemoMapUnsafe(),
+  });
+
+  await runtime.runPromise(
+    Effect.gen(function* () {
+      const store = yield* CatalogStore;
+      yield* store.listProjects();
+    }),
+  );
 
   const snapshot = (): ServerSnapshot => ({
     name: APP_NAME,
@@ -191,26 +525,10 @@ export async function startLocalServer(
 
     void Effect.runPromise(
       Effect.gen(function* () {
-        if (url.pathname === "/api/health") {
-          response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
-          response.end(JSON.stringify(snapshot(), null, 2));
-          return;
-        }
-
-        if (url.pathname === "/api/meta") {
-          response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
-          response.end(
-            JSON.stringify(
-              {
-                appName: APP_NAME,
-                appVersion: APP_VERSION,
-                serverOrigin: origin,
-                mode: options.mode,
-              },
-              null,
-              2,
-            ),
-          );
+        const apiHandled = yield* Effect.promise(() =>
+          handleApiRequest(request, response, url, options, origin, runtime, snapshot),
+        );
+        if (apiHandled) {
           return;
         }
 
@@ -232,8 +550,12 @@ export async function startLocalServer(
             console.error("[lensflare] local server request failed", cause);
             if (!response.headersSent) {
               response.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
+              response.end("Internal Server Error");
+              return;
             }
-            response.end("Internal Server Error");
+            if (!response.writableEnded) {
+              response.end("Internal Server Error");
+            }
           }),
         ),
       ),
@@ -295,6 +617,7 @@ export async function startLocalServer(
       }
 
       await Promise.all([
+        runtime.dispose(),
         new Promise<void>((resolvePromise, reject) => {
           webSocketServer.close((error) => {
             if (error) {
