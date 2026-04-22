@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "preserve",
+    "moduleResolution": "Bundler",
+    "exactOptionalPropertyTypes": false,
+    "types": ["bun", "node"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts",
+    "electrobun.config.ts",
+    "scripts/**/*.ts"
+  ]
+}

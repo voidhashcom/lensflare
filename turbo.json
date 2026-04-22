@@ -1,0 +1,32 @@
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "concurrency": "15",
+  "tasks": {
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".output/**", ".vercel/output/**"],
+      "env": [
+
+      ]
+    },
+    "clean": {},
+    "format": {},
+    "lint": {},
+    "start": {
+      "cache": false
+    },
+    "test": {
+      "cache": false,
+      "dependsOn": ["build"],
+      "outputs": []
+    },
+    "typecheck": {
+      "outputs": [],
+      "cache": false
+    }
+  }
+}

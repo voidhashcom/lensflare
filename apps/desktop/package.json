@@ -1,0 +1,26 @@
+{
+  "name": "@lensflare/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "LENSFLARE_DESKTOP_DEV=1 electrobun dev --watch",
+    "build": "pnpm --dir ../.. --filter @lensflare/web build && electrobun build --env stable",
+    "start": "electrobun dev",
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm exec vitest run --passWithNoTests",
+    "clean": "rm -rf build artifacts"
+  },
+  "dependencies": {
+    "@lensflare/local-server": "workspace:*",
+    "@lensflare/shared": "workspace:*",
+    "effect": "catalog:",
+    "electrobun": "^1.16.0"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

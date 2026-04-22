@@ -1,0 +1,51 @@
+packages:
+  - apps/*
+  - packages/*
+catalog:
+  # Effect ecosystem (v4)
+  effect: 4.0.0-beta.23
+  "@effect/platform-bun": 4.0.0-beta.23
+  "@effect/vitest": 4.0.0-beta.23
+  "@effect/opentelemetry": 4.0.0-beta.23
+
+  # TanStack
+  "@tanstack/react-router": ^1.160.0
+  "@tanstack/react-router-ssr-query": ^1.160.0
+  "@tanstack/react-start": ^1.160.0
+  "@tanstack/router-plugin": ^1.160.0
+
+  # React 19 & types
+  react: ^19.1.0
+  react-dom: ^19.1.0
+  "@types/react": ^19.1.0
+  "@types/react-dom": ^19.1.0
+
+  # Shared frontend dependencies
+  "@base-ui/react": ^1.2.0
+  "@tailwindcss/vite": ^4.1.17
+  "@vitejs/plugin-react": ^5.1.1
+  "babel-plugin-react-compiler": 19.1.0-rc.2
+  "class-variance-authority": ^0.7.1
+  clsx: ^2.1.1
+  "lucide-react": ^0.555.0
+  "sonner": ^2.0.6
+  tailwindcss: ^4.1.17
+  "tailwind-merge": ^3.4.0
+  vite: ^7.2.0
+  "vite-tsconfig-paths": ^5.1.4
+  typescript: ^5.7.3
+  "@types/node": ^24.10.13
+  "@types/bun": ^1.3.1
+
+  vitest: ^4.0.8
+  vite-plus: latest
+overrides:
+  vite: "catalog:"
+  vitest: "catalog:"
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: "*"
+    vitest: "*"
