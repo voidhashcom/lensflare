@@ -1,25 +1,31 @@
 import type { FilterNode } from "@lensflare/contracts";
+import { Extension, type Editor, type JSONContent } from "@tiptap/core";
+import Document from "@tiptap/extension-document";
+import Paragraph from "@tiptap/extension-paragraph";
+import Text from "@tiptap/extension-text";
+import { Plugin } from "@tiptap/pm/state";
+import { Decoration, DecorationSet } from "@tiptap/pm/view";
+import { EditorContent, useEditor } from "@tiptap/react";
 import { SearchIcon, XIcon } from "lucide-react";
 import {
   useCallback,
   useEffect,
   useId,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  type KeyboardEvent,
-  type MouseEvent,
 } from "react";
 
 import {
-  Popover,
-  PopoverPopup,
-} from "~/components/ui/popover";
+  CommandDialog,
+  CommandDialogPopup,
+  CommandFooter,
+  CommandPanel,
+} from "~/components/ui/command";
+import { Kbd, KbdGroup } from "~/components/ui/kbd";
 import type { TelemetryLogField } from "~/data/logApi";
 import { cn } from "~/lib/utils";
 
-import { FilterPillChip } from "./FilterPillChip";
 import {
   FilterSuggestionsPanel,
   type FilterSuggestion,
@@ -35,9 +41,49 @@ import {
   parsedToFilter,
   resolvePillField,
   serialisePill,
-  type OperatorSyntax,
   type ParsedPill,
 } from "./syntax";
+
+const PlainTextDocument = Document.extend({
+  content: "paragraph",
+});
+
+interface FilterPillDecorationOptions {
+  getFields: () => ReadonlyArray<TelemetryLogField>;
+}
+
+const FilterPillDecorations = Extension.create<FilterPillDecorationOptions>({
+  name: "filterPillDecorations",
+
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        props: {
+          decorations: (state) => {
+            const source = state.doc.textContent;
+            const parsed = parseFilterInput(source, source.length);
+            const fields = this.options.getFields();
+            const decorations = parsed.pills.map((pill) => {
+              const field = resolvePillField(pill, fields);
+              const className = cn(
+                "filter-query-pill",
+                field === null && "filter-query-pill--unknown",
+                field?.kind === "enum" && "filter-query-pill--enum",
+                field?.kind === "number" && "filter-query-pill--number",
+                field?.kind === "string" && "filter-query-pill--string",
+              );
+              return Decoration.inline(pill.start + 1, pill.end + 1, {
+                class: className,
+                "data-filter-kind": field?.kind ?? "unknown",
+              });
+            });
+            return DecorationSet.create(state.doc, decorations);
+          },
+        },
+      }),
+    ];
+  },
+});
 
 interface FilterQueryInputProps {
   projectId: string;
@@ -49,21 +95,10 @@ interface FilterQueryInputProps {
 }
 
 /**
- * Keyboard-first filter input. Owns `source` as its single source of truth
- * and renders parsed pills inline before a bare `<input>` holding the
- * trailing free text. The suggestions popover mirrors the parser's cursor
- * context — fields, operators, or values — and emits typed `FilterSuggestion`
- * accepts that this component splices back into `source`.
- *
- * Pitfalls handled:
- *   - IME composition: `Enter` / `Tab` / `Backspace` are ignored while
- *     `isComposing` is true so non-latin input methods compose cleanly.
- *   - Programmatic caret restoration: whenever we rewrite `source`
- *     (suggestion accept, pill edit, pill remove), the input's real caret
- *     is re-synced in a `useLayoutEffect` so keystrokes continue from the
- *     right position rather than jumping to the end.
- *   - Backspace-at-zero: with an empty trailing text, Backspace peels the
- *     last pill off `source` instead of being a no-op.
+ * Spotlight-style dataset filter. The header renders a compact trigger while
+ * the modal owns a plain-text Tiptap editor. `source` remains the canonical
+ * string so the existing parser, suggestion splicers, and filter AST emission
+ * keep the same behavior as the old inline control.
  */
 export function FilterQueryInput({
   projectId,
@@ -74,21 +109,110 @@ export function FilterQueryInput({
   const [source, setSource] = useState("");
   const [cursor, setCursor] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
-  const [isComposing, setIsComposing] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const popoverId = useId();
+  const [highlightedSuggestionIndex, setHighlightedSuggestionIndex] = useState<number | null>(null);
+  const [suggestionCount, setSuggestionCount] = useState(0);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const fieldsRef = useRef(fields);
+  const suggestionCountRef = useRef(0);
+  const editorId = useId();
+  const suggestionsId = useId();
 
-  // When `pendingCursorRef` is non-null, a layout effect below will
-  // `setSelectionRange` the input to that absolute offset on the next
-  // commit. Used for post-mutation caret restoration.
-  const pendingCursorRef = useRef<number | null>(null);
+  fieldsRef.current = fields;
 
   const parsed = useMemo(() => parseFilterInput(source, cursor), [source, cursor]);
+  const cursorContextKey = useMemo(
+    () => cursorContextToKey(parsed.cursorContext),
+    [parsed.cursorContext],
+  );
   const filter = useMemo(
     () => parsedToFilter(parsed, fields),
     [parsed, fields],
   );
+
+  const editor = useEditor({
+    extensions: [
+      PlainTextDocument,
+      Paragraph,
+      Text,
+      FilterPillDecorations.configure({
+        getFields: () => fieldsRef.current,
+      }),
+    ],
+    content: textToDoc(""),
+    editorProps: {
+      attributes: {
+        "aria-controls": suggestionsId,
+        "aria-label": "Filter logs",
+        class:
+          "min-h-8 max-h-24 overflow-y-auto outline-none whitespace-pre-wrap break-words px-0 py-1.5 text-sm leading-6",
+        id: editorId,
+        spellcheck: "false",
+      },
+      transformPastedText(text) {
+        return text.replace(/\s+/g, " ");
+      },
+      handleKeyDown(_view, event) {
+        if (event.key === "Escape") {
+          setIsOpen(false);
+          return false;
+        }
+
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+          const count = suggestionCountRef.current;
+          if (count <= 0) return false;
+          event.preventDefault();
+          const direction = event.key === "ArrowDown" ? 1 : -1;
+          setHighlightedSuggestionIndex((index) =>
+            index === null
+              ? event.key === "ArrowDown"
+                ? 0
+                : count - 1
+              : modulo(index + direction, count),
+          );
+          return true;
+        }
+
+        if (event.key === "Enter") {
+          event.preventDefault();
+          if (suggestionCountRef.current > 0) {
+            const active = document
+              .getElementById(suggestionsId)
+              ?.querySelector<HTMLButtonElement>("[data-filter-suggestion-active='true']");
+            if (active) {
+              active.click();
+              return true;
+            }
+          }
+          setIsOpen(false);
+          return true;
+        }
+
+        return false;
+      },
+    },
+    immediatelyRender: false,
+    onSelectionUpdate({ editor: nextEditor }) {
+      setCursor(getEditorTextOffset(nextEditor));
+    },
+    onUpdate({ editor: nextEditor }) {
+      const nextSource = nextEditor.getText({ blockSeparator: " " });
+      setSource(nextSource);
+      setCursor(getEditorTextOffset(nextEditor));
+    },
+  }, [editorId, suggestionsId]);
+
+  useEffect(() => {
+    if (!editor) return;
+    editor.view.dispatch(editor.state.tr.setMeta("filterPillDecorations", "fields"));
+  }, [editor, fields]);
+
+  useEffect(() => {
+    suggestionCountRef.current = suggestionCount;
+  }, [suggestionCount]);
+
+  useEffect(() => {
+    setHighlightedSuggestionIndex(null);
+  }, [cursorContextKey]);
 
   // Dedup filter emissions via a stringified diff so the parent doesn't see
   // spurious re-notifications when parser output is shape-identical but
@@ -104,107 +228,42 @@ export function FilterQueryInput({
     onFilterChange(filter);
   }, [filter, onFilterChange]);
 
-  useLayoutEffect(() => {
-    if (pendingCursorRef.current === null) return;
-    const absolute = pendingCursorRef.current;
-    const local = Math.max(
-      0,
-      Math.min(absolute - parsed.trailingStart, parsed.trailingText.length),
-    );
-    // Only reposition the caret when the outer input still owns focus.
-    // If the mutation came from a nested surface (e.g. the row editor's
-    // value input, or the pill's operator dropdown), stealing focus here
-    // would yank the caret out of that surface mid-edit.
-    if (document.activeElement === inputRef.current) {
-      inputRef.current?.setSelectionRange(local, local);
-    }
-    pendingCursorRef.current = null;
-    // `parsed` is derived from `source` (its trailingStart/length are pure
-    // functions of the string), so re-triggering on every source change is
-    // sufficient — no need to also list the derived fields as deps.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source]);
+  useEffect(() => {
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (event.key.toLowerCase() !== "k") return;
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      setIsOpen((open) => !open);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen || !editor) return;
+    const frame = window.requestAnimationFrame(() => {
+      editor.commands.focus(Math.min(source.length + 1, editor.state.doc.content.size));
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [editor, isOpen, source.length]);
 
   const commitSource = useCallback(
-    (nextSource: string, nextCursor: number, { openPopover = true } = {}) => {
-      pendingCursorRef.current = nextCursor;
+    (nextSource: string, nextCursor: number) => {
+      const safeCursor = clampTextOffset(nextCursor, nextSource);
       setSource(nextSource);
-      setCursor(nextCursor);
-      if (openPopover) setIsOpen(true);
-    },
-    [],
-  );
-
-  const handleInputChange = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      const tail = event.currentTarget.value;
-      const nextSource = source.slice(0, parsed.trailingStart) + tail;
-      const selection = event.currentTarget.selectionStart ?? nextSource.length;
-      const nextCursor = parsed.trailingStart + selection;
-      // Don't call setSelectionRange — the browser has already placed the
-      // caret naturally for typed / pasted input.
-      setSource(nextSource);
-      setCursor(nextCursor);
-      setIsOpen(true);
-    },
-    [parsed.trailingStart, source],
-  );
-
-  const handleInputSelect = useCallback(
-    (event: React.SyntheticEvent<HTMLInputElement>) => {
-      const target = event.currentTarget;
-      const local = target.selectionStart ?? 0;
-      setCursor(parsed.trailingStart + local);
-    },
-    [parsed.trailingStart],
-  );
-
-  const handleInputFocus = useCallback(() => {
-    setIsOpen(true);
-  }, []);
-
-  const handleKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLInputElement>) => {
-      if (isComposing) return;
-
-      if (event.key === "Escape") {
-        setIsOpen(false);
-        return;
-      }
-
-      if (event.key === "Backspace") {
-        const selection = event.currentTarget.selectionStart ?? 0;
-        const selectionEnd = event.currentTarget.selectionEnd ?? 0;
-        const hasRange = selection !== selectionEnd;
-        if (!hasRange && selection === 0 && parsed.pills.length > 0) {
-          event.preventDefault();
-          const lastPill = parsed.pills[parsed.pills.length - 1];
-          if (!lastPill) return;
-          // Drop the pill plus the whitespace right after it so there's no
-          // leftover double-space in `source`.
-          let removeEnd = lastPill.end;
-          while (
-            removeEnd < source.length &&
-            /\s/.test(source[removeEnd] ?? "")
-          ) {
-            removeEnd += 1;
-          }
-          const nextSource =
-            source.slice(0, lastPill.start) + source.slice(removeEnd);
-          commitSource(nextSource, lastPill.start);
-        }
+      setCursor(safeCursor);
+      if (editor) {
+        editor.commands.setContent(textToDoc(nextSource), { emitUpdate: false });
+        editor.commands.setTextSelection(safeCursor + 1);
+        editor.commands.focus();
       }
     },
-    [commitSource, isComposing, parsed.pills, source],
+    [editor],
   );
-
-  const handleCompositionStart = useCallback(() => {
-    setIsComposing(true);
-  }, []);
-
-  const handleCompositionEnd = useCallback(() => {
-    setIsComposing(false);
-  }, []);
 
   const handleClearAll = useCallback(() => {
     commitSource("", 0);
@@ -224,25 +283,6 @@ export function FilterQueryInput({
       const nextSource =
         source.slice(0, pill.start) + source.slice(removeEnd);
       commitSource(nextSource, pill.start);
-    },
-    [commitSource, parsed.pills, source],
-  );
-
-  const handlePillOperatorChange = useCallback(
-    (index: number, syntax: OperatorSyntax) => {
-      const pill = parsed.pills[index];
-      if (!pill) return;
-      const nextPill: ParsedPill = {
-        ...pill,
-        operator: syntax.operator,
-        operatorToken: syntax.token,
-        negated: syntax.negated,
-      };
-      const serialised = serialisePill(nextPill);
-      const nextSource =
-        source.slice(0, pill.start) + serialised + source.slice(pill.end);
-      const nextCursor = pill.start + serialised.length;
-      commitSource(nextSource, nextCursor);
     },
     [commitSource, parsed.pills, source],
   );
@@ -282,88 +322,117 @@ export function FilterQueryInput({
     [commitSource, parsed, source],
   );
 
+  const handleSuggestionCountChange = useCallback((count: number) => {
+    setSuggestionCount(count);
+    setHighlightedSuggestionIndex((index) =>
+      count <= 0 || index === null ? null : Math.min(index, count - 1),
+    );
+  }, []);
+
   const hasContent = parsed.pills.length > 0 || parsed.trailingText.length > 0;
+  const triggerLabel = hasContent ? source : "Filter logs";
 
   return (
-    <div className="relative min-w-0 flex-1">
-      <Popover modal={false} onOpenChange={setIsOpen} open={isOpen}>
-        <div
+    <CommandDialog onOpenChange={setIsOpen} open={isOpen}>
+      <button
+        aria-label="Open log filter"
+        className={cn(
+          "inline-flex h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md border border-input bg-background/60 px-2.5 text-left text-sm text-foreground/80 shadow-xs/5 hover:bg-accent/50",
+          "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/24",
+        )}
+        data-slot="filter-query-input"
+        onClick={() => setIsOpen(true)}
+        ref={triggerRef}
+        type="button"
+      >
+        <SearchIcon className="size-3.5 shrink-0 text-muted-foreground/80" />
+        <span
           className={cn(
-            "flex h-9 min-w-0 flex-1 items-center gap-1 rounded-md border border-input bg-background/60 px-2 text-sm shadow-xs/5 ring-ring/24 transition-shadow",
-            "focus-within:border-ring focus-within:ring-[3px]",
+            "min-w-0 flex-1 truncate",
+            !hasContent && "text-muted-foreground/72",
           )}
-          data-slot="filter-query-input"
-          onClick={(event: MouseEvent<HTMLDivElement>) => {
-            // Clicking blank chrome should focus the input rather than
-            // falling through to the page.
-            if (event.target === event.currentTarget) {
-              inputRef.current?.focus();
-            }
-          }}
-          ref={containerRef}
-          role="combobox"
-          aria-expanded={isOpen}
-          aria-haspopup="listbox"
-          aria-owns={popoverId}
         >
-          <SearchIcon className="size-3.5 shrink-0 text-muted-foreground/80" />
-          {parsed.pills.map((pill, index) => (
-            <FilterPillChip
-              field={resolvePillField(pill, fields)}
-              key={`${pill.start}-${pill.end}`}
-              onChangeOperator={(syntax) => handlePillOperatorChange(index, syntax)}
-              onRemove={() => handleRemovePill(index)}
-              pill={pill}
-            />
-          ))}
-          <input
-            aria-autocomplete="list"
-            aria-controls={popoverId}
-            className="min-w-12 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/72"
-            onChange={handleInputChange}
-            onCompositionEnd={handleCompositionEnd}
-            onCompositionStart={handleCompositionStart}
-            onFocus={handleInputFocus}
-            onKeyDown={handleKeyDown}
-            onSelect={handleInputSelect}
-            placeholder={hasContent ? "" : "Filter logs — try level:info"}
-            ref={inputRef}
-            type="text"
-            value={parsed.trailingText}
-          />
-          {hasContent ? (
-            <button
-              aria-label="Clear filters"
-              className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground/80 hover:bg-accent/60 hover:text-foreground"
-              onClick={handleClearAll}
-              onMouseDown={(event) => event.preventDefault()}
-              type="button"
-            >
-              <XIcon className="size-3.5" />
-            </button>
-          ) : null}
+          {triggerLabel}
+        </span>
+        <KbdGroup className="shrink-0 gap-0.5 max-sm:hidden">
+          <Kbd className="h-4 min-w-4 px-1 text-[10px]">⌘</Kbd>
+          <Kbd className="h-4 min-w-4 px-1 text-[10px]">K</Kbd>
+        </KbdGroup>
+      </button>
+
+      <CommandDialogPopup
+        aria-label="Dataset filter"
+        className="max-w-2xl overflow-hidden p-0"
+        finalFocus={() => {
+          triggerRef.current?.focus();
+          return false;
+        }}
+      >
+        <div className="border-b px-4 py-3">
+          <div className="flex items-start gap-2">
+            <SearchIcon className="mt-2 size-4 shrink-0 text-muted-foreground/80" />
+            <div className="relative min-w-0 flex-1">
+              {source.length === 0 ? (
+                <label
+                  className="pointer-events-none absolute left-0 top-1.5 text-muted-foreground/72 text-sm leading-6"
+                  htmlFor={editorId}
+                >
+                  Filter logs — try level:info
+                </label>
+              ) : null}
+              <EditorContent
+                className="min-w-0 [&_.ProseMirror_p]:m-0"
+                editor={editor}
+              />
+            </div>
+            {hasContent ? (
+              <button
+                aria-label="Clear filters"
+                className="mt-1 inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground/80 hover:bg-accent/60 hover:text-foreground"
+                onClick={handleClearAll}
+                onMouseDown={(event) => event.preventDefault()}
+                type="button"
+              >
+                <XIcon className="size-4" />
+              </button>
+            ) : null}
+          </div>
         </div>
-        <PopoverPopup
-          align="start"
-          anchor={containerRef}
-          className="w-[min(100%,48rem)] max-w-[min(90vw,48rem)]"
-          id={popoverId}
-          side="bottom"
-          sideOffset={6}
-        >
+        <CommandPanel className="max-h-[min(26rem,60vh)] rounded-none border-x-0 border-t-0 shadow-none [clip-path:none] before:hidden">
           <FilterSuggestionsPanel
             cursorContext={parsed.cursorContext}
             datasetId={datasetId}
             fields={fields}
+            highlightedSuggestionIndex={highlightedSuggestionIndex}
             onApplySuggestion={handleApplySuggestion}
             onEditPill={handleEditPill}
+            onHighlightSuggestion={setHighlightedSuggestionIndex}
             onRemovePill={handleRemovePill}
+            onSuggestionCountChange={handleSuggestionCountChange}
             pills={parsed.pills}
             projectId={projectId}
+            suggestionsId={suggestionsId}
           />
-        </PopoverPopup>
-      </Popover>
-    </div>
+        </CommandPanel>
+        <CommandFooter className="gap-3 max-sm:flex-col max-sm:items-start">
+          <div className="flex items-center gap-3">
+            <KbdGroup className="items-center gap-1.5">
+              <Kbd>↑</Kbd>
+              <Kbd>↓</Kbd>
+              <span className="text-muted-foreground/80">Navigate</span>
+            </KbdGroup>
+            <KbdGroup className="items-center gap-1.5">
+              <Kbd>Enter</Kbd>
+              <span className="text-muted-foreground/80">Apply / Select</span>
+            </KbdGroup>
+            <KbdGroup className="items-center gap-1.5">
+              <Kbd>Esc</Kbd>
+              <span className="text-muted-foreground/80">Close</span>
+            </KbdGroup>
+          </div>
+        </CommandFooter>
+      </CommandDialogPopup>
+    </CommandDialog>
   );
 }
 
@@ -410,5 +479,40 @@ function applySuggestion({
       commitSource(result.source, result.cursor);
       return;
     }
+  }
+}
+
+function textToDoc(text: string): JSONContent {
+  return {
+    type: "doc",
+    content: [
+      {
+        type: "paragraph",
+        content: text.length > 0 ? [{ type: "text", text }] : [],
+      },
+    ],
+  };
+}
+
+function getEditorTextOffset(editor: Editor): number {
+  return clampTextOffset(editor.state.selection.from - 1, editor.getText({ blockSeparator: " " }));
+}
+
+function clampTextOffset(offset: number, text: string): number {
+  return Math.max(0, Math.min(offset, text.length));
+}
+
+function modulo(value: number, size: number): number {
+  return ((value % size) + size) % size;
+}
+
+function cursorContextToKey(context: ReturnType<typeof parseFilterInput>["cursorContext"]): string {
+  switch (context.kind) {
+    case "field":
+      return `field:${context.prefix}`;
+    case "operator":
+      return `operator:${context.fieldPath.join(".")}:${context.tokenPrefix}`;
+    case "value":
+      return `value:${context.fieldPath.join(".")}:${context.valuePrefix}`;
   }
 }

@@ -53,11 +53,12 @@ describe("FilterQueryInput — initial render", () => {
     expect(html).toContain("lucide-search");
   });
 
-  it("exposes the combobox role and aria-haspopup", () => {
+  it("renders the spotlight trigger", () => {
     const html = render();
 
-    expect(html).toContain('role="combobox"');
-    expect(html).toContain('aria-haspopup="listbox"');
+    expect(html).toContain('aria-label="Open log filter"');
+    expect(html).toContain('data-slot="filter-query-input"');
+    expect(html).toContain("K");
   });
 
   it("doesn't show the Clear-all button when there is nothing to clear", () => {
