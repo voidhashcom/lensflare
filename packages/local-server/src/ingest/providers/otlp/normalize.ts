@@ -43,6 +43,14 @@ function bytesToHex(value: unknown): string | null {
   return null;
 }
 
+function attributeStringOrNull(
+  attributes: Readonly<Record<string, unknown>>,
+  key: string,
+): string | null {
+  const value = attributes[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
 function anyValueToJson(value: unknown): unknown {
   const record = toObjectRecord(value);
   if (record === undefined) {
@@ -311,14 +319,20 @@ export function normalizeOtlpDocument(document: Record<string, unknown>): Normal
       for (const logRecord of logRecords) {
         const attributes = keyValueArrayToObject(getRecordValue(logRecord, "attributes"));
         const { bodyText, bodyJson } = normalizeBody(getRecordValue(logRecord, "body"));
+        const traceId =
+          bytesToHex(getRecordValue(logRecord, "traceId", "trace_id")) ??
+          attributeStringOrNull(attributes, "traceId");
+        const spanId =
+          bytesToHex(getRecordValue(logRecord, "spanId", "span_id")) ??
+          attributeStringOrNull(attributes, "spanId");
 
         records.push({
           timestamp: parseTimestamp(getRecordValue(logRecord, "timeUnixNano", "time_unix_nano")),
           observedTimestamp: parseTimestamp(
             getRecordValue(logRecord, "observedTimeUnixNano", "observed_time_unix_nano"),
           ),
-          traceId: bytesToHex(getRecordValue(logRecord, "traceId", "trace_id")),
-          spanId: bytesToHex(getRecordValue(logRecord, "spanId", "span_id")),
+          traceId,
+          spanId,
           traceFlags: scalarStringOrNull(getRecordValue(logRecord, "flags")),
           severityNumber: numberOrNull(
             getRecordValue(logRecord, "severityNumber", "severity_number"),

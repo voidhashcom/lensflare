@@ -1,4 +1,5 @@
 import { NodeHttpServer } from "@effect/platform-node";
+import { NodeSdk } from "@effect/opentelemetry";
 import {
   DatasetRpcGroup,
   type LensflareEnvironmentDescriptor,
@@ -15,9 +16,12 @@ import {
   resolveDataPaths,
   resolveServerOrigin,
 } from "@lensflare/shared";
+import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
+import { BatchLogRecordProcessor } from "@opentelemetry/sdk-logs";
+import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { Effect, Layer, ManagedRuntime } from "effect";
-import { FetchHttpClient, HttpRouter } from "effect/unstable/http";
-import { OtlpLogger, OtlpSerialization } from "effect/unstable/observability";
+import { HttpRouter } from "effect/unstable/http";
 import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
@@ -94,19 +98,36 @@ function makeObservabilityLayer(
     return Layer.empty;
   }
 
-  return OtlpLogger.layer({
-    url: `${origin}/ingest/otlp/v1/logs/${otel.projectSlug}/${otel.datasetSlug}`,
-    resource: {
-      serviceName: mode === "desktop" ? "lensflare-desktop" : "lensflare-server",
-      serviceVersion: APP_VERSION,
-      attributes: {
-        "lensflare.mode": mode,
-      },
+  const resource = {
+    serviceName: mode === "desktop" ? "lensflare-desktop" : "lensflare-server",
+    serviceVersion: APP_VERSION,
+    attributes: {
+      "lensflare.mode": mode,
     },
-    exportInterval: "1 second",
-    maxBatchSize: 100,
+  };
+
+  return NodeSdk.layer(() => ({
+    resource,
+    logRecordProcessor: new BatchLogRecordProcessor(
+      new OTLPLogExporter({
+        url: `${origin}/ingest/otlp/v1/logs/${otel.projectSlug}/${otel.datasetSlug}`,
+      }),
+      {
+        scheduledDelayMillis: 1_000,
+        maxExportBatchSize: 100,
+      },
+    ),
+    spanProcessor: new BatchSpanProcessor(
+      new OTLPTraceExporter({
+        url: `${origin}/ingest/otlp/v1/traces/${otel.projectSlug}/${otel.datasetSlug}`,
+      }),
+      {
+        scheduledDelayMillis: 1_000,
+        maxExportBatchSize: 100,
+      },
+    ),
     shutdownTimeout: otelShutdownTimeout,
-  }).pipe(Layer.provide(FetchHttpClient.layer), Layer.provide(OtlpSerialization.layerJson));
+  }));
 }
 
 function ensureTelemetryCatalogTarget(

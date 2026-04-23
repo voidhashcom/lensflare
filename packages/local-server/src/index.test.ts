@@ -1,3 +1,4 @@
+import { DuckDBInstance } from "@duckdb/node-api";
 import { NodeSocket } from "@effect/platform-node";
 import { describe, expect, it } from "@effect/vitest";
 import {
@@ -47,6 +48,27 @@ async function getAvailablePort(): Promise<number> {
       });
     });
   });
+}
+
+async function queryDuckDb(
+  duckdbDatabaseFile: string,
+  sql: string,
+): Promise<Array<Record<string, unknown>>> {
+  const instance = await DuckDBInstance.create(duckdbDatabaseFile);
+  const connection = await instance.connect();
+
+  try {
+    const reader = await connection.runAndReadAll(sql);
+    await reader.readAll();
+    return reader.getRowObjectsJson();
+  } finally {
+    connection.closeSync();
+    instance.closeSync();
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 describe("startLocalServer", () => {
@@ -377,6 +399,50 @@ describe("startLocalServer", () => {
       expect(body.mode).toBe("server");
     } finally {
       await server.stop();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("exports local observability spans alongside local logs", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "lensflare-local-server-"));
+    const port = await getAvailablePort();
+    const duckdbDatabaseFile = join(directory, "lensflare.duckdb");
+
+    const server = await startLocalServer({
+      mode: "server",
+      host: "127.0.0.1",
+      port,
+      sqliteDatabaseFile: join(directory, "lensflare.sqlite"),
+      duckdbDatabaseFile,
+      otel: {
+        enabled: true,
+        projectSlug: "lensflare-internal",
+        datasetSlug: "runtime-logs",
+      },
+    });
+
+    try {
+      const response = await fetch(new URL("/api/health", server.origin));
+      expect(response.ok).toBe(true);
+
+      await delay(1_200);
+    } finally {
+      await server.stop();
+    }
+
+    try {
+      const spanRows = await queryDuckDb(
+        duckdbDatabaseFile,
+        "SELECT COUNT(*) AS count FROM span_records WHERE project_slug = 'lensflare-internal' AND dataset_slug = 'runtime-logs'",
+      );
+      const logRows = await queryDuckDb(
+        duckdbDatabaseFile,
+        "SELECT COUNT(*) AS count FROM log_records WHERE project_slug = 'lensflare-internal' AND dataset_slug = 'runtime-logs' AND trace_id IS NOT NULL AND span_id IS NOT NULL",
+      );
+
+      expect(Number(spanRows[0]?.count ?? 0)).toBeGreaterThan(0);
+      expect(Number(logRows[0]?.count ?? 0)).toBeGreaterThan(0);
+    } finally {
       await rm(directory, { recursive: true, force: true });
     }
   });
