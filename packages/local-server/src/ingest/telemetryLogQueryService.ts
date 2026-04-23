@@ -327,9 +327,12 @@ function toTraceContext(
       status: toTraceSpanStatus(row.statusCode),
     };
   });
+  const orderedSpans = orderTraceSpansForDisplay(spans);
 
   const selectedSpan =
-    currentSpanId && spans.some((span) => span.id === currentSpanId) ? currentSpanId : spans[0]?.id;
+    currentSpanId && orderedSpans.some((span) => span.id === currentSpanId)
+      ? currentSpanId
+      : orderedSpans[0]?.id;
 
   if (!selectedSpan) {
     return null;
@@ -339,9 +342,72 @@ function toTraceContext(
     traceId,
     startTime: new Date(traceStartMs).toISOString(),
     totalDurationUs,
-    spans,
+    spans: orderedSpans,
     currentSpanId: selectedSpan,
   };
+}
+
+function orderTraceSpansForDisplay(
+  spans: ReadonlyArray<TelemetryTraceContext["spans"][number]>,
+): ReadonlyArray<TelemetryTraceContext["spans"][number]> {
+  const byId = new Map(spans.map((span) => [span.id, span]));
+  const childrenByParent = new Map<string | null, Array<TelemetryTraceContext["spans"][number]>>();
+
+  for (const span of spans) {
+    const parentKey =
+      span.parentSpanId !== null && byId.has(span.parentSpanId) ? span.parentSpanId : null;
+    const siblings = childrenByParent.get(parentKey);
+    if (siblings) {
+      siblings.push(span);
+    } else {
+      childrenByParent.set(parentKey, [span]);
+    }
+  }
+
+  for (const siblings of childrenByParent.values()) {
+    siblings.sort(compareTraceSpans);
+  }
+
+  const ordered: Array<TelemetryTraceContext["spans"][number]> = [];
+  const visited = new Set<string>();
+  const visiting = new Set<string>();
+
+  const visit = (span: TelemetryTraceContext["spans"][number]) => {
+    if (visited.has(span.id) || visiting.has(span.id)) {
+      return;
+    }
+    visiting.add(span.id);
+    ordered.push(span);
+    for (const child of childrenByParent.get(span.id) ?? []) {
+      visit(child);
+    }
+    visiting.delete(span.id);
+    visited.add(span.id);
+  };
+
+  for (const root of childrenByParent.get(null) ?? []) {
+    visit(root);
+  }
+
+  // Defensive fallback for malformed traces (cycles, duplicate parents, etc.).
+  for (const span of [...spans].sort(compareTraceSpans)) {
+    visit(span);
+  }
+
+  return ordered;
+}
+
+function compareTraceSpans(
+  left: TelemetryTraceContext["spans"][number],
+  right: TelemetryTraceContext["spans"][number],
+): number {
+  if (left.startOffsetUs !== right.startOffsetUs) {
+    return left.startOffsetUs - right.startOffsetUs;
+  }
+  if (left.durationUs !== right.durationUs) {
+    return right.durationUs - left.durationUs;
+  }
+  return left.id.localeCompare(right.id);
 }
 
 function encodeTelemetryLogCursor(row: TelemetryLogRow): string {

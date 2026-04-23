@@ -234,17 +234,38 @@ function buildWindow(trace: TraceContext): WindowResult {
 }
 
 function computeDepths(spans: ReadonlyArray<TraceSpan>): ReadonlyMap<string, number> {
+  const spansById = new Map(spans.map((span) => [span.id, span]));
   const depths = new Map<string, number>();
-  for (const span of spans) {
+  const resolving = new Set<string>();
+
+  const resolveDepth = (span: TraceSpan): number => {
+    const cached = depths.get(span.id);
+    if (cached !== undefined) {
+      return cached;
+    }
     if (span.parentSpanId === null) {
       depths.set(span.id, 0);
-      continue;
+      return 0;
     }
-    // Parent may already be resolved (spans are roughly in start-time order
-    // with parents before children); if not, fall back to 1 so children
-    // still render at a sensible indent.
-    const parentDepth = depths.get(span.parentSpanId);
-    depths.set(span.id, (parentDepth ?? 0) + 1);
+    if (resolving.has(span.id)) {
+      return 0;
+    }
+
+    const parent = spansById.get(span.parentSpanId);
+    if (!parent) {
+      depths.set(span.id, 1);
+      return 1;
+    }
+
+    resolving.add(span.id);
+    const depth = resolveDepth(parent) + 1;
+    resolving.delete(span.id);
+    depths.set(span.id, depth);
+    return depth;
+  };
+
+  for (const span of spans) {
+    resolveDepth(span);
   }
   return depths;
 }

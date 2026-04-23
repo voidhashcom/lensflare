@@ -162,7 +162,8 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
         estimatedItemSize={ROW_ESTIMATED_SIZE}
         extraData={{ onSelectLog, selectedLogId }}
         keyExtractor={extractLogKey}
-        alignItemsAtEnd={true}
+        // Keep short log sets anchored to the top of the viewport; live-tail
+        // following is handled separately by `maintainScrollAtEnd`.
         maintainScrollAtEnd={true}
         ListHeaderComponent={
           hasPreviousPage ? (

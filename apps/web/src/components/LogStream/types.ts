@@ -44,9 +44,10 @@ export interface TraceSpan {
 }
 
 /**
- * Sparse trace context attached to a log entry. `spans` is ordered by
- * `startOffsetUs` ascending so the trace overview can render a waterfall
- * without having to re-sort on every mount.
+ * Sparse trace context attached to a log entry. `spans` is ordered for trace
+ * display: parents appear before their children, while siblings are sorted by
+ * `startOffsetUs` ascending. Horizontal bar positions still come from each
+ * span's own `startOffsetUs`.
  */
 export interface TraceContext {
   readonly traceId: string;

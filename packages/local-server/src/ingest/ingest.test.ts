@@ -231,6 +231,8 @@ describe("HTTP ingest", () => {
     const traceId = "0af7651916cd43dd8448eb211c80319c";
     const rootSpanId = "b7ad6b7169203331";
     const childSpanId = "1111111111111111";
+    const grandchildSpanId = "2222222222222222";
+    const siblingSpanId = "3333333333333333";
 
     const { project, dataset } = await seedProjectAndDataset(sqliteDatabaseFile);
     const server = await startLocalServer({
@@ -278,9 +280,29 @@ describe("HTTP ingest", () => {
                       parentSpanId: rootSpanId,
                       name: "SELECT orders",
                       kind: "SPAN_KIND_CLIENT",
-                      startTimeUnixNano: "1716201600050000000",
-                      endTimeUnixNano: "1716201600125000000",
+                      startTimeUnixNano: "1716201600010000000",
+                      endTimeUnixNano: "1716201600085000000",
                       status: { code: "STATUS_CODE_ERROR", message: "timeout" },
+                    },
+                    {
+                      traceId,
+                      spanId: grandchildSpanId,
+                      parentSpanId: childSpanId,
+                      name: "decode rows",
+                      kind: "SPAN_KIND_INTERNAL",
+                      startTimeUnixNano: "1716201600030000000",
+                      endTimeUnixNano: "1716201600040000000",
+                      status: { code: "STATUS_CODE_OK" },
+                    },
+                    {
+                      traceId,
+                      spanId: siblingSpanId,
+                      parentSpanId: rootSpanId,
+                      name: "publish response",
+                      kind: "SPAN_KIND_INTERNAL",
+                      startTimeUnixNano: "1716201600020000000",
+                      endTimeUnixNano: "1716201600035000000",
+                      status: { code: "STATUS_CODE_OK" },
                     },
                   ],
                 },
@@ -366,12 +388,36 @@ describe("HTTP ingest", () => {
             parentSpanId: rootSpanId,
             name: "SELECT orders",
             serviceName: "api",
-            startOffsetUs: 50_000,
+            startOffsetUs: 10_000,
             durationUs: 75_000,
             status: "error",
           }),
+          expect.objectContaining({
+            id: grandchildSpanId,
+            parentSpanId: childSpanId,
+            name: "decode rows",
+            serviceName: "api",
+            startOffsetUs: 30_000,
+            durationUs: 10_000,
+            status: "ok",
+          }),
+          expect.objectContaining({
+            id: siblingSpanId,
+            parentSpanId: rootSpanId,
+            name: "publish response",
+            serviceName: "api",
+            startOffsetUs: 20_000,
+            durationUs: 15_000,
+            status: "ok",
+          }),
         ],
       });
+      expect(traceContext?.spans.map((span) => span.id)).toEqual([
+        rootSpanId,
+        childSpanId,
+        grandchildSpanId,
+        siblingSpanId,
+      ]);
     } finally {
       await Promise.all([server.stop(), rm(directory, { recursive: true, force: true })]);
     }
