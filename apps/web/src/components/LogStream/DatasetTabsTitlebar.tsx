@@ -1,8 +1,9 @@
 import { useParams } from "@tanstack/react-router";
-import { GitBranchIcon, TelescopeIcon, XIcon } from "lucide-react";
+import { TelescopeIcon, XIcon } from "lucide-react";
 import { useMemo, type MouseEvent } from "react";
 
 import { LogoSymbol } from "~/components/Logo";
+import { TopTabsItem, TopTabsList, TopTabsTrigger } from "~/components/ui/top-tabs";
 import { cn } from "~/lib/utils";
 
 import { getDatasetTabState, type DatasetTab, type DatasetTabId } from "./datasetTabs";
@@ -41,11 +42,7 @@ export function DatasetTabsTitlebar() {
   };
 
   return (
-    <div
-      aria-label="Dataset tabs"
-      className="desktop-drag flex min-w-0 flex-1 items-stretch overflow-x-auto px-3"
-      role="tablist"
-    >
+    <TopTabsList aria-label="Dataset tabs" className="desktop-drag flex-1 items-stretch overflow-x-auto px-3">
       <div className="flex min-w-0 items-center">
         {tabState.tabs.map((tab) => (
           <DatasetTabButton
@@ -57,7 +54,7 @@ export function DatasetTabsTitlebar() {
           />
         ))}
       </div>
-    </div>
+    </TopTabsList>
   );
 }
 
@@ -84,33 +81,29 @@ function DatasetTabButton({ active, tab, onSelect, onClose }: DatasetTabButtonPr
   };
 
   return (
-    <div
+    <TopTabsItem
+      active={active}
       className={cn(
-        "desktop-no-drag group -mb-px inline-flex min-w-24 max-w-56 items-center border-b-2 text-sm group relative",
-        active
-          ? "border-foreground text-foreground"
-          : "border-transparent text-muted-foreground hover:text-foreground",
+        "desktop-no-drag min-w-24 max-w-56 text-sm relative",
+        tab.closable && "pr-8",
       )}
-      role="presentation"
     >
-      <button
-        aria-selected={active}
-        className="flex min-w-0 flex-1 cursor-pointer text-xs items-center gap-2 px-4 py-3 text-left outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      <TopTabsTrigger
+        active={active}
+        className="flex flex-1 gap-2 text-left text-xs"
+        leading={<DatasetTabIcon tab={tab} />}
         onClick={handleSelectClick}
         onMouseDown={handleSelectMouseDown}
-        role="tab"
-        type="button"
       >
-        <DatasetTabIcon tab={tab} />
-        <span className="min-w-0 truncate">{tab.title}</span>
-      </button>
+        {tab.title}
+      </TopTabsTrigger>
       {tab.closable ? (
-        <div className="absolute right-0 top-0 bottom-0 h-full flex items-center  pl-3 opacity-0 group-hover:opacity-100">
-          <div className="w-4 h-full bg-linear-to-r from-background/0 to-background" />
-          <div className="bg-background pl-2">
+        <div className="pointer-events-auto absolute inset-y-0 right-0 flex items-center pl-3 opacity-0 group-hover:opacity-100">
+          <div className="h-full w-4 bg-linear-to-r from-background/0 to-background" />
+          <div className="bg-background pl-2 pointer-events-auto">
             <button
               aria-label={`Close ${tab.title}`}
-              className="mr-2 size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-70 hover:bg-accent hover:text-foreground inline-flex"
+              className="mr-2 inline-flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-70 hover:bg-accent hover:text-foreground"
               onClick={() => onClose(tab.id)}
               type="button"
             >
@@ -119,7 +112,7 @@ function DatasetTabButton({ active, tab, onSelect, onClose }: DatasetTabButtonPr
           </div>
         </div>
       ) : null}
-    </div>
+    </TopTabsItem>
   );
 }
 

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { ScrollArea } from "~/components/ui/scroll-area";
+import { TopTabsItem, TopTabsList, TopTabsTrigger } from "~/components/ui/top-tabs";
 import { getLogTraceContext } from "~/data/logApi";
 import { cn } from "~/lib/utils";
 
@@ -139,39 +140,20 @@ interface TabBarProps {
 
 function TabBar({ activeTab, onSelect }: TabBarProps) {
   return (
-    // `pr-10` reserves space on the right for the absolutely-positioned
-    // close button so the tab labels never collide with it.
-    <div className="flex shrink-0 min-w-0 items-center border-b border-border/60 pr-10">
-      <TabButton active={activeTab === "properties"} onClick={() => onSelect("properties")}>
-        Event Properties
-      </TabButton>
-      <TabButton active={activeTab === "raw"} onClick={() => onSelect("raw")}>
-        Raw Data
-      </TabButton>
-    </div>
-  );
-}
-
-interface TabButtonProps {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}
-
-function TabButton({ active, onClick, children }: TabButtonProps) {
-  return (
-    <button
-      className={cn(
-        "-mb-px relative cursor-pointer px-4 py-3 text-sm transition-colors",
-        active
-          ? "border-b-2 border-foreground text-foreground"
-          : "border-b-2 border-transparent text-muted-foreground hover:text-foreground",
-      )}
-      onClick={onClick}
-      type="button"
-    >
-      {children}
-    </button>
+    <TopTabsList aria-label="Log detail tabs" className="pr-10">
+      {/* `pr-10` reserves space on the right for the absolutely-positioned
+          close button so the tab labels never collide with it. */}
+      <TopTabsItem active={activeTab === "properties"}>
+        <TopTabsTrigger active={activeTab === "properties"} onClick={() => onSelect("properties")}>
+          Event Properties
+        </TopTabsTrigger>
+      </TopTabsItem>
+      <TopTabsItem active={activeTab === "raw"}>
+        <TopTabsTrigger active={activeTab === "raw"} onClick={() => onSelect("raw")}>
+          Raw Data
+        </TopTabsTrigger>
+      </TopTabsItem>
+    </TopTabsList>
   );
 }
 

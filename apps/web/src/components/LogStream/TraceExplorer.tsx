@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type MouseEvent, type KeyboardEvent } from "react";
 
+import { TopTabsItem, TopTabsList, TopTabsTrigger } from "~/components/ui/top-tabs";
 import { getLogTraceContext } from "~/data/logApi";
 import { cn } from "~/lib/utils";
 
@@ -653,29 +654,11 @@ interface SpanDetailsTabsProps {
 
 function SpanDetailsTabs({ active, onSelect }: SpanDetailsTabsProps) {
   return (
-    <div
-      aria-label="Span detail tabs"
-      className="flex shrink-0 items-center gap-1 border-b border-border/60 px-2"
-      role="tablist"
-    >
-      <TabHeader
-        active={active === "fields"}
-        label="Fields"
-        onClick={() => onSelect("fields")}
-      />
-      <TabHeader
-        active={active === "events"}
-        badge={0}
-        label="Events"
-        onClick={() => onSelect("events")}
-      />
-      <TabHeader
-        active={active === "links"}
-        badge={0}
-        label="Links"
-        onClick={() => onSelect("links")}
-      />
-    </div>
+    <TopTabsList aria-label="Span detail tabs" className="gap-1 px-2">
+      <TabHeader active={active === "fields"} label="Fields" onClick={() => onSelect("fields")} />
+      <TabHeader active={active === "events"} badge={0} label="Events" onClick={() => onSelect("events")} />
+      <TabHeader active={active === "links"} badge={0} label="Links" onClick={() => onSelect("links")} />
+    </TopTabsList>
   );
 }
 
@@ -688,30 +671,11 @@ interface TabHeaderProps {
 
 function TabHeader({ active, label, badge, onClick }: TabHeaderProps) {
   return (
-    <button
-      aria-selected={active}
-      className={cn(
-        "-mb-px inline-flex cursor-pointer items-center gap-1.5 border-b-2 px-3 py-2.5 text-xs",
-        active
-          ? "border-foreground text-foreground"
-          : "border-transparent text-muted-foreground hover:text-foreground",
-      )}
-      onClick={onClick}
-      role="tab"
-      type="button"
-    >
-      <span>{label}</span>
-      {badge !== undefined ? (
-        <span
-          className={cn(
-            "rounded px-1 font-mono text-[10px] tabular-nums",
-            active ? "text-foreground/80" : "text-muted-foreground/60",
-          )}
-        >
-          {badge}
-        </span>
-      ) : null}
-    </button>
+    <TopTabsItem active={active}>
+      <TopTabsTrigger active={active} badge={badge} onClick={onClick} size="compact">
+        {label}
+      </TopTabsTrigger>
+    </TopTabsItem>
   );
 }
 
