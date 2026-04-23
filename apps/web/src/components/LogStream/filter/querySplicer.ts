@@ -27,7 +27,9 @@ export interface SpliceContext {
 
 /**
  * Accept a field suggestion: replace the composing field prefix with
- * `<field><default-op>` so the caret lands at the value position.
+ * `<field><default-op>` so the caret lands at the value position. For
+ * string-like fields we pre-insert `""` and place the caret inside the
+ * quotes so values with spaces can be typed immediately.
  */
 export function applyFieldSuggestion(
   ctx: SpliceContext,
@@ -37,10 +39,17 @@ export function applyFieldSuggestion(
   const pathString = field.path.join(".");
   const wsIdx = findLastWhitespace(ctx.trailingText);
   const keepBefore = ctx.trailingText.slice(0, wsIdx + 1);
-  const inserted = `${pathString}${token}`;
+  const inserted =
+    field.kind === "number"
+      ? `${pathString}${token}`
+      : `${pathString}${token}""`;
   const nextTrailing = keepBefore + inserted;
   const nextSource = ctx.source.slice(0, ctx.trailingStart) + nextTrailing;
-  return { source: nextSource, cursor: ctx.trailingStart + nextTrailing.length };
+  const cursorOffset =
+    field.kind === "number"
+      ? nextTrailing.length
+      : nextTrailing.length - 1;
+  return { source: nextSource, cursor: ctx.trailingStart + cursorOffset };
 }
 
 /**

@@ -126,11 +126,18 @@ describe("quoteValueIfNeeded", () => {
 });
 
 describe("applyFieldSuggestion", () => {
-  it("inserts `<path>:` for string fields when trailingText is empty", () => {
+  it('inserts `<path>:""` for string fields and places the cursor inside the quotes', () => {
     const ctx = contextFromTrailing("", 0);
     const result = applyFieldSuggestion(ctx, messageField);
-    expect(result.source).toBe("message:");
-    expect(result.cursor).toBe(8);
+    expect(result.source).toBe('message:""');
+    expect(result.cursor).toBe(9);
+  });
+
+  it('inserts `<path>:""` for enum fields and places the cursor inside the quotes', () => {
+    const ctx = contextFromTrailing("", 0);
+    const result = applyFieldSuggestion(ctx, levelField);
+    expect(result.source).toBe('level:""');
+    expect(result.cursor).toBe(7);
   });
 
   it("inserts `<path>=` for number fields", () => {
@@ -161,8 +168,8 @@ describe("applyFieldSuggestion", () => {
       trailingText: "lev",
     };
     const result = applyFieldSuggestion(ctx, levelField);
-    expect(result.source).toBe("level:");
-    expect(result.cursor).toBe(6);
+    expect(result.source).toBe('level:""');
+    expect(result.cursor).toBe(7);
   });
 });
 

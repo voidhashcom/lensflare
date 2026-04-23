@@ -366,7 +366,7 @@ function computeCursorContext(trailingText: string, cursor: number): CursorConte
     };
   }
 
-  const valuePrefix = afterIdent.slice(opMatch.end);
+  const valuePrefix = normaliseValuePrefix(afterIdent.slice(opMatch.end));
   return {
     kind: "value",
     fieldPath: splitIdent(identMatch.value),
@@ -403,6 +403,30 @@ function leadingOperator(text: string): { readonly syntax: OperatorSyntax; reado
     }
   }
   return null;
+}
+
+function normaliseValuePrefix(valuePrefix: string): string {
+  if (!valuePrefix.startsWith('"')) {
+    return valuePrefix;
+  }
+
+  let result = "";
+  for (let index = 1; index < valuePrefix.length; index += 1) {
+    const char = valuePrefix[index] ?? "";
+    if (char === "\\") {
+      const next = valuePrefix[index + 1];
+      if (next === '"' || next === "\\") {
+        result += next;
+        index += 1;
+        continue;
+      }
+    }
+    if (char === '"') {
+      break;
+    }
+    result += char;
+  }
+  return result;
 }
 
 /**
@@ -459,8 +483,14 @@ export function parsedToFilter(
   fields: ReadonlyArray<TelemetryLogField>,
 ): FilterNode | null {
   const children: Array<FilterNode> = [];
+  const pills = [...result.pills];
+  const trailingPill = tryReadWholePill(result.trailingText);
 
-  for (const pill of result.pills) {
+  if (trailingPill !== null) {
+    pills.push(trailingPill);
+  }
+
+  for (const pill of pills) {
     const field = resolvePillField(pill, fields);
     if (field === null) continue;
 
@@ -479,9 +509,41 @@ export function parsedToFilter(
     children.push(pill.negated ? { _tag: "not", child: cmp } : cmp);
   }
 
+  const trailingTextNode = trailingTextToFilterNode(result);
+  if (trailingTextNode !== null) {
+    children.push(trailingTextNode);
+  }
+
   if (children.length === 0) return null;
   if (children.length === 1) return children[0] ?? null;
   return { _tag: "and", children };
+}
+
+function tryReadWholePill(source: string): ParsedPill | null {
+  const pill = tryReadPill(source, 0);
+  if (pill === null) {
+    return null;
+  }
+  return pill.end === source.length ? pill : null;
+}
+
+function trailingTextToFilterNode(result: ParseResult): FilterNode | null {
+  const trimmed = result.trailingText.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  if (tryReadWholePill(result.trailingText) !== null) {
+    return null;
+  }
+
+  switch (result.cursorContext.kind) {
+    case "operator":
+    case "value":
+      return null;
+    case "field":
+      return { _tag: "text", query: trimmed, mode: "substring" };
+  }
 }
 
 /**

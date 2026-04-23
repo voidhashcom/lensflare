@@ -25,7 +25,7 @@ import { LogDetailsPanel } from "./LogDetailsPanel";
 import { LogStreamHeader } from "./LogStreamHeader";
 import { LogTable, type LogTableHandle } from "./LogTable";
 import { TraceExplorer } from "./TraceExplorer";
-import type { DateRangePreset, LogEntry, SourceIconKind } from "./types";
+import type { LogEntry, SourceIconKind } from "./types";
 
 /**
  * Below this viewport width we switch the log details panel from an inline
@@ -63,7 +63,6 @@ export function LogStreamView({
 }: LogStreamViewProps) {
   const tabsByDataset = useDatasetTabsSnapshot();
   const [filter, setFilter] = useState<FilterNode | null>(null);
-  const [dateRange, _setDateRange] = useState<DateRangePreset>("Last 30 days");
   const [logs, setLogs] = useState<ReadonlyArray<LogEntry>>([]);
   const [pageInfo, setPageInfoState] = useState<TelemetryLogPageInfo | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -207,14 +206,6 @@ export function LogStreamView({
     updatePageInfo,
   ]);
 
-  const handleScrollClick = () => {
-    const table = tableRef.current;
-    if (!table) {
-      return;
-    }
-    table.scrollToBottom();
-  };
-
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-background/40">
       {!hasDesktopTitleTabs ? (
@@ -236,13 +227,9 @@ export function LogStreamView({
             <LiveTabPanel
               active={tab.id === tabState.activeTabId}
               closeDetails={closeDetails}
-              datasetIcon={datasetIcon}
               datasetId={datasetId}
-              datasetName={datasetName}
-              dateRange={dateRange}
               errorMessage={errorMessage}
               handleLoadOlder={handleLoadOlder}
-              handleScrollClick={handleScrollClick}
               isLoading={isLoading}
               isLoadingOlder={isLoadingOlder}
               key={tab.id}
@@ -266,13 +253,9 @@ export function LogStreamView({
 interface LiveTabPanelProps {
   active: boolean;
   closeDetails: () => void;
-  datasetIcon: SourceIconKind;
   datasetId: string;
-  datasetName: string;
-  dateRange: DateRangePreset;
   errorMessage: string | null;
   handleLoadOlder: () => void;
-  handleScrollClick: () => void;
   isLoading: boolean;
   isLoadingOlder: boolean;
   logs: ReadonlyArray<LogEntry>;
@@ -289,13 +272,9 @@ interface LiveTabPanelProps {
 function LiveTabPanel({
   active,
   closeDetails,
-  datasetIcon,
   datasetId,
-  datasetName,
-  dateRange,
   errorMessage,
   handleLoadOlder,
-  handleScrollClick,
   isLoading,
   isLoadingOlder,
   logs,
@@ -319,12 +298,8 @@ function LiveTabPanel({
         <div className="flex min-h-0 flex-1">
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <LogStreamHeader
-              datasetIcon={datasetIcon}
               datasetId={datasetId}
-              datasetName={datasetName}
-              dateRange={dateRange}
               onFilterChange={setFilter}
-              onScrollClick={handleScrollClick}
               projectId={projectId}
             />
             {errorMessage ? (

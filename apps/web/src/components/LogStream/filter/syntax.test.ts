@@ -23,6 +23,12 @@ const messageField: TelemetryLogField = {
   kind: "string",
 };
 
+const serviceNameField: TelemetryLogField = {
+  path: ["serviceName"],
+  label: "serviceName",
+  kind: "string",
+};
+
 const requestIdField: TelemetryLogField = {
   path: ["attributes", "requestId"],
   label: "requestId",
@@ -38,6 +44,7 @@ const statusField: TelemetryLogField = {
 const catalog: ReadonlyArray<TelemetryLogField> = [
   levelField,
   messageField,
+  serviceNameField,
   requestIdField,
   statusField,
 ];
@@ -191,6 +198,20 @@ describe("parseFilterInput — cursor context", () => {
     expect(result.cursorContext.valuePrefix).toBe("inf");
   });
 
+  it("treats the cursor inside inserted quotes as an empty value prefix", () => {
+    const result = parseFilterInput('level:""', 7);
+    expect(result.cursorContext.kind).toBe("value");
+    if (result.cursorContext.kind !== "value") throw new Error("unexpected");
+    expect(result.cursorContext.valuePrefix).toBe("");
+  });
+
+  it("normalises quoted partial values for suggestions", () => {
+    const result = parseFilterInput('level:"in"', 9);
+    expect(result.cursorContext.kind).toBe("value");
+    if (result.cursorContext.kind !== "value") throw new Error("unexpected");
+    expect(result.cursorContext.valuePrefix).toBe("in");
+  });
+
   it("resets to `field` context after a committed pill + space", () => {
     const result = parseFilterInput("level:info ", 11);
     expect(result.cursorContext).toEqual({ kind: "field", prefix: "" });
@@ -203,6 +224,15 @@ describe("parsedToFilter", () => {
     expect(parsedToFilter(result, catalog)).toBeNull();
   });
 
+  it("emits a text node for plain free-text input", () => {
+    const result = parseFilterInput("timeout", "timeout".length);
+    expect(parsedToFilter(result, catalog)).toEqual({
+      _tag: "text",
+      query: "timeout",
+      mode: "substring",
+    });
+  });
+
   it("emits a bare cmp node for a single pill", () => {
     const source = "level:error ";
     const result = parseFilterInput(source, source.length);
@@ -211,6 +241,16 @@ describe("parsedToFilter", () => {
       field: { path: ["level"] },
       op: "eq",
       value: { _tag: "string", value: "error" },
+    });
+  });
+
+  it("includes a complete trailing pill at EOF", () => {
+    const result = parseFilterInput('serviceName:"hello"', 'serviceName:"hello"'.length);
+    expect(parsedToFilter(result, catalog)).toEqual({
+      _tag: "cmp",
+      field: { path: ["serviceName"] },
+      op: "eq",
+      value: { _tag: "string", value: "hello" },
     });
   });
 
@@ -235,6 +275,54 @@ describe("parsedToFilter", () => {
     expect(filter?._tag).toBe("and");
     if (filter?._tag !== "and") throw new Error("unexpected");
     expect(filter.children).toHaveLength(2);
+  });
+
+  it("includes a final complete pill even without trailing whitespace", () => {
+    const source = 'level:error serviceName:"hello"';
+    const result = parseFilterInput(source, source.length);
+    expect(parsedToFilter(result, catalog)).toEqual({
+      _tag: "and",
+      children: [
+        {
+          _tag: "cmp",
+          field: { path: ["level"] },
+          op: "eq",
+          value: { _tag: "string", value: "error" },
+        },
+        {
+          _tag: "cmp",
+          field: { path: ["serviceName"] },
+          op: "eq",
+          value: { _tag: "string", value: "hello" },
+        },
+      ],
+    });
+  });
+
+  it("combines committed pills with trailing free text", () => {
+    const source = "level:error timeout";
+    const result = parseFilterInput(source, source.length);
+    expect(parsedToFilter(result, catalog)).toEqual({
+      _tag: "and",
+      children: [
+        {
+          _tag: "cmp",
+          field: { path: ["level"] },
+          op: "eq",
+          value: { _tag: "string", value: "error" },
+        },
+        {
+          _tag: "text",
+          query: "timeout",
+          mode: "substring",
+        },
+      ],
+    });
+  });
+
+  it("does not turn partial structured syntax into free-text search", () => {
+    expect(parsedToFilter(parseFilterInput("level:", 6), catalog)).toBeNull();
+    expect(parsedToFilter(parseFilterInput('serviceName:"hel', 'serviceName:"hel'.length), catalog)).toBeNull();
   });
 
   it("drops pills that reference unknown fields", () => {

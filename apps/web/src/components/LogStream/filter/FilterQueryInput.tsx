@@ -106,7 +106,8 @@ export function FilterQueryInput({
   fields,
   onFilterChange,
 }: FilterQueryInputProps) {
-  const [source, setSource] = useState("");
+  const [appliedSource, setAppliedSource] = useState("");
+  const [draftSource, setDraftSource] = useState("");
   const [cursor, setCursor] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const [highlightedSuggestionIndex, setHighlightedSuggestionIndex] = useState<number | null>(null);
@@ -114,19 +115,28 @@ export function FilterQueryInput({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const fieldsRef = useRef(fields);
   const suggestionCountRef = useRef(0);
+  const suppressNextCloseResetRef = useRef(false);
+  const appliedSourceRef = useRef(appliedSource);
+  const draftSourceRef = useRef(draftSource);
   const editorId = useId();
   const suggestionsId = useId();
 
   fieldsRef.current = fields;
+  appliedSourceRef.current = appliedSource;
+  draftSourceRef.current = draftSource;
 
-  const parsed = useMemo(() => parseFilterInput(source, cursor), [source, cursor]);
+  const appliedParsed = useMemo(
+    () => parseFilterInput(appliedSource, appliedSource.length),
+    [appliedSource],
+  );
+  const parsed = useMemo(() => parseFilterInput(draftSource, cursor), [cursor, draftSource]);
   const cursorContextKey = useMemo(
     () => cursorContextToKey(parsed.cursorContext),
     [parsed.cursorContext],
   );
-  const filter = useMemo(
-    () => parsedToFilter(parsed, fields),
-    [parsed, fields],
+  const appliedFilter = useMemo(
+    () => parsedToFilter(appliedParsed, fields),
+    [appliedParsed, fields],
   );
 
   const editor = useEditor({
@@ -153,8 +163,9 @@ export function FilterQueryInput({
       },
       handleKeyDown(_view, event) {
         if (event.key === "Escape") {
-          setIsOpen(false);
-          return false;
+          event.preventDefault();
+          cancelAndClose();
+          return true;
         }
 
         if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -183,7 +194,7 @@ export function FilterQueryInput({
               return true;
             }
           }
-          setIsOpen(false);
+          applyAndClose();
           return true;
         }
 
@@ -196,10 +207,12 @@ export function FilterQueryInput({
     },
     onUpdate({ editor: nextEditor }) {
       const nextSource = nextEditor.getText({ blockSeparator: " " });
-      setSource(nextSource);
+      setDraftSource(nextSource);
       setCursor(getEditorTextOffset(nextEditor));
     },
   }, [editorId, suggestionsId]);
+  const editorRef = useRef<Editor | null>(null);
+  editorRef.current = editor ?? null;
 
   useEffect(() => {
     if (!editor) return;
@@ -222,11 +235,59 @@ export function FilterQueryInput({
   // means the parent must rely on this emission to learn the editor's state.
   const lastNotifiedRef = useRef<string>("__unset__");
   useEffect(() => {
-    const key = filter === null ? "null" : JSON.stringify(filter);
+    const key = appliedFilter === null ? "null" : JSON.stringify(appliedFilter);
     if (lastNotifiedRef.current === key) return;
     lastNotifiedRef.current = key;
-    onFilterChange(filter);
-  }, [filter, onFilterChange]);
+    onFilterChange(appliedFilter);
+  }, [appliedFilter, onFilterChange]);
+
+  const syncDraftFromApplied = useCallback(
+    (nextCursor = appliedSourceRef.current.length) => {
+      const nextAppliedSource = appliedSourceRef.current;
+      const safeCursor = clampTextOffset(nextCursor, nextAppliedSource);
+      setDraftSource(nextAppliedSource);
+      setCursor(safeCursor);
+      const currentEditor = editorRef.current;
+      if (currentEditor) {
+        currentEditor.commands.setContent(textToDoc(nextAppliedSource), { emitUpdate: false });
+        currentEditor.commands.setTextSelection(safeCursor + 1);
+      }
+    },
+    [],
+  );
+
+  const openEditor = useCallback(() => {
+    syncDraftFromApplied();
+    setIsOpen(true);
+  }, [syncDraftFromApplied]);
+
+  const cancelAndClose = useCallback(() => {
+    suppressNextCloseResetRef.current = true;
+    syncDraftFromApplied();
+    setIsOpen(false);
+  }, [syncDraftFromApplied]);
+
+  const applyAndClose = useCallback(() => {
+    const nextAppliedSource =
+      editorRef.current?.getText({ blockSeparator: " " }) ?? draftSourceRef.current;
+    suppressNextCloseResetRef.current = true;
+    setDraftSource(nextAppliedSource);
+    setCursor(clampTextOffset(nextAppliedSource.length, nextAppliedSource));
+    setAppliedSource(nextAppliedSource);
+    setIsOpen(false);
+  }, []);
+
+  const handleDialogOpenChange = useCallback((nextOpen: boolean) => {
+    if (nextOpen) {
+      openEditor();
+      return;
+    }
+    if (suppressNextCloseResetRef.current) {
+      suppressNextCloseResetRef.current = false;
+      return;
+    }
+    cancelAndClose();
+  }, [cancelAndClose, openEditor]);
 
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -236,25 +297,29 @@ export function FilterQueryInput({
 
       event.preventDefault();
       event.stopPropagation();
-      setIsOpen((open) => !open);
+      if (isOpen) {
+        cancelAndClose();
+        return;
+      }
+      openEditor();
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [cancelAndClose, isOpen, openEditor]);
 
   useEffect(() => {
     if (!isOpen || !editor) return;
     const frame = window.requestAnimationFrame(() => {
-      editor.commands.focus(Math.min(source.length + 1, editor.state.doc.content.size));
+      editor.commands.focus(Math.min(cursor + 1, editor.state.doc.content.size));
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [editor, isOpen, source.length]);
+  }, [editor, isOpen]);
 
-  const commitSource = useCallback(
+  const updateDraftSource = useCallback(
     (nextSource: string, nextCursor: number) => {
       const safeCursor = clampTextOffset(nextCursor, nextSource);
-      setSource(nextSource);
+      setDraftSource(nextSource);
       setCursor(safeCursor);
       if (editor) {
         editor.commands.setContent(textToDoc(nextSource), { emitUpdate: false });
@@ -265,9 +330,18 @@ export function FilterQueryInput({
     [editor],
   );
 
-  const handleClearAll = useCallback(() => {
-    commitSource("", 0);
-  }, [commitSource]);
+  const handleClearDraft = useCallback(() => {
+    updateDraftSource("", 0);
+  }, [updateDraftSource]);
+
+  const handleClearApplied = useCallback(() => {
+    setAppliedSource("");
+    setDraftSource("");
+    setCursor(0);
+    if (editor) {
+      editor.commands.setContent(textToDoc(""), { emitUpdate: false });
+    }
+  }, [editor]);
 
   const handleRemovePill = useCallback(
     (index: number) => {
@@ -275,16 +349,16 @@ export function FilterQueryInput({
       if (!pill) return;
       let removeEnd = pill.end;
       while (
-        removeEnd < source.length &&
-        /\s/.test(source[removeEnd] ?? "")
+        removeEnd < draftSource.length &&
+        /\s/.test(draftSource[removeEnd] ?? "")
       ) {
         removeEnd += 1;
       }
       const nextSource =
-        source.slice(0, pill.start) + source.slice(removeEnd);
-      commitSource(nextSource, pill.start);
+        draftSource.slice(0, pill.start) + draftSource.slice(removeEnd);
+      updateDraftSource(nextSource, pill.start);
     },
-    [commitSource, parsed.pills, source],
+    [draftSource, parsed.pills, updateDraftSource],
   );
 
   const handleEditPill = useCallback(
@@ -303,23 +377,23 @@ export function FilterQueryInput({
       };
       const serialised = serialisePill(nextPill);
       const nextSource =
-        source.slice(0, pill.start) + serialised + source.slice(pill.end);
+        draftSource.slice(0, pill.start) + serialised + draftSource.slice(pill.end);
       const nextCursor = pill.start + serialised.length;
-      commitSource(nextSource, nextCursor);
+      updateDraftSource(nextSource, nextCursor);
     },
-    [commitSource, parsed.pills, source],
+    [draftSource, parsed.pills, updateDraftSource],
   );
 
   const handleApplySuggestion = useCallback(
     (suggestion: FilterSuggestion) => {
       applySuggestion({
         suggestion,
-        source,
+        source: draftSource,
         parsed,
-        commitSource,
+        commitSource: updateDraftSource,
       });
     },
-    [commitSource, parsed, source],
+    [draftSource, parsed, updateDraftSource],
   );
 
   const handleSuggestionCountChange = useCallback((count: number) => {
@@ -329,36 +403,57 @@ export function FilterQueryInput({
     );
   }, []);
 
-  const hasContent = parsed.pills.length > 0 || parsed.trailingText.length > 0;
-  const triggerLabel = hasContent ? source : "Filter logs";
+  const hasDraftContent = parsed.pills.length > 0 || parsed.trailingText.length > 0;
+  const hasAppliedContent =
+    appliedParsed.pills.length > 0 || appliedParsed.trailingText.length > 0;
+  const triggerLabel = hasAppliedContent ? appliedSource : "Filter logs";
 
   return (
-    <CommandDialog onOpenChange={setIsOpen} open={isOpen}>
-      <button
-        aria-label="Open log filter"
-        className={cn(
-          "inline-flex h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md border border-input bg-background/60 px-2.5 text-left text-sm text-foreground/80 shadow-xs/5 hover:bg-accent/50",
-          "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/24",
-        )}
-        data-slot="filter-query-input"
-        onClick={() => setIsOpen(true)}
-        ref={triggerRef}
-        type="button"
-      >
-        <SearchIcon className="size-3.5 shrink-0 text-muted-foreground/80" />
-        <span
+    <CommandDialog onOpenChange={handleDialogOpenChange} open={isOpen}>
+      <div className="relative min-w-0 flex-1">
+        <button
+          aria-label="Open log filter"
           className={cn(
-            "min-w-0 flex-1 truncate",
-            !hasContent && "text-muted-foreground/72",
+            "inline-flex h-8 min-w-0 w-full cursor-pointer items-center gap-2 rounded-md border border-input bg-background/60 px-2.5 text-left text-sm text-foreground/80 shadow-xs/5 hover:bg-accent/50",
+            hasAppliedContent ? "pr-9" : "pr-2.5",
+            "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/24",
           )}
+          data-slot="filter-query-input"
+          onClick={openEditor}
+          ref={triggerRef}
+          type="button"
         >
-          {triggerLabel}
-        </span>
-        <KbdGroup className="shrink-0 gap-0.5 max-sm:hidden">
-          <Kbd className="h-4 min-w-4 px-1 text-[10px]">⌘</Kbd>
-          <Kbd className="h-4 min-w-4 px-1 text-[10px]">K</Kbd>
-        </KbdGroup>
-      </button>
+          <SearchIcon className="size-3.5 shrink-0 text-muted-foreground/80" />
+          <span
+            className={cn(
+              "min-w-0 flex-1 truncate",
+              !hasAppliedContent && "text-muted-foreground/72",
+            )}
+          >
+            {triggerLabel}
+          </span>
+          {!hasAppliedContent ? (
+            <KbdGroup className="shrink-0 gap-0.5 max-sm:hidden">
+              <Kbd className="h-4 min-w-4 px-1 text-[10px]">⌘</Kbd>
+              <Kbd className="h-4 min-w-4 px-1 text-[10px]">K</Kbd>
+            </KbdGroup>
+          ) : null}
+        </button>
+        {hasAppliedContent ? (
+          <button
+            aria-label="Clear filters"
+            className="absolute right-1.5 top-1/2 inline-flex size-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-muted-foreground/80 hover:bg-accent/60 hover:text-foreground"
+            onClick={(event) => {
+              event.stopPropagation();
+              handleClearApplied();
+            }}
+            onMouseDown={(event) => event.preventDefault()}
+            type="button"
+          >
+            <XIcon className="size-3.5" />
+          </button>
+        ) : null}
+      </div>
 
       <CommandDialogPopup
         aria-label="Dataset filter"
@@ -372,7 +467,7 @@ export function FilterQueryInput({
           <div className="flex items-start gap-2">
             <SearchIcon className="mt-2 size-4 shrink-0 text-muted-foreground/80" />
             <div className="relative min-w-0 flex-1">
-              {source.length === 0 ? (
+              {draftSource.length === 0 ? (
                 <label
                   className="pointer-events-none absolute left-0 top-1.5 text-muted-foreground/72 text-sm leading-6"
                   htmlFor={editorId}
@@ -385,11 +480,11 @@ export function FilterQueryInput({
                 editor={editor}
               />
             </div>
-            {hasContent ? (
+            {hasDraftContent ? (
               <button
                 aria-label="Clear filters"
                 className="mt-1 inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground/80 hover:bg-accent/60 hover:text-foreground"
-                onClick={handleClearAll}
+                onClick={handleClearDraft}
                 onMouseDown={(event) => event.preventDefault()}
                 type="button"
               >
@@ -423,11 +518,11 @@ export function FilterQueryInput({
             </KbdGroup>
             <KbdGroup className="items-center gap-1.5">
               <Kbd>Enter</Kbd>
-              <span className="text-muted-foreground/80">Apply / Select</span>
+              <span className="text-muted-foreground/80">Select / Apply</span>
             </KbdGroup>
             <KbdGroup className="items-center gap-1.5">
               <Kbd>Esc</Kbd>
-              <span className="text-muted-foreground/80">Close</span>
+              <span className="text-muted-foreground/80">Cancel</span>
             </KbdGroup>
           </div>
         </CommandFooter>
