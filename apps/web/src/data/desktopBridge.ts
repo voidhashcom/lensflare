@@ -1,6 +1,7 @@
 import type { DesktopBridge, DesktopLocalServerState } from "@lensflare/contracts";
 
 function readBridge(): DesktopBridge | null {
+  if (typeof window === "undefined") return null;
   return window.desktopBridge ?? window.lensflareDesktop ?? null;
 }
 

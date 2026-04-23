@@ -1,8 +1,8 @@
+import type { FilterNode } from "@lensflare/contracts";
 import {
   ChevronDownIcon,
   ClockIcon,
   ColumnsIcon,
-  HistoryIcon,
   LayersIcon,
   SearchIcon,
   SettingsIcon,
@@ -11,17 +11,20 @@ import type * as React from "react";
 
 import { cn } from "~/lib/utils";
 
+import { QueryBuilder } from "./filter/QueryBuilder";
 import { SourceBadge } from "./SourceBadge";
 import type { DateRangePreset, SourceIconKind } from "./types";
 
 interface LogStreamHeaderProps {
+  projectId: string;
+  datasetId: string;
   datasetName: string;
   datasetIcon?: SourceIconKind;
-  searchValue: string;
-  onSearchChange: (next: string) => void;
+  /** Fired when the user commits a filter change (popover Apply or chip remove). */
+  onFilterChange: (filter: FilterNode | null) => void;
   dateRange: DateRangePreset;
   onDateRangeClick?: () => void;
-  onSearchSubmit?: () => void;
+  onRunQuery?: () => void;
   onScrollClick?: () => void;
   onPresetsClick?: () => void;
   onDatasetClick?: () => void;
@@ -30,18 +33,21 @@ interface LogStreamHeaderProps {
 
 /**
  * Top action bar for the log stream. Mirrors the reference mock: presets
- * dropdown, dataset chip, free-text search, time-range + run, and the
- * trailing scroll / columns / settings controls. All interactions are
- * delegated to callbacks so the parent can wire them up later.
+ * dropdown, dataset chip, chip-rich filter bar (QueryBuilder), time-range +
+ * run, and the trailing scroll / columns / settings controls. The free-text
+ * search from the previous iteration was replaced by the `QueryBuilder`
+ * component which renders committed filter rows inline as chips alongside
+ * the free-text input.
  */
 export function LogStreamHeader({
+  projectId,
+  datasetId,
   datasetName,
   datasetIcon = "js",
-  searchValue,
-  onSearchChange,
+  onFilterChange,
   dateRange,
   onDateRangeClick,
-  onSearchSubmit,
+  onRunQuery,
   onScrollClick,
   onPresetsClick,
   onDatasetClick,
@@ -60,34 +66,11 @@ export function LogStreamHeader({
         <ChevronDownIcon className="ml-1 size-3 text-muted-foreground/60" />
       </HeaderPill>
 
-      <div className="relative min-w-0 flex-1">
-        <SearchIcon
-          aria-hidden
-          className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 size-3.5 text-muted-foreground/60"
-        />
-        <input
-          className="h-8 w-full rounded-md border border-input bg-background/60 pl-8 pr-9 font-mono text-xs text-foreground placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/24"
-          onChange={(event) => {
-            onSearchChange(event.target.value);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              onSearchSubmit?.();
-            }
-          }}
-          placeholder="Search for logs"
-          type="search"
-          value={searchValue}
-        />
-        <button
-          aria-label="History"
-          className="-translate-y-1/2 absolute top-1/2 right-2 inline-flex size-5 cursor-pointer items-center justify-center rounded text-muted-foreground/60 hover:bg-accent hover:text-foreground"
-          onClick={onSearchSubmit}
-          type="button"
-        >
-          <HistoryIcon className="size-3.5" />
-        </button>
-      </div>
+      <QueryBuilder
+        datasetId={datasetId}
+        onFilterChange={onFilterChange}
+        projectId={projectId}
+      />
 
       <HeaderPill onClick={onDateRangeClick}>
         <span className="text-xs text-foreground/80">{dateRange}</span>
@@ -97,7 +80,7 @@ export function LogStreamHeader({
       <button
         aria-label="Run search"
         className="inline-flex size-8 cursor-pointer items-center justify-center rounded-md border border-input bg-background/60 text-foreground hover:bg-accent/50"
-        onClick={onSearchSubmit}
+        onClick={onRunQuery}
         type="button"
       >
         <SearchIcon className="size-3.5" />

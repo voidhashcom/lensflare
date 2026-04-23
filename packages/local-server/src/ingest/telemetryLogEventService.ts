@@ -1,4 +1,9 @@
-import type { TelemetryLogEntry, TelemetryLogLevel } from "@lensflare/contracts";
+import {
+  evaluateFilter,
+  type FilterNode,
+  type TelemetryLogEntry,
+  type TelemetryLogLevel,
+} from "@lensflare/contracts";
 import { Context, Effect, Layer, PubSub, Stream } from "effect";
 import type { IngestWriteRequest, NormalizedLogRecord, WrittenLogRecord } from "./types.ts";
 
@@ -53,6 +58,27 @@ function toLevel(record: NormalizedLogRecord): TelemetryLogLevel {
   return "trace";
 }
 
+/**
+ * Best-effort JSON decode for the OTLP attribute map persisted alongside each
+ * row. We tolerate malformed blobs (returning `{}`) because the live stream
+ * should keep flowing even if an upstream producer sends weird payloads — the
+ * caller can still filter on non-attribute fields.
+ */
+function parseAttributes(raw: string | null): Readonly<Record<string, unknown>> {
+  if (!raw) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    return {};
+  } catch {
+    return {};
+  }
+}
+
 function toTelemetryLogEntry(request: IngestWriteRequest, written: WrittenLogRecord): TelemetryLogEntry {
   const record = written.record;
 
@@ -62,6 +88,12 @@ function toTelemetryLogEntry(request: IngestWriteRequest, written: WrittenLogRec
     sourceName: record.serviceName ?? request.datasetSlug ?? request.providerKind,
     level: toLevel(record),
     message: record.bodyText || record.bodyJson || record.rawRecordJson,
+    severityNumber: record.severityNumber,
+    severityText: record.severityText,
+    serviceName: record.serviceName,
+    traceId: record.traceId,
+    spanId: record.spanId,
+    attributes: parseAttributes(record.attributesJson),
   };
 }
 
@@ -75,6 +107,7 @@ export class TelemetryLogEventService extends Context.Service<
     readonly streamDatasetLogs: (
       projectId: string,
       datasetId: string,
+      filter?: FilterNode | undefined,
     ) => Stream.Stream<TelemetryLogEntry>;
   }
 >()("@lensflare/local-server/TelemetryLogEventService") {
@@ -100,13 +133,21 @@ export class TelemetryLogEventService extends Context.Service<
         );
       });
 
-      const streamDatasetLogs = (projectId: string, datasetId: string) =>
-        stream.pipe(
+      const streamDatasetLogs = (
+        projectId: string,
+        datasetId: string,
+        filter?: FilterNode | undefined,
+      ) => {
+        const byDataset = stream.pipe(
           Stream.filter(
             (event) => event.projectId === projectId && event.datasetId === datasetId,
           ),
           Stream.map((event) => event.entry),
         );
+        return filter === undefined
+          ? byDataset
+          : byDataset.pipe(Stream.filter((entry) => evaluateFilter(filter, entry)));
+      };
 
       return TelemetryLogEventService.of({ publishBatch, streamDatasetLogs });
     }),

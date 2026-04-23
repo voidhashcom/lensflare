@@ -7,8 +7,8 @@ export const telemetryLogRpcLayer = TelemetryLogRpcGroup.toLayer(
     const service = yield* TelemetryLogEventService;
 
     return TelemetryLogRpcGroup.of({
-      SubscribeTelemetryLogEvents: ({ projectId, datasetId }) =>
-        service.streamDatasetLogs(projectId, datasetId),
+      SubscribeTelemetryLogEvents: ({ projectId, datasetId, filter }) =>
+        service.streamDatasetLogs(projectId, datasetId, filter),
     });
   }),
 );

@@ -27,8 +27,9 @@ interface TraceOverviewProps {
  * into "N earlier/later spans" markers.
  *
  * Unlike Axiom's full trace viewer this component is designed to fit above
- * the details tabs without dominating the panel — rows are ~22px tall, the
- * ruler is intentionally unlabelled, and we don't render a tree connector.
+ * the details tabs without dominating the panel — rows reserve a fixed 24px
+ * height, the ruler is intentionally unlabelled, and we don't render a tree
+ * connector.
  */
 export function TraceOverview({ trace, className }: TraceOverviewProps) {
   const { visibleSpans, hiddenBefore, hiddenAfter, depthByParent } = useMemo(
@@ -40,15 +41,13 @@ export function TraceOverview({ trace, className }: TraceOverviewProps) {
     <div
       aria-label="Trace overview"
       className={cn(
-        "shrink-0 border-b border-border/60 bg-muted/10",
+        "group relative h-[216px] shrink-0 overflow-hidden border-b border-border/60 bg-muted/10",
         className,
       )}
     >
       <TraceHeader trace={trace} />
       <ol className="flex flex-col py-1">
-        {hiddenBefore > 0 ? (
-          <TruncationRow direction="before" count={hiddenBefore} />
-        ) : null}
+        {hiddenBefore > 0 ? <TruncationRow direction="before" count={hiddenBefore} /> : null}
         {visibleSpans.map((span) => (
           <SpanRow
             depth={depthByParent.get(span.id) ?? 0}
@@ -58,10 +57,15 @@ export function TraceOverview({ trace, className }: TraceOverviewProps) {
             totalDurationUs={trace.totalDurationUs}
           />
         ))}
-        {hiddenAfter > 0 ? (
-          <TruncationRow direction="after" count={hiddenAfter} />
-        ) : null}
+        {hiddenAfter > 0 ? <TruncationRow direction="after" count={hiddenAfter} /> : null}
       </ol>
+      <button
+        aria-label="Explore trace"
+        className="absolute inset-0 flex cursor-pointer items-center justify-center bg-background/35 opacity-0 backdrop-blur-xs duration-100 hover:transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+        type="button"
+      >
+        <span className="font-medium text-sm text-foreground">Explore trace</span>
+      </button>
     </div>
   );
 }
@@ -75,7 +79,7 @@ function TraceHeader({ trace }: TraceHeaderProps) {
     // `pr-10` leaves room for the details-panel close button which is
     // absolutely positioned in the panel's top-right corner. Without the
     // reservation the span-count and duration collide with the X icon.
-    <div className="flex items-center justify-between gap-3 px-4 py-2 pr-10 font-mono text-[10px] uppercase tracking-wide text-muted-foreground/70">
+    <div className="flex h-8 items-center justify-between gap-3 px-4 pr-10 font-mono text-[10px] uppercase tracking-wide text-muted-foreground/70">
       <div className="flex min-w-0 items-center gap-2">
         <span className="text-muted-foreground/50">Trace</span>
         <span className="min-w-0 truncate text-foreground/70" title={trace.traceId}>
@@ -114,18 +118,14 @@ function SpanRow({ span, depth, isCurrent, totalDurationUs }: SpanRowProps) {
   return (
     <li
       className={cn(
-        "grid grid-cols-[minmax(0,1fr)_minmax(120px,1.2fr)_auto] items-center gap-3 px-4 py-1",
+        "grid h-6 grid-cols-[minmax(0,1fr)_minmax(120px,1.2fr)_auto] items-center gap-3 px-4",
         isCurrent && "bg-foreground/[0.04]",
       )}
     >
       <div className="flex min-w-0 items-center">
         {/* Depth indent — rendered as a fixed-width spacer so alignment is
             stable regardless of monospace vs. sans. */}
-        <span
-          aria-hidden
-          className="shrink-0"
-          style={{ width: depth * 10 }}
-        />
+        <span aria-hidden className="shrink-0" style={{ width: depth * 10 }} />
         <span
           aria-hidden
           className={cn(
@@ -183,7 +183,7 @@ interface TruncationRowProps {
 function TruncationRow({ count, direction }: TruncationRowProps) {
   const label = `${count} ${direction === "before" ? "earlier" : "later"} span${count === 1 ? "" : "s"} hidden`;
   return (
-    <li className="px-4 py-1 font-mono text-[10px] text-muted-foreground/50">
+    <li className="flex h-6 items-center px-4 font-mono text-[10px] text-muted-foreground/50">
       <span className="mr-2">{direction === "before" ? "↑" : "↓"}</span>
       {label}
     </li>

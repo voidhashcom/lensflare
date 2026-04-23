@@ -2,6 +2,10 @@ import * as Schema from "effect/Schema";
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 
+import { FilterNodeSchema } from "./filter.ts";
+
+export * from "./filter.ts";
+
 const AppModeSchema = Schema.Literals(["desktop", "server"]);
 
 export type AppMode = Schema.Schema.Type<typeof AppModeSchema>;
@@ -293,12 +297,26 @@ export const TelemetryLogLevelSchema = Schema.Literals([
 
 export type TelemetryLogLevel = Schema.Schema.Type<typeof TelemetryLogLevelSchema>;
 
+/**
+ * Wire format for a single log row streamed / paginated to the UI. Widened to
+ * carry the fields needed for client-side attribute filtering (severity,
+ * service, trace/span ids, arbitrary attributes) so the in-browser evaluator
+ * can apply the same AST the server compiled to SQL. `attributes` is a loose
+ * record because OTLP attribute keys are open-ended — the evaluator copes with
+ * any JSON-serialisable leaf.
+ */
 export const TelemetryLogEntrySchema = Schema.Struct({
   id: Schema.String,
   timestamp: Schema.String,
   sourceName: Schema.String,
   level: TelemetryLogLevelSchema,
   message: Schema.String,
+  severityNumber: Schema.NullOr(Schema.Number),
+  severityText: Schema.NullOr(Schema.String),
+  serviceName: Schema.NullOr(Schema.String),
+  traceId: Schema.NullOr(Schema.String),
+  spanId: Schema.NullOr(Schema.String),
+  attributes: Schema.Record(Schema.String, Schema.Unknown),
 });
 
 export type TelemetryLogEntry = Schema.Schema.Type<typeof TelemetryLogEntrySchema>;
@@ -493,6 +511,12 @@ class SubscribeTelemetryLogEvents extends Rpc.make("SubscribeTelemetryLogEvents"
   payload: {
     projectId: Schema.String,
     datasetId: Schema.String,
+    /**
+     * Optional filter AST applied server-side to reduce WebSocket traffic.
+     * The web client re-subscribes whenever the committed filter changes so
+     * the server-side pre-filter stays in sync with the UI.
+     */
+    filter: Schema.optional(FilterNodeSchema),
   },
   success: TelemetryLogEntrySchema,
   stream: true,

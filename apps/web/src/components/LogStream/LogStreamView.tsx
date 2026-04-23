@@ -1,5 +1,10 @@
-import type { TelemetryLogPageInfo } from "@lensflare/contracts";
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import {
+  evaluateFilter,
+  type FilterNode,
+  type TelemetryLogEntry,
+  type TelemetryLogPageInfo,
+} from "@lensflare/contracts";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Sheet, SheetPopup } from "~/components/ui/sheet";
 import { listDatasetLogs, subscribeDatasetLogEntries } from "~/data/logApi";
@@ -30,6 +35,13 @@ interface LogStreamViewProps {
  * Full-height live log stream view shown when a dataset is selected.
  * Fetches the initial dataset log page from the local server, then merges
  * pushed log events from the RPC websocket stream.
+ *
+ * Owns the active filter AST: the QueryBuilder (rendered inside
+ * `LogStreamHeader`) bubbles changes up via `onFilterChange`, the initial
+ * page load + cursor pagination ship the filter to the backend, and the
+ * WebSocket stream is both pre-filtered server-side (via the RPC payload)
+ * and re-evaluated client-side so late subscription races cannot leak
+ * non-matching entries.
  */
 export function LogStreamView({
   projectId,
@@ -37,7 +49,7 @@ export function LogStreamView({
   datasetName,
   datasetIcon = "js",
 }: LogStreamViewProps) {
-  const [searchValue, setSearchValue] = useState("");
+  const [filter, setFilter] = useState<FilterNode | null>(null);
   const [dateRange, _setDateRange] = useState<DateRangePreset>("Last 30 days");
   const [logs, setLogs] = useState<ReadonlyArray<LogEntry>>([]);
   const [pageInfo, setPageInfoState] = useState<TelemetryLogPageInfo | null>(null);
@@ -47,7 +59,6 @@ export function LogStreamView({
   const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
   const tableRef = useRef<LogTableHandle | null>(null);
   const pageInfoRef = useRef<TelemetryLogPageInfo | null>(null);
-  const deferredSearchValue = useDeferredValue(searchValue);
   const shouldUseDetailsSheet = useMediaQuery(LOG_DETAILS_SHEET_MEDIA_QUERY);
 
   // Derive the selected log from the current list so it stays in sync as new
@@ -77,8 +88,8 @@ export function LogStreamView({
 
       try {
         const page = await listDatasetLogs(projectId, datasetId, {
-          search: deferredSearchValue || undefined,
           limit: LOG_PAGE_SIZE,
+          filter: filter ?? undefined,
         });
         if (cancelled) {
           return;
@@ -108,14 +119,17 @@ export function LogStreamView({
     return () => {
       cancelled = true;
     };
-  }, [datasetIcon, datasetId, datasetName, deferredSearchValue, projectId, updatePageInfo]);
+  }, [datasetIcon, datasetId, datasetName, filter, projectId, updatePageInfo]);
 
   useEffect(() => {
     return subscribeDatasetLogEntries(
       projectId,
       datasetId,
       (entry) => {
-        if (!matchesSearch(entry, deferredSearchValue)) {
+        // Double-check the filter in the browser even though the server
+        // already pre-filters: the subscription message may have crossed in
+        // flight with a filter-change commit, and the evaluator is cheap.
+        if (filter !== null && !evaluateFilter(filter, entry)) {
           return;
         }
 
@@ -127,8 +141,9 @@ export function LogStreamView({
       (error) => {
         setErrorMessage(error.message);
       },
+      filter ?? undefined,
     );
-  }, [datasetIcon, datasetId, datasetName, deferredSearchValue, projectId]);
+  }, [datasetIcon, datasetId, datasetName, filter, projectId]);
 
   const handleLoadOlder = useCallback(async () => {
     const currentPageInfo = pageInfoRef.current;
@@ -141,8 +156,8 @@ export function LogStreamView({
       const page = await listDatasetLogs(projectId, datasetId, {
         cursor: currentPageInfo.startCursor,
         direction: "older",
-        search: deferredSearchValue || undefined,
         limit: LOG_PAGE_SIZE,
+        filter: filter ?? undefined,
       });
       const entries = page.entries.map((entry) => toLogEntry(entry, datasetName, datasetIcon));
       const latestPageInfo = pageInfoRef.current ?? currentPageInfo;
@@ -164,7 +179,7 @@ export function LogStreamView({
     datasetIcon,
     datasetId,
     datasetName,
-    deferredSearchValue,
+    filter,
     isLoadingOlder,
     projectId,
     updatePageInfo,
@@ -185,21 +200,22 @@ export function LogStreamView({
   const showSheetDetails = selectedLog !== null && shouldUseDetailsSheet;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-background/40">
-      <LogStreamHeader
-        datasetIcon={datasetIcon}
-        datasetName={datasetName}
-        dateRange={dateRange}
-        onScrollClick={handleScrollClick}
-        onSearchChange={setSearchValue}
-        searchValue={searchValue}
-      />
-      {errorMessage ? (
-        <div className="border-b border-rose-500/20 bg-rose-500/8 px-4 py-2 font-mono text-[11px] text-rose-200">
-          {errorMessage}
-        </div>
-      ) : null}
-      <div className="flex min-h-0 min-w-0 flex-1">
+    <div className="flex min-h-0 flex-1 bg-background/40">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <LogStreamHeader
+          datasetIcon={datasetIcon}
+          datasetId={datasetId}
+          datasetName={datasetName}
+          dateRange={dateRange}
+          onFilterChange={setFilter}
+          onScrollClick={handleScrollClick}
+          projectId={projectId}
+        />
+        {errorMessage ? (
+          <div className="border-b border-rose-500/20 bg-rose-500/8 px-4 py-2 font-mono text-[11px] text-rose-200">
+            {errorMessage}
+          </div>
+        ) : null}
         <LogTable
           hasPreviousPage={pageInfo?.hasPreviousPage ?? false}
           isLoadingPrevious={isLoadingOlder}
@@ -210,12 +226,12 @@ export function LogStreamView({
           selectedLogId={selectedLogId}
           waiting={errorMessage === null || isLoading}
         />
-        {showInlineDetails ? (
-          <div className="flex w-[min(42vw,560px)] min-w-[360px] shrink-0 flex-col">
-            <LogDetailsPanel log={selectedLog} onClose={closeDetails} variant="inline" />
-          </div>
-        ) : null}
       </div>
+      {showInlineDetails ? (
+        <div className="flex w-[min(42vw,560px)] min-w-[360px] shrink-0 flex-col">
+          <LogDetailsPanel log={selectedLog} onClose={closeDetails} variant="inline" />
+        </div>
+      ) : null}
       <Sheet
         onOpenChange={(open) => {
           if (!open) {
@@ -239,13 +255,7 @@ export function LogStreamView({
 }
 
 function toLogEntry(
-  entry: {
-    readonly id: string;
-    readonly timestamp: string;
-    readonly sourceName: string;
-    readonly level: LogEntry["level"];
-    readonly message: string;
-  },
+  entry: TelemetryLogEntry,
   datasetName: string,
   datasetIcon: SourceIconKind,
 ): LogEntry {
@@ -285,26 +295,6 @@ function inferSourceIcon(sourceName: string, fallback: SourceIconKind): SourceIc
     return "java";
   }
   return fallback;
-}
-
-function matchesSearch(
-  entry: {
-    readonly sourceName: string;
-    readonly level: string;
-    readonly message: string;
-  },
-  search: string,
-): boolean {
-  const needle = search.trim().toLowerCase();
-  if (!needle) {
-    return true;
-  }
-
-  return (
-    entry.message.toLowerCase().includes(needle) ||
-    entry.sourceName.toLowerCase().includes(needle) ||
-    entry.level.toLowerCase().includes(needle)
-  );
 }
 
 function mergeUniqueLogs(
