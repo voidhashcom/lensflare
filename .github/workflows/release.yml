@@ -1,0 +1,204 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Release channel"
+        required: true
+        default: "nightly"
+        type: choice
+        options:
+          - nightly
+          - stable
+      version:
+        description: "Stable version override. Leave blank for package version or tag version."
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  LENSFLARE_DESKTOP_UPDATE_REPOSITORY: ${{ vars.LENSFLARE_DESKTOP_UPDATE_REPOSITORY || secrets.LENSFLARE_DESKTOP_UPDATE_REPOSITORY || github.repository }}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-22.04
+    outputs:
+      channel: ${{ steps.release.outputs.channel }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      update_repository: ${{ steps.release.outputs.update_repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" && "${GITHUB_REF_NAME:-}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            CHANNEL="latest"
+            TAG="${GITHUB_REF_NAME}"
+            PRERELEASE="false"
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.channel }}" == "stable" ]]; then
+            VERSION="${{ inputs.version }}"
+            if [[ -z "$VERSION" ]]; then
+              VERSION="$(node -p "require('./apps/desktop/package.json').version")"
+            fi
+            CHANNEL="latest"
+            TAG="v${VERSION}"
+            PRERELEASE="false"
+          else
+            BASE_VERSION="$(node -p "require('./apps/desktop/package.json').version.split('-')[0]")"
+            NEXT_PATCH="$(node -e "const [maj,min,patch]=process.argv[1].split('.').map(Number); console.log([maj,min,patch+1].join('.'))" "$BASE_VERSION")"
+            STAMP="$(date -u +%Y%m%d)"
+            VERSION="${NEXT_PATCH}-nightly.${STAMP}.${GITHUB_RUN_NUMBER}"
+            CHANNEL="nightly"
+            TAG="nightly-${STAMP}.${GITHUB_RUN_NUMBER}"
+            PRERELEASE="true"
+          fi
+          UPDATE_REPOSITORY="${LENSFLARE_DESKTOP_UPDATE_REPOSITORY:-${GITHUB_REPOSITORY}}"
+          {
+            echo "version=$VERSION"
+            echo "channel=$CHANNEL"
+            echo "tag=$TAG"
+            echo "prerelease=$PRERELEASE"
+            echo "update_repository=$UPDATE_REPOSITORY"
+          } >> "$GITHUB_OUTPUT"
+
+  create-release:
+    needs: prepare
+    runs-on: ubuntu-22.04
+    env:
+      GH_TOKEN: ${{ secrets.LENSFLARE_DESKTOP_UPDATE_GITHUB_TOKEN || github.token }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+      UPDATE_REPOSITORY: ${{ needs.prepare.outputs.update_repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view --repo "$UPDATE_REPOSITORY" "$TAG" >/dev/null 2>&1; then
+            exit 0
+          fi
+          FLAGS=()
+          if [[ "$PRERELEASE" == "true" ]]; then
+            FLAGS+=(--prerelease)
+          fi
+          gh release create "$TAG" "${FLAGS[@]}" --repo "$UPDATE_REPOSITORY" --title "Lensflare ${VERSION}" --notes "Lensflare ${VERSION}"
+
+  build:
+    needs:
+      - prepare
+      - create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            platform: mac
+            arch: arm64
+            target: dmg
+          - os: macos-13
+            platform: mac
+            arch: x64
+            target: dmg
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+            target: AppImage
+          - os: windows-2022
+            platform: win
+            arch: x64
+            target: nsis
+    runs-on: ${{ matrix.os }}
+    env:
+      GH_TOKEN: ${{ secrets.LENSFLARE_DESKTOP_UPDATE_GITHUB_TOKEN || github.token }}
+      LENSFLARE_DESKTOP_UPDATE_GITHUB_TOKEN: ${{ secrets.LENSFLARE_DESKTOP_UPDATE_GITHUB_TOKEN }}
+      LENSFLARE_DESKTOP_UPDATE_REPOSITORY: ${{ needs.prepare.outputs.update_repository }}
+      LENSFLARE_DESKTOP_VERSION: ${{ needs.prepare.outputs.version }}
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_PUBLISHER_NAME }}
+      AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ secrets.AZURE_TRUSTED_SIGNING_ENDPOINT }}
+      AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME }}
+      AZURE_TRUSTED_SIGNING_ACCOUNT_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_ACCOUNT_NAME }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run release:update-package-versions -- "${{ needs.prepare.outputs.version }}"
+      - name: Build desktop artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          SIGNED_ARGS=()
+          if [[ "${{ matrix.platform }}" == "mac" && -n "${CSC_LINK:-}" && -n "${CSC_KEY_PASSWORD:-}" && -n "${APPLE_API_KEY:-}" && -n "${APPLE_API_KEY_ID:-}" && -n "${APPLE_API_ISSUER:-}" ]]; then
+            SIGNED_ARGS+=(--signed)
+          fi
+          if [[ "${{ matrix.platform }}" == "win" && -n "${AZURE_TRUSTED_SIGNING_PUBLISHER_NAME:-}" && -n "${AZURE_TRUSTED_SIGNING_ENDPOINT:-}" && -n "${AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME:-}" && -n "${AZURE_TRUSTED_SIGNING_ACCOUNT_NAME:-}" ]]; then
+            SIGNED_ARGS+=(--signed)
+          fi
+          pnpm run release:desktop:artifact -- \
+            --platform "${{ matrix.platform }}" \
+            --arch "${{ matrix.arch }}" \
+            --target "${{ matrix.target }}" \
+            --build-version "${{ needs.prepare.outputs.version }}" \
+            "${SIGNED_ARGS[@]}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.platform }}-${{ matrix.arch }}
+          path: release/**
+          if-no-files-found: error
+
+  publish:
+    needs:
+      - prepare
+      - build
+    runs-on: ubuntu-22.04
+    env:
+      GH_TOKEN: ${{ secrets.LENSFLARE_DESKTOP_UPDATE_GITHUB_TOKEN || github.token }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+      CHANNEL: ${{ needs.prepare.outputs.channel }}
+      UPDATE_REPOSITORY: ${{ needs.prepare.outputs.update_repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          path: downloaded-artifacts
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-upload
+          find downloaded-artifacts -type f ! -name "latest-mac.yml" ! -name "nightly-mac.yml" -exec cp {} release-upload/ \;
+          mapfile -t MAC_MANIFESTS < <(find downloaded-artifacts -type f -name "${CHANNEL}-mac.yml" | sort)
+          if [[ "${#MAC_MANIFESTS[@]}" -eq 1 ]]; then
+            cp "${MAC_MANIFESTS[0]}" "release-upload/${CHANNEL}-mac.yml"
+          elif [[ "${#MAC_MANIFESTS[@]}" -gt 1 ]]; then
+            pnpm run release:merge-update-manifests -- --platform mac "${MAC_MANIFESTS[0]}" "${MAC_MANIFESTS[1]}" "release-upload/${CHANNEL}-mac.yml"
+          fi
+      - name: Upload GitHub release assets
+        run: gh release upload --repo "$UPDATE_REPOSITORY" "$TAG" release-upload/* --clobber

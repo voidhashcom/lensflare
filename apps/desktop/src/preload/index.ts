@@ -1,10 +1,20 @@
-import type { DesktopEnvironmentBootstrap, DesktopLocalServerState } from "@lensflare/contracts";
+import type {
+  DesktopBridge,
+  DesktopEnvironmentBootstrap,
+  DesktopLocalServerState,
+} from "@lensflare/contracts";
 import { contextBridge, ipcRenderer } from "electron";
 import { Buffer } from "node:buffer";
 import {
   GET_LOCAL_SERVER_STATE_CHANNEL,
   LOCAL_SERVER_STATE_CHANNEL,
   RESTART_LOCAL_SERVER_CHANNEL,
+  UPDATE_CHECK_CHANNEL,
+  UPDATE_DOWNLOAD_CHANNEL,
+  UPDATE_GET_STATE_CHANNEL,
+  UPDATE_INSTALL_CHANNEL,
+  UPDATE_SET_CHANNEL_CHANNEL,
+  UPDATE_STATE_CHANNEL,
 } from "../ipc.ts";
 
 /**
@@ -42,7 +52,7 @@ ipcRenderer.on(LOCAL_SERVER_STATE_CHANNEL, (_event, state: DesktopLocalServerSta
   }
 });
 
-contextBridge.exposeInMainWorld("lensflareDesktop", {
+const bridge = {
   getLocalServerState: (): Promise<DesktopLocalServerState> =>
     ipcRenderer.invoke(GET_LOCAL_SERVER_STATE_CHANNEL) as Promise<DesktopLocalServerState>,
   restartLocalServer: (): Promise<DesktopLocalServerState> =>
@@ -61,4 +71,25 @@ contextBridge.exposeInMainWorld("lensflareDesktop", {
     };
   },
   getLocalServerBootstrap: (): DesktopEnvironmentBootstrap | null => latestBootstrap,
-});
+  getUpdateState: () => ipcRenderer.invoke(UPDATE_GET_STATE_CHANNEL),
+  setUpdateChannel: (channel) => ipcRenderer.invoke(UPDATE_SET_CHANNEL_CHANNEL, channel),
+  checkForUpdate: () => ipcRenderer.invoke(UPDATE_CHECK_CHANNEL),
+  downloadUpdate: () => ipcRenderer.invoke(UPDATE_DOWNLOAD_CHANNEL),
+  installUpdate: () => ipcRenderer.invoke(UPDATE_INSTALL_CHANNEL),
+  onUpdateState: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: unknown) => {
+      if (typeof state !== "object" || state === null) {
+        return;
+      }
+      listener(state as Parameters<typeof listener>[0]);
+    };
+
+    ipcRenderer.on(UPDATE_STATE_CHANNEL, handler);
+    return () => {
+      ipcRenderer.off(UPDATE_STATE_CHANNEL, handler);
+    };
+  },
+} satisfies DesktopBridge;
+
+contextBridge.exposeInMainWorld("lensflareDesktop", bridge);
+contextBridge.exposeInMainWorld("desktopBridge", bridge);

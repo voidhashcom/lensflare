@@ -1,6 +1,6 @@
 import type { Project } from "@lensflare/contracts";
 import { useLiveQuery } from "@tanstack/react-db";
-import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
+import { Link, useLocation, useParams } from "@tanstack/react-router";
 import { PlusIcon, SettingsIcon } from "lucide-react";
 
 import { datasetsCollection } from "~/collections/datasetsCollection";
@@ -23,6 +23,7 @@ import { DeleteDialog } from "./DeleteDialog";
 import { ProjectDialog } from "./ProjectDialog";
 import { ProjectRow } from "./ProjectRow";
 import { SearchRow } from "./SearchRow";
+import { SidebarUpdatePill } from "./SidebarUpdatePill";
 import { SidebarContextMenu } from "./SidebarContextMenu";
 import { ROUTE_PARAMS_OPTIONS } from "./constants";
 import { selectSidebarProjects } from "./projectsQuery";
@@ -40,7 +41,6 @@ import { useSidebarContextMenu } from "./useSidebarContextMenu";
  */
 export function AppSidebar() {
   const isMacDesktop = detectMacDesktop();
-  const navigate = useNavigate();
   const pathname = useLocation({ select: (location) => location.pathname });
   const isOnSettings = pathname.startsWith("/settings");
 
@@ -129,7 +129,7 @@ export function AppSidebar() {
                   aria-label="New project"
                   className="desktop-no-drag inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
                   disabled={projectDialog.submitting}
-                  onClick={projectDialog.openCreate}
+                  onClick={() => projectDialog.openCreate()}
                   title="New project"
                   type="button"
                 >
@@ -160,8 +160,10 @@ export function AppSidebar() {
                       activeCollectionId={activeCollectionId}
                       activeProjectId={activeProjectId}
                       key={project.id}
-                      onCreateDataset={datasetDialog.openCreate}
-                      onOpenContextMenu={contextMenu.handleRowContextMenu}
+                      onCreateDataset={(project) => datasetDialog.openCreate(project)}
+                      onOpenContextMenu={(event, target) =>
+                        contextMenu.handleRowContextMenu(event, target)
+                      }
                       project={project}
                     />
                   ))
@@ -171,11 +173,12 @@ export function AppSidebar() {
           </SidebarContent>
 
           <SidebarFooter className="p-2">
+            <SidebarUpdatePill />
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
                   className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
-                  onClick={() => void navigate({ to: "/settings" })}
+                  render={<Link to="/settings" />}
                   size="sm"
                 >
                   <SettingsIcon className="size-3.5" />
@@ -191,9 +194,9 @@ export function AppSidebar() {
         error={projectDialog.error}
         mode={projectDialog.mode}
         name={projectDialog.name}
-        onNameChange={projectDialog.onNameChange}
-        onOpenChange={projectDialog.onOpenChange}
-        onSubmit={projectDialog.onSubmit}
+        onNameChange={(value) => projectDialog.onNameChange(value)}
+        onOpenChange={(open) => projectDialog.onOpenChange(open)}
+        onSubmit={(event) => projectDialog.onSubmit(event)}
         open={projectDialog.open}
         submitting={projectDialog.submitting}
       />
@@ -202,17 +205,17 @@ export function AppSidebar() {
         error={datasetDialog.error}
         mode={datasetDialog.mode}
         name={datasetDialog.name}
-        onNameChange={datasetDialog.onNameChange}
-        onOpenChange={datasetDialog.onOpenChange}
-        onSubmit={datasetDialog.onSubmit}
+        onNameChange={(value) => datasetDialog.onNameChange(value)}
+        onOpenChange={(open) => datasetDialog.onOpenChange(open)}
+        onSubmit={(event) => datasetDialog.onSubmit(event)}
         open={datasetDialog.open}
         submitting={datasetDialog.submitting}
       />
 
       <DeleteDialog
         error={deleteDialog.error}
-        onConfirm={deleteDialog.onConfirm}
-        onOpenChange={deleteDialog.onOpenChange}
+        onConfirm={() => deleteDialog.onConfirm()}
+        onOpenChange={(open) => deleteDialog.onOpenChange(open)}
         open={deleteDialog.open}
         submitting={deleteDialog.submitting}
         target={deleteDialog.target}
@@ -223,7 +226,7 @@ export function AppSidebar() {
         onCreateDataset={onContextMenuCreateDataset}
         onDelete={onContextMenuDelete}
         onEdit={onContextMenuEdit}
-        onOpenChange={contextMenu.onOpenChange}
+        onOpenChange={(open) => contextMenu.onOpenChange(open)}
         open={contextMenu.open}
         target={contextMenu.target}
       />

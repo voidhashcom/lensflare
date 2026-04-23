@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 
 import "./index.css";
 
+import { ToastProvider } from "~/components/ui/toast";
 import { createAppRouter } from "./router";
 
 const root = document.getElementById("root");
@@ -24,6 +25,8 @@ const router = createAppRouter();
 
 createRoot(root).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    <ToastProvider>
+      <RouterProvider router={router} />
+    </ToastProvider>
   </StrictMode>,
 );

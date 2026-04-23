@@ -81,6 +81,54 @@ export type DesktopLocalServerState =
   | { readonly status: "restarting" }
   | { readonly status: "failed"; readonly message: string };
 
+export type DesktopUpdateStatus =
+  | "disabled"
+  | "idle"
+  | "checking"
+  | "up-to-date"
+  | "available"
+  | "downloading"
+  | "downloaded"
+  | "error";
+
+export type DesktopUpdateChannel = "latest" | "nightly";
+
+export type DesktopRuntimeArch = "arm64" | "x64" | "other";
+
+export interface DesktopRuntimeInfo {
+  readonly hostArch: DesktopRuntimeArch;
+  readonly appArch: DesktopRuntimeArch;
+  readonly runningUnderArm64Translation: boolean;
+}
+
+export interface DesktopUpdateState {
+  readonly enabled: boolean;
+  readonly status: DesktopUpdateStatus;
+  readonly channel: DesktopUpdateChannel;
+  readonly currentVersion: string;
+  readonly hostArch: DesktopRuntimeArch;
+  readonly appArch: DesktopRuntimeArch;
+  readonly runningUnderArm64Translation: boolean;
+  readonly availableVersion: string | null;
+  readonly downloadedVersion: string | null;
+  readonly downloadPercent: number | null;
+  readonly checkedAt: string | null;
+  readonly message: string | null;
+  readonly errorContext: "check" | "download" | "install" | null;
+  readonly canRetry: boolean;
+}
+
+export interface DesktopUpdateActionResult {
+  readonly accepted: boolean;
+  readonly completed: boolean;
+  readonly state: DesktopUpdateState;
+}
+
+export interface DesktopUpdateCheckResult {
+  readonly checked: boolean;
+  readonly state: DesktopUpdateState;
+}
+
 /**
  * Desktop-only bridge. Anything going through this contract lives outside
  * the Effect RPC surface because it needs to run on the main process
@@ -88,11 +136,20 @@ export type DesktopLocalServerState =
  * be added here — they belong on the backend target exposed via
  * {@link DesktopEnvironmentBootstrap}.
  */
-export interface LensflareDesktopBridge {
+export interface DesktopBridge {
   readonly getLocalServerState: () => Promise<DesktopLocalServerState>;
   readonly restartLocalServer: () => Promise<DesktopLocalServerState>;
   readonly onLocalServerState: (listener: (state: DesktopLocalServerState) => void) => () => void;
+  readonly getLocalServerBootstrap: () => DesktopEnvironmentBootstrap | null;
+  readonly getUpdateState: () => Promise<DesktopUpdateState>;
+  readonly setUpdateChannel: (channel: DesktopUpdateChannel) => Promise<DesktopUpdateState>;
+  readonly checkForUpdate: () => Promise<DesktopUpdateCheckResult>;
+  readonly downloadUpdate: () => Promise<DesktopUpdateActionResult>;
+  readonly installUpdate: () => Promise<DesktopUpdateActionResult>;
+  readonly onUpdateState: (listener: (state: DesktopUpdateState) => void) => () => void;
 }
+
+export interface LensflareDesktopBridge extends DesktopBridge {}
 
 const ServerEventSchema = Schema.Struct({
   type: Schema.Literals(["server.ready", "server.heartbeat"]),

@@ -12,6 +12,8 @@ import {
   isNullLike,
   renderDetailValue,
 } from "./logDetailsFormat";
+import { buildLogTraceContext } from "./mockTrace";
+import { TraceOverview } from "./TraceOverview";
 import type { LogEntry } from "./types";
 
 type LogDetailsTab = "properties" | "raw";
@@ -40,15 +42,35 @@ export function LogDetailsPanel({
   const [tab, setTab] = useState<LogDetailsTab>("properties");
   const [showNullValues, setShowNullValues] = useState(false);
 
+  // Trace context for the log, when the log is part of a trace. Rendered
+  // above the tab bar so users can see where in the request lifecycle the
+  // event fired before drilling into the event's raw fields. Memoised on
+  // `log` — the mock generator is pure but non-trivial.
+  const traceContext = useMemo(() => buildLogTraceContext(log), [log]);
+
   return (
     <div
       className={cn(
-        "flex h-full min-h-0 min-w-0 flex-col bg-background",
+        "relative flex h-full min-h-0 min-w-0 flex-col bg-background",
         variant === "inline" && "border-l border-border/70",
         className,
       )}
     >
-      <TabBar activeTab={tab} onSelect={setTab} onClose={onClose} />
+      {/* Close button is anchored to the panel's top-right regardless of
+          whether the trace overview renders, so the dismiss affordance
+          doesn't drift down when a trace is present. */}
+      <Button
+        aria-label="Close log details"
+        className="absolute right-2 top-2 z-10"
+        onClick={onClose}
+        size="icon-sm"
+        variant="ghost"
+      >
+        <XIcon />
+      </Button>
+
+      {traceContext !== null ? <TraceOverview trace={traceContext} /> : null}
+      <TabBar activeTab={tab} onSelect={setTab} />
 
       {tab === "properties" ? (
         <EventPropertiesTab
@@ -66,29 +88,19 @@ export function LogDetailsPanel({
 interface TabBarProps {
   activeTab: LogDetailsTab;
   onSelect: (tab: LogDetailsTab) => void;
-  onClose: () => void;
 }
 
-function TabBar({ activeTab, onSelect, onClose }: TabBarProps) {
+function TabBar({ activeTab, onSelect }: TabBarProps) {
   return (
-    <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 pr-2">
-      <div className="flex min-w-0">
-        <TabButton active={activeTab === "properties"} onClick={() => onSelect("properties")}>
-          Event Properties
-        </TabButton>
-        <TabButton active={activeTab === "raw"} onClick={() => onSelect("raw")}>
-          Raw Data
-        </TabButton>
-      </div>
-      <Button
-        aria-label="Close log details"
-        className="shrink-0"
-        onClick={onClose}
-        size="icon-sm"
-        variant="ghost"
-      >
-        <XIcon />
-      </Button>
+    // `pr-10` reserves space on the right for the absolutely-positioned
+    // close button so the tab labels never collide with it.
+    <div className="flex shrink-0 min-w-0 items-center border-b border-border/60 pr-10">
+      <TabButton active={activeTab === "properties"} onClick={() => onSelect("properties")}>
+        Event Properties
+      </TabButton>
+      <TabButton active={activeTab === "raw"} onClick={() => onSelect("raw")}>
+        Raw Data
+      </TabButton>
     </div>
   );
 }

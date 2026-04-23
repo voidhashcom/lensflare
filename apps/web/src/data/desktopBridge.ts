@@ -1,13 +1,7 @@
-import type { DesktopLocalServerState, LensflareDesktopBridge } from "@lensflare/contracts";
+import type { DesktopBridge, DesktopLocalServerState } from "@lensflare/contracts";
 
-declare global {
-  interface Window {
-    lensflareDesktop?: LensflareDesktopBridge;
-  }
-}
-
-function readBridge(): LensflareDesktopBridge | null {
-  return window.lensflareDesktop ?? null;
+function readBridge(): DesktopBridge | null {
+  return window.desktopBridge ?? window.lensflareDesktop ?? null;
 }
 
 /**

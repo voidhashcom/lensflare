@@ -1,5 +1,7 @@
-import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
+import { Outlet, createFileRoute, useLocation } from "@tanstack/react-router";
 import { useEffect } from "react";
+
+import { DesktopUpdateSettingsPanel } from "~/components/settings/DesktopUpdateSettingsPanel";
 
 /**
  * Layout route for the `/settings` section. It renders a header with the
@@ -9,15 +11,12 @@ import { useEffect } from "react";
  * render a sidebar itself.
  */
 export const Route = createFileRoute("/settings")({
-  beforeLoad: ({ location }) => {
-    if (location.pathname === "/settings" || location.pathname === "/settings/") {
-      throw redirect({ to: "/settings/general", replace: true });
-    }
-  },
   component: SettingsLayout,
 });
 
 function SettingsLayout() {
+  const pathname = useLocation({ select: (location) => location.pathname });
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
@@ -40,7 +39,11 @@ function SettingsLayout() {
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <Outlet />
+        {pathname === "/settings" || pathname === "/settings/" ? (
+          <DesktopUpdateSettingsPanel />
+        ) : (
+          <Outlet />
+        )}
       </div>
     </div>
   );

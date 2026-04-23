@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowLeftIcon, InfoIcon, PaletteIcon, Settings2Icon } from "lucide-react";
+import { ArrowLeftIcon, InfoIcon, PaletteIcon, RefreshCwIcon, Settings2Icon } from "lucide-react";
 import type { ComponentType } from "react";
 
 import {
@@ -12,13 +12,18 @@ import {
   SidebarSeparator,
 } from "~/components/ui/sidebar";
 
-export type SettingsSectionPath = "/settings/general" | "/settings/appearance" | "/settings/about";
+export type SettingsSectionPath =
+  | "/settings"
+  | "/settings/general"
+  | "/settings/appearance"
+  | "/settings/about";
 
 export const SETTINGS_NAV_ITEMS: ReadonlyArray<{
   label: string;
   to: SettingsSectionPath;
   icon: ComponentType<{ className?: string }>;
 }> = [
+  { label: "Updates", to: "/settings", icon: RefreshCwIcon },
   { label: "General", to: "/settings/general", icon: Settings2Icon },
   { label: "Appearance", to: "/settings/appearance", icon: PaletteIcon },
   { label: "About", to: "/settings/about", icon: InfoIcon },

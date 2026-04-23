@@ -10,7 +10,7 @@ import { defineConfig } from "vite-plus";
 // to be fully self-contained. The options below apply to both.
 export default defineConfig({
   pack: {
-    entry: ["src/main/index.ts", "src/preload/index.ts"],
+    entry: ["src/main/index.ts", "src/preload.ts"],
     outDir: "dist",
     format: ["cjs"],
     platform: "node",
