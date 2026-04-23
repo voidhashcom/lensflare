@@ -4,6 +4,7 @@ import { ProjectDatasetMismatch, UnknownDatasetSlug, UnknownProjectSlug } from "
 import { IngestTargetResolver } from "./targetResolver.ts";
 import { TelemetryLogEventService } from "./telemetryLogEventService.ts";
 import { TelemetryLogsRepository } from "./telemetryLogsRepository.ts";
+import { TelemetrySpansRepository } from "./telemetrySpansRepository.ts";
 import type { DuckDbError } from "./telemetryStore.ts";
 import type { NormalizedIngestBatch } from "./types.ts";
 
@@ -61,12 +62,13 @@ export class LogIngestService extends Context.Service<
     LogIngestService,
     Effect.gen(function* () {
       const resolver = yield* IngestTargetResolver;
-      const telemetry = yield* TelemetryLogsRepository;
+      const logs = yield* TelemetryLogsRepository;
+      const spans = yield* TelemetrySpansRepository;
       const events = yield* TelemetryLogEventService;
 
       const ingest = Effect.fn("LogIngestService.ingest")(function* (input: IngestInput) {
         const target = yield* resolver.resolve(input.projectSlug, input.datasetSlug);
-        const request = {
+        const baseRequest = {
           providerKind: input.batch.providerKind,
           signal: input.batch.signal,
           projectId: target.projectId,
@@ -78,9 +80,30 @@ export class LogIngestService extends Context.Service<
           requestBytes: input.requestBytes,
           clientAddr: input.clientAddr,
           receivedAt: new Date().toISOString(),
+        } as const;
+
+        if (input.batch.signal === "traces") {
+          const request = {
+            ...baseRequest,
+            signal: "traces",
+            spans: input.batch.spans,
+          } as const;
+          const { batchId } = yield* spans.writeBatch(request);
+
+          return {
+            batchId,
+            acceptedRecords: input.batch.spans.length,
+            rejectedRecords: input.batch.droppedRecords,
+            warnings: input.batch.warnings,
+          } satisfies IngestResult;
+        }
+
+        const request = {
+          ...baseRequest,
+          signal: "logs",
           records: input.batch.records,
         } as const;
-        const { batchId, records } = yield* telemetry.writeBatch(request);
+        const { batchId, records } = yield* logs.writeBatch(request);
         yield* events.publishBatch(request, records);
 
         return {

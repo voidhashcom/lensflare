@@ -28,10 +28,11 @@ import { AxiomNativeDecoder } from "./ingest/providers/axiom/decoder.ts";
 import { axiomRouteLayer } from "./ingest/providers/axiom/route.ts";
 import { LogIngestService } from "./ingest/logIngestService.ts";
 import { TelemetryLogEventService } from "./ingest/telemetryLogEventService.ts";
-import { OtlpLogsDecoder } from "./ingest/providers/otlp/decoder.ts";
+import { OtlpLogsDecoder, OtlpTracesDecoder } from "./ingest/providers/otlp/decoder.ts";
 import { otlpRouteLayer } from "./ingest/providers/otlp/route.ts";
 import { TelemetryLogQueryService } from "./ingest/telemetryLogQueryService.ts";
 import { TelemetryLogsRepository } from "./ingest/telemetryLogsRepository.ts";
+import { TelemetrySpansRepository } from "./ingest/telemetrySpansRepository.ts";
 import { TelemetryStore } from "./ingest/telemetryStore.ts";
 import { IngestTargetResolver } from "./ingest/targetResolver.ts";
 import { DatasetsRepository } from "./repositories/datasetsRepository.ts";
@@ -253,6 +254,7 @@ export async function startLocalServer(
   const ingestServicesLayer = LogIngestService.layer.pipe(
     Layer.provide(telemetryLogEventLayer),
     Layer.provide(TelemetryLogsRepository.layer),
+    Layer.provide(TelemetrySpansRepository.layer),
     Layer.provide(IngestTargetResolver.layer),
     Layer.provide(ProjectsRepository.layer),
     Layer.provide(DatasetsRepository.layer),
@@ -273,6 +275,7 @@ export async function startLocalServer(
   // service). No edits anywhere else.
   const ingestProvidersLayer = Layer.mergeAll(otlpRouteLayer, axiomRouteLayer).pipe(
     Layer.provide(OtlpLogsDecoder.layer),
+    Layer.provide(OtlpTracesDecoder.layer),
     Layer.provide(AxiomNativeDecoder.layer),
   );
 

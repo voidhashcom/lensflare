@@ -1,5 +1,10 @@
-import { decodeTelemetryLogPage, type TelemetryLogPage } from "@lensflare/contracts";
+import {
+  decodeTelemetryLogPage,
+  decodeTelemetryTraceContext,
+  type TelemetryLogPage,
+} from "@lensflare/contracts";
 import { Effect, Stream } from "effect";
+import type { TraceContext } from "~/components/LogStream/types";
 import { resolveBackendHttpUrl } from "./backendTarget";
 import { runRpcCallback } from "./rpcConnectionManager";
 
@@ -59,6 +64,50 @@ export async function listDatasetLogs(
     }
 
     return decodeTelemetryLogPage(payload);
+  } catch (error) {
+    throw toLogApiError(error);
+  }
+}
+
+export async function getLogTraceContext(
+  projectId: string,
+  datasetId: string,
+  traceId: string,
+  spanId?: string | undefined,
+): Promise<TraceContext | null> {
+  try {
+    const search = new URLSearchParams();
+    if (spanId) {
+      search.set("spanId", spanId);
+    }
+
+    const url = resolveBackendHttpUrl(
+      `/api/projects/${projectId}/datasets/${datasetId}/traces/${traceId}`,
+      search,
+    );
+
+    const response = await fetch(url, {
+      headers: {
+        accept: "application/json",
+      },
+    });
+
+    const payload = await response.json();
+    if (!response.ok) {
+      const message =
+        typeof payload?.error?.message === "string"
+          ? payload.error.message
+          : "Failed to load trace context.";
+      throw new Error(message);
+    }
+
+    const trace = decodeTelemetryTraceContext(payload);
+    return trace === null
+      ? null
+      : {
+          ...trace,
+          startTime: new Date(trace.startTime),
+        };
   } catch (error) {
     throw toLogApiError(error);
   }

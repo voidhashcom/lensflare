@@ -1,6 +1,6 @@
 import { DuckDBInstance } from "@duckdb/node-api";
 import { describe, expect, it } from "@effect/vitest";
-import { decodeTelemetryLogPage } from "@lensflare/contracts";
+import { decodeTelemetryLogPage, decodeTelemetryTraceContext } from "@lensflare/contracts";
 import { Effect, Layer } from "effect";
 import { gzipSync } from "node:zlib";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -218,6 +218,160 @@ describe("HTTP ingest", () => {
           message: "hello from otlp json",
         }),
       ]);
+    } finally {
+      await Promise.all([server.stop(), rm(directory, { recursive: true, force: true })]);
+    }
+  });
+
+  it("ingests OTLP JSON spans and returns trace context for traced logs", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "lensflare-ingest-"));
+    const sqliteDatabaseFile = join(directory, "lensflare.sqlite");
+    const duckdbDatabaseFile = join(directory, "lensflare.duckdb");
+    const port = await getAvailablePort();
+    const traceId = "0af7651916cd43dd8448eb211c80319c";
+    const rootSpanId = "b7ad6b7169203331";
+    const childSpanId = "1111111111111111";
+
+    const { project, dataset } = await seedProjectAndDataset(sqliteDatabaseFile);
+    const server = await startLocalServer({
+      mode: "server",
+      host: "127.0.0.1",
+      port,
+      sqliteDatabaseFile,
+      duckdbDatabaseFile,
+      otel: otelDisabled,
+    });
+
+    try {
+      const traceResponse = await fetch(`${server.origin}/ingest/otlp/v1/traces/lensflare/traces`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          resourceSpans: [
+            {
+              resource: {
+                attributes: [
+                  {
+                    key: "service.name",
+                    value: { stringValue: "api" },
+                  },
+                ],
+              },
+              scopeSpans: [
+                {
+                  scope: { name: "tests", version: "1.0.0" },
+                  spans: [
+                    {
+                      traceId,
+                      spanId: rootSpanId,
+                      name: "GET /checkout",
+                      kind: "SPAN_KIND_SERVER",
+                      startTimeUnixNano: "1716201600000000000",
+                      endTimeUnixNano: "1716201600200000000",
+                      status: { code: "STATUS_CODE_OK" },
+                    },
+                    {
+                      traceId,
+                      spanId: childSpanId,
+                      parentSpanId: rootSpanId,
+                      name: "SELECT orders",
+                      kind: "SPAN_KIND_CLIENT",
+                      startTimeUnixNano: "1716201600050000000",
+                      endTimeUnixNano: "1716201600125000000",
+                      status: { code: "STATUS_CODE_ERROR", message: "timeout" },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        }),
+      });
+      expect(traceResponse.status).toBe(200);
+
+      const logResponse = await fetch(`${server.origin}/ingest/otlp/v1/logs/lensflare/traces`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          resourceLogs: [
+            {
+              resource: {
+                attributes: [
+                  {
+                    key: "service.name",
+                    value: { stringValue: "api" },
+                  },
+                ],
+              },
+              scopeLogs: [
+                {
+                  scope: { name: "tests", version: "1.0.0" },
+                  logRecords: [
+                    {
+                      timeUnixNano: "1716201600060000000",
+                      traceId,
+                      spanId: childSpanId,
+                      severityNumber: 17,
+                      severityText: "ERROR",
+                      body: { stringValue: "query failed" },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        }),
+      });
+      expect(logResponse.status).toBe(200);
+
+      const pageResponse = await fetch(
+        `${server.origin}/api/projects/${project.id}/datasets/${dataset.id}/logs`,
+      );
+      expect(pageResponse.status).toBe(200);
+
+      const logPage = decodeTelemetryLogPage(await pageResponse.json());
+      expect(logPage.entries).toEqual([
+        expect.objectContaining({
+          traceId,
+          spanId: childSpanId,
+          level: "error",
+          message: "query failed",
+        }),
+      ]);
+
+      const traceContextResponse = await fetch(
+        `${server.origin}/api/projects/${project.id}/datasets/${dataset.id}/traces/${traceId}?spanId=${childSpanId}`,
+      );
+      expect(traceContextResponse.status).toBe(200);
+
+      const traceContext = decodeTelemetryTraceContext(await traceContextResponse.json());
+      expect(traceContext).toMatchObject({
+        traceId,
+        currentSpanId: childSpanId,
+        totalDurationUs: 200_000,
+        spans: [
+          expect.objectContaining({
+            id: rootSpanId,
+            parentSpanId: null,
+            name: "GET /checkout",
+            serviceName: "api",
+            status: "ok",
+          }),
+          expect.objectContaining({
+            id: childSpanId,
+            parentSpanId: rootSpanId,
+            name: "SELECT orders",
+            serviceName: "api",
+            startOffsetUs: 50_000,
+            durationUs: 75_000,
+            status: "error",
+          }),
+        ],
+      });
     } finally {
       await Promise.all([server.stop(), rm(directory, { recursive: true, force: true })]);
     }

@@ -2,7 +2,13 @@ import { Context, Effect, Layer } from "effect";
 import { decodeBatch } from "../../decoder/decodeBatch.ts";
 import { MalformedPayload, NormalizationFailure } from "../../errors.ts";
 import type { NormalizedIngestBatch } from "../../types.ts";
-import { type OtlpWireFormat, normalizeOtlpDocument, parseDocument } from "./normalize.ts";
+import {
+  type OtlpWireFormat,
+  normalizeOtlpDocument,
+  normalizeOtlpTraceDocument,
+  parseDocument,
+  parseTraceDocument,
+} from "./normalize.ts";
 
 /**
  * Decode an OTLP `ExportLogsServiceRequest` (JSON or protobuf) into a
@@ -29,6 +35,28 @@ export class OtlpLogsDecoder extends Context.Service<
           provider: "otlp_http_logs",
           emptyMessage: "Payload did not contain any log records.",
           decode: () => normalizeOtlpDocument(parseDocument(format, body)),
+        });
+      },
+    }),
+  );
+}
+
+export class OtlpTracesDecoder extends Context.Service<
+  OtlpTracesDecoder,
+  {
+    readonly decode: (
+      format: OtlpWireFormat,
+      body: Uint8Array,
+    ) => Effect.Effect<NormalizedIngestBatch, MalformedPayload | NormalizationFailure>;
+  }
+>()("@lensflare/local-server/OtlpTracesDecoder") {
+  static readonly layer = Layer.sync(OtlpTracesDecoder, () =>
+    OtlpTracesDecoder.of({
+      decode(format, body) {
+        return decodeBatch({
+          provider: "otlp_http_traces",
+          emptyMessage: "Payload did not contain any spans.",
+          decode: () => normalizeOtlpTraceDocument(parseTraceDocument(format, body)),
         });
       },
     }),
