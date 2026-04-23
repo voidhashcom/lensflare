@@ -1,7 +1,7 @@
 import type { ChangeMessageOrDeleteKeyMessage, CollectionConfig, SyncConfig } from "@tanstack/db";
-import { Cause, Effect, Exit, Stream } from "effect";
-import { CatalogRpcClient, type CatalogRpcClientShape, rpcRuntime } from "~/data/rpc";
-import { reportRpcConnectionFailure } from "~/data/rpcConnection";
+import { Cause, Effect, Stream } from "effect";
+import type { CatalogRpcClientShape } from "~/data/rpc";
+import { runRpcCallback } from "~/data/rpcConnectionManager";
 
 /**
  * The generic shape shared by both `ProjectChangeEvent` and
@@ -32,6 +32,13 @@ export interface EntityCollectionUtils {
  * beyond "items of type `TItem` keyed by `TKey` with an upsert/delete
  * change stream". That keeps the two domain collection files free of
  * cross-concerns.
+ *
+ * The subscription lifecycle is delegated to
+ * {@link ../data/rpcConnectionManager}: on every reconnect the manager
+ * re-invokes our factory with the freshly built {@link CatalogRpcClientShape},
+ * so the snapshot-plus-stream dance runs again automatically against the
+ * new transport. The `markReady` callback from TanStack DB is persistent
+ * across that boundary — collections call it at most once per lifetime.
  */
 export function createEntityCollectionOptions<TItem extends object, TKey extends string>(config: {
   readonly getKey: (item: TItem) => TKey;
@@ -70,8 +77,6 @@ export function createEntityCollectionOptions<TItem extends object, TKey extends
         truncate,
         collection,
       }: Parameters<SyncConfig<TItem, TKey>["sync"]>[0]) => {
-        const bufferedEvents: Array<EntityChangeEvent<TItem>> = [];
-        let isReady = false;
         let readyMarked = false;
 
         const ensureReady = () => {
@@ -129,71 +134,72 @@ export function createEntityCollectionOptions<TItem extends object, TKey extends
               };
         };
 
-        const handleEvent = (event: EntityChangeEvent<TItem>) => {
-          if (!isReady) {
-            bufferedEvents.push(event);
-            return;
-          }
+        // Per-attempt state lives inside the factory so that every
+        // reconnect starts with a fresh buffer + readiness flag, which
+        // keeps the snapshot/stream ordering invariants identical to a
+        // cold boot.
+        return runRpcCallback(
+          (client) => {
+            const bufferedEvents: Array<EntityChangeEvent<TItem>> = [];
+            let isReady = false;
 
-          const change = toChangeMessage(event);
-          if (change !== null) {
-            applyChange(change);
-          }
-        };
-
-        return rpcRuntime.runCallback(
-          Effect.scoped(
-            Effect.gen(function* () {
-              const client = yield* CatalogRpcClient.asEffect();
-              const stream = config.subscribe(client);
-
-              yield* stream.pipe(
-                Stream.runForEach((event) =>
-                  Effect.sync(() => {
-                    handleEvent(event);
-                  }),
-                ),
-                Effect.catchCause((cause) =>
-                  Effect.sync(() => {
-                    const error = Cause.squash(cause);
-                    state.lastError = config.formatError(error);
-                    reportRpcConnectionFailure(error);
-                    ensureReady();
-                  }),
-                ),
-                Effect.forkChild,
-              );
-
-              const items = [...(yield* config.list(client))];
-
-              yield* Effect.sync(() => {
-                state.lastError = undefined;
-                applySnapshot(items);
-                isReady = true;
-
-                for (const event of bufferedEvents) {
-                  const change = toChangeMessage(event);
-                  if (change !== null) {
-                    applyChange(change);
-                  }
-                }
-
-                bufferedEvents.length = 0;
-                ensureReady();
-              });
-
-              return yield* Effect.never;
-            }),
-          ),
-          {
-            onExit: (exit) => {
-              if (!Exit.isFailure(exit) || Cause.hasInterruptsOnly(exit.cause)) {
+            const handleEvent = (event: EntityChangeEvent<TItem>) => {
+              if (!isReady) {
+                bufferedEvents.push(event);
                 return;
               }
 
-              const error = Cause.squash(exit.cause);
+              const change = toChangeMessage(event);
+              if (change !== null) {
+                applyChange(change);
+              }
+            };
+
+            return Effect.scoped(
+              Effect.gen(function* () {
+                const stream = config.subscribe(client);
+
+                yield* stream.pipe(
+                  Stream.runForEach((event) =>
+                    Effect.sync(() => {
+                      handleEvent(event);
+                    }),
+                  ),
+                  Effect.catchCause((cause) =>
+                    Effect.sync(() => {
+                      const error = Cause.squash(cause);
+                      state.lastError = config.formatError(error);
+                      ensureReady();
+                    }),
+                  ),
+                  Effect.forkChild,
+                );
+
+                const items = [...(yield* config.list(client))];
+
+                yield* Effect.sync(() => {
+                  state.lastError = undefined;
+                  applySnapshot(items);
+                  isReady = true;
+
+                  for (const event of bufferedEvents) {
+                    const change = toChangeMessage(event);
+                    if (change !== null) {
+                      applyChange(change);
+                    }
+                  }
+
+                  bufferedEvents.length = 0;
+                  ensureReady();
+                });
+
+                return yield* Effect.never;
+              }),
+            );
+          },
+          {
+            onError: (error) => {
               state.lastError = config.formatError(error);
-              reportRpcConnectionFailure(error);
               ensureReady();
             },
           },

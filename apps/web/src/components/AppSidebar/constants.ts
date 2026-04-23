@@ -5,7 +5,10 @@ import type { ComponentType, SVGProps } from "react";
 export const ROUTE_PARAMS_OPTIONS = { strict: false } as const;
 
 /** Maps a project icon identifier to its lucide icon component. */
-export const PROJECT_ICON_COMPONENTS: Record<ProjectIcon, ComponentType<SVGProps<SVGSVGElement>>> = {
+export const PROJECT_ICON_COMPONENTS: Record<
+  ProjectIcon,
+  ComponentType<SVGProps<SVGSVGElement>>
+> = {
   compass: CompassIcon,
   folder: FolderIcon,
   rocket: RocketIcon,

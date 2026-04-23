@@ -8,14 +8,23 @@ import {
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
-import { retryRpcConnection, useRpcConnectionState } from "~/data/rpcConnection";
+import { reloadApp, retryConnection, useConnectionState } from "~/data/rpcConnectionManager";
 
 export function RpcConnectionModal() {
-  const { issue, retryError, retrying } = useRpcConnectionState();
+  const { issue, retryError, retrying, autoRetrying, attempts } = useConnectionState();
 
   if (issue === null) {
     return null;
   }
+
+  const busy = retrying || autoRetrying;
+  const exhaustedAutoRetries = attempts >= 4 && retryError !== null;
+
+  const buttonLabel = retrying
+    ? "Retrying..."
+    : autoRetrying
+      ? "Reconnecting..."
+      : "Retry connection";
 
   return (
     <AlertDialog open>
@@ -26,15 +35,18 @@ export function RpcConnectionModal() {
           <div className="rounded-lg border bg-muted/50 px-3 py-2 font-mono text-muted-foreground text-xs">
             {issue.detail}
           </div>
-          {retryError ? (
-            <p className="text-destructive text-sm">{retryError}</p>
-          ) : null}
+          {retryError ? <p className="text-destructive text-sm">{retryError}</p> : null}
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <Button disabled={retrying} onClick={() => void retryRpcConnection()}>
-            <RefreshCcwIcon className={retrying ? "animate-spin" : undefined} />
-            {retrying ? "Retrying..." : "Retry connection"}
+          <Button disabled={busy} onClick={() => void retryConnection()}>
+            <RefreshCcwIcon className={busy ? "animate-spin" : undefined} />
+            {buttonLabel}
           </Button>
+          {exhaustedAutoRetries ? (
+            <Button variant="secondary" onClick={reloadApp}>
+              Reload Lensflare
+            </Button>
+          ) : null}
         </AlertDialogFooter>
       </AlertDialogPopup>
     </AlertDialog>

@@ -34,7 +34,5 @@ function DatasetLogStreamRoute() {
 
 function selectDataset(datasetId: string) {
   return (q: any) =>
-    q
-      .from({ dataset: datasetsCollection })
-      .where(({ dataset }: any) => eq(dataset.id, datasetId));
+    q.from({ dataset: datasetsCollection }).where(({ dataset }: any) => eq(dataset.id, datasetId));
 }

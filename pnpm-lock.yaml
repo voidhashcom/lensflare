@@ -103,6 +103,9 @@ importers:
       '@duckdb/node-api':
         specifier: 'catalog:'
         version: 1.5.2-r.1
+      '@lensflare/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@lensflare/local-server':
         specifier: workspace:*
         version: link:../../packages/local-server

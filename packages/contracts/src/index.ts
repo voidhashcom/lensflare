@@ -6,12 +6,7 @@ const AppModeSchema = Schema.Literals(["desktop", "server"]);
 
 export type AppMode = Schema.Schema.Type<typeof AppModeSchema>;
 
-const StaticAssetModeSchema = Schema.Literals([
-  "embedded",
-  "filesystem",
-  "proxy",
-  "none",
-]);
+const StaticAssetModeSchema = Schema.Literals(["embedded", "filesystem", "proxy", "none"]);
 
 const ServerSnapshotSchema = Schema.Struct({
   name: Schema.String,
@@ -27,6 +22,77 @@ const ServerSnapshotSchema = Schema.Struct({
 });
 
 export type ServerSnapshot = Schema.Schema.Type<typeof ServerSnapshotSchema>;
+
+/**
+ * Public "environment descriptor" served at
+ * `/.well-known/lensflare/environment`. The browser uses it to learn the
+ * explicit HTTP + WebSocket base URLs of the backend it should talk to, so
+ * it never has to infer transport targets from `window.location` or Vite
+ * proxy shims. `serverInstanceId` changes on every successful
+ * {@link startLocalServer} so clients can detect a fresh process across
+ * restarts.
+ */
+export const LensflareEnvironmentDescriptorSchema = Schema.Struct({
+  appName: Schema.String,
+  appVersion: Schema.String,
+  mode: AppModeSchema,
+  platform: Schema.String,
+  host: Schema.String,
+  port: Schema.Number,
+  httpBaseUrl: Schema.String,
+  wsBaseUrl: Schema.String,
+  serverInstanceId: Schema.String,
+  startedAt: Schema.String,
+});
+
+export type LensflareEnvironmentDescriptor = Schema.Schema.Type<
+  typeof LensflareEnvironmentDescriptorSchema
+>;
+
+const decodeLensflareEnvironmentDescriptorSchema = Schema.decodeUnknownSync(
+  LensflareEnvironmentDescriptorSchema,
+);
+
+export function decodeLensflareEnvironmentDescriptor(
+  input: unknown,
+): LensflareEnvironmentDescriptor {
+  return decodeLensflareEnvironmentDescriptorSchema(input);
+}
+
+/**
+ * Typed payload the desktop shell hands to the renderer as the default
+ * backend target. The renderer converts this into {@link BackendTarget} via
+ * `~/data/backendTarget`.
+ */
+export interface DesktopEnvironmentBootstrap {
+  readonly label: string;
+  readonly httpBaseUrl: string;
+  readonly wsBaseUrl: string;
+  readonly serverInstanceId: string;
+}
+
+/**
+ * Lifecycle state of the backend process owned by the desktop shell. The
+ * renderer mirrors these transitions in its connection UI.
+ */
+export type DesktopLocalServerState =
+  | { readonly status: "starting" }
+  | { readonly status: "ready"; readonly bootstrap: DesktopEnvironmentBootstrap }
+  | { readonly status: "restarting" }
+  | { readonly status: "failed"; readonly message: string };
+
+/**
+ * Desktop-only bridge. Anything going through this contract lives outside
+ * the Effect RPC surface because it needs to run on the main process
+ * (process lifecycle, local shell capabilities). Backend calls must not
+ * be added here — they belong on the backend target exposed via
+ * {@link DesktopEnvironmentBootstrap}.
+ */
+export interface LensflareDesktopBridge {
+  readonly getLocalServerState: () => Promise<DesktopLocalServerState>;
+  readonly restartLocalServer: () => Promise<DesktopLocalServerState>;
+  readonly onLocalServerState: (listener: (state: DesktopLocalServerState) => void) => () => void;
+}
 
 const ServerEventSchema = Schema.Struct({
   type: Schema.Literals(["server.ready", "server.heartbeat"]),

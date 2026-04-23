@@ -78,3 +78,46 @@ export function resolveWebSocketOrigin(httpOrigin: string): string {
 export function resolveWebDevUrl(config: Pick<RuntimeConfig, "host" | "webDevPort">): string {
   return `http://${config.host}:${config.webDevPort}`;
 }
+
+/**
+ * Convert an HTTP(S) base URL into its WebSocket equivalent while
+ * preserving host, port, and path. Throws when given a protocol that can't
+ * be mapped — callers should have already normalized the input with
+ * {@link normalizeBaseUrl} or their own URL parser.
+ */
+export function httpUrlToWsUrl(httpUrl: string): string {
+  const url = new URL(httpUrl);
+  if (url.protocol === "https:") {
+    url.protocol = "wss:";
+  } else if (url.protocol === "http:") {
+    url.protocol = "ws:";
+  } else if (url.protocol !== "ws:" && url.protocol !== "wss:") {
+    throw new Error(`Unsupported base URL protocol: ${url.protocol}`);
+  }
+  return url.toString();
+}
+
+/**
+ * Convert a WebSocket base URL into its HTTP(S) equivalent.
+ */
+export function wsUrlToHttpUrl(wsUrl: string): string {
+  const url = new URL(wsUrl);
+  if (url.protocol === "wss:") {
+    url.protocol = "https:";
+  } else if (url.protocol === "ws:") {
+    url.protocol = "http:";
+  } else if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error(`Unsupported base URL protocol: ${url.protocol}`);
+  }
+  return url.toString();
+}
+
+/**
+ * Normalize a configured backend URL. Absolute URLs are returned verbatim;
+ * relative values are resolved against `base`. Used by backend target
+ * resolution to accept env vars like `VITE_LENSFLARE_HTTP_URL` that may be
+ * absolute in dev but path-style in packaged builds.
+ */
+export function normalizeBaseUrl(rawValue: string, base: string): string {
+  return new URL(rawValue, base).toString();
+}

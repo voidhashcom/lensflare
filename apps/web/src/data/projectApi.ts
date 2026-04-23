@@ -5,7 +5,7 @@ import {
   type ProjectEntity,
   type UpdateProjectInput,
 } from "@lensflare/contracts";
-import { runRpc } from "./rpc";
+import { runRpc } from "./rpcConnectionManager";
 
 /**
  * Promise-returning wrappers around the project RPC endpoints. These are

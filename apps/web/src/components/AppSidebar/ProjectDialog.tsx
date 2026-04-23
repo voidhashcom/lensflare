@@ -42,11 +42,7 @@ export function ProjectDialog({
   const description = isEditing
     ? "Update the project name."
     : "Create a new project and organize its datasets from the sidebar.";
-  const submitLabel = submitting
-    ? "Saving..."
-    : isEditing
-      ? "Save Project"
-      : "Create Project";
+  const submitLabel = submitting ? "Saving..." : isEditing ? "Save Project" : "Create Project";
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -74,11 +70,7 @@ export function ProjectDialog({
           </form>
         </DialogPanel>
         <DialogFooter>
-          <Button
-            disabled={submitting}
-            onClick={() => onOpenChange(false)}
-            variant="outline"
-          >
+          <Button disabled={submitting} onClick={() => onOpenChange(false)} variant="outline">
             Cancel
           </Button>
           <Button disabled={submitting} form={formId} type="submit">

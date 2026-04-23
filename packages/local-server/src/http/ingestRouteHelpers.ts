@@ -57,8 +57,6 @@ export function getProjectSlugFromAuthorization(value: string | undefined): stri
  * collapsing the `Option<string>` shape to a nullable string for the
  * downstream JSON-friendly logging code.
  */
-export function getRemoteAddress(
-  request: HttpServerRequest.HttpServerRequest,
-): string | null {
+export function getRemoteAddress(request: HttpServerRequest.HttpServerRequest): string | null {
   return Option.getOrElse(request.remoteAddress, () => null);
 }

@@ -21,12 +21,8 @@ describe("@lensflare/shared", () => {
     expect(resolveServerOrigin({ host: "127.0.0.1", serverPort: 43110 })).toBe(
       "http://127.0.0.1:43110",
     );
-    expect(resolveWebSocketOrigin("http://127.0.0.1:43110")).toBe(
-      "ws://127.0.0.1:43110/",
-    );
-    expect(resolveWebDevUrl({ host: "localhost", webDevPort: 5173 })).toBe(
-      "http://localhost:5173",
-    );
+    expect(resolveWebSocketOrigin("http://127.0.0.1:43110")).toBe("ws://127.0.0.1:43110/");
+    expect(resolveWebDevUrl({ host: "localhost", webDevPort: 5173 })).toBe("http://localhost:5173");
   });
 
   it("resolves standardized data paths per platform", () => {

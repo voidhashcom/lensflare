@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
-import { decodeServerEvent, decodeServerSnapshot } from "./index.ts";
+import {
+  decodeLensflareEnvironmentDescriptor,
+  decodeServerEvent,
+  decodeServerSnapshot,
+} from "./index.ts";
 
 describe("@lensflare/contracts", () => {
   it("decodes a server snapshot", () => {
@@ -41,5 +45,24 @@ describe("@lensflare/contracts", () => {
 
     expect(event.type).toBe("server.ready");
     expect(event.snapshot.staticAssetMode).toBe("filesystem");
+  });
+
+  it("decodes an environment descriptor", () => {
+    const descriptor = decodeLensflareEnvironmentDescriptor({
+      appName: "Lensflare",
+      appVersion: "0.1.0",
+      mode: "desktop",
+      platform: "darwin",
+      host: "127.0.0.1",
+      port: 43110,
+      httpBaseUrl: "http://127.0.0.1:43110",
+      wsBaseUrl: "ws://127.0.0.1:43110",
+      serverInstanceId: "abc123",
+      startedAt: "2026-04-21T10:00:00.000Z",
+    });
+
+    expect(descriptor.serverInstanceId).toBe("abc123");
+    expect(descriptor.mode).toBe("desktop");
+    expect(descriptor.wsBaseUrl).toBe("ws://127.0.0.1:43110");
   });
 });

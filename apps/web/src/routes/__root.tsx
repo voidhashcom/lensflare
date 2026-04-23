@@ -2,12 +2,7 @@ import { Outlet, createRootRoute } from "@tanstack/react-router";
 
 import { AppSidebar } from "~/components/AppSidebar";
 import { RpcConnectionModal } from "~/components/RpcConnectionModal";
-import {
-  Sidebar,
-  SidebarInset,
-  SidebarProvider,
-  SidebarRail,
-} from "~/components/ui/sidebar";
+import { Sidebar, SidebarInset, SidebarProvider, SidebarRail } from "~/components/ui/sidebar";
 
 export const Route = createRootRoute({
   component: RootLayout,

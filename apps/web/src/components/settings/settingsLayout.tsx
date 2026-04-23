@@ -75,9 +75,7 @@ export function SettingsRow({
             </span>
           </div>
           <p className="text-muted-foreground/80 text-xs leading-relaxed">{description}</p>
-          {status ? (
-            <div className="pt-0.5 text-[11px] text-muted-foreground">{status}</div>
-          ) : null}
+          {status ? <div className="pt-0.5 text-[11px] text-muted-foreground">{status}</div> : null}
         </div>
         {control ? (
           <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:justify-end">
@@ -95,13 +93,7 @@ export function SettingsRow({
  * differs from its default. Clicking invokes `onClick` which is expected to
  * restore the default.
  */
-export function SettingResetButton({
-  label,
-  onClick,
-}: {
-  label: string;
-  onClick: () => void;
-}) {
+export function SettingResetButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <Button
       aria-label={`Reset ${label} to default`}

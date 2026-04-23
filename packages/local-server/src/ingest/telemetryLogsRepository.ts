@@ -101,7 +101,9 @@ const insertLogRecordSql = `
 export class TelemetryLogsRepository extends Context.Service<
   TelemetryLogsRepository,
   {
-    readonly writeBatch: (request: IngestWriteRequest) => Effect.Effect<{ readonly batchId: string }, DuckDbError>;
+    readonly writeBatch: (
+      request: IngestWriteRequest,
+    ) => Effect.Effect<{ readonly batchId: string }, DuckDbError>;
   }
 >()("@lensflare/local-server/TelemetryLogsRepository") {
   static readonly layer = Layer.effect(

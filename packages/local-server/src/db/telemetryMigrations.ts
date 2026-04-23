@@ -102,10 +102,9 @@ export async function runTelemetryMigrations(connection: DuckDBConnection): Prom
     await connection.run("BEGIN TRANSACTION");
     try {
       await migration.apply(connection);
-      await connection.run(
-        "INSERT INTO telemetry_migrations (id) VALUES ($id)",
-        { id: migration.id },
-      );
+      await connection.run("INSERT INTO telemetry_migrations (id) VALUES ($id)", {
+        id: migration.id,
+      });
       await connection.run("COMMIT");
     } catch (error) {
       try {

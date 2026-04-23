@@ -103,8 +103,7 @@ export function useProjectDialog(): UseProjectDialogResult {
       } catch (submitError) {
         setState((current) => ({
           ...current,
-          error:
-            submitError instanceof Error ? submitError.message : "Failed to save project.",
+          error: submitError instanceof Error ? submitError.message : "Failed to save project.",
           submitting: false,
         }));
       }

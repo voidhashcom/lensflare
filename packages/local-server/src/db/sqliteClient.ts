@@ -62,7 +62,10 @@ export const make = (
         timeout: options.timeout ?? 5_000,
       });
 
-      yield* Scope.addFinalizer(scope, Effect.sync(() => db.close()));
+      yield* Scope.addFinalizer(
+        scope,
+        Effect.sync(() => db.close()),
+      );
 
       if (options.readonly !== true && options.disableWAL !== true) {
         yield* Effect.orDie(
@@ -114,7 +117,9 @@ export const make = (
         });
 
       const run = (sql: string, params: ReadonlyArray<unknown>, raw = false) =>
-        Effect.flatMap(Cache.get(prepareCache, sql), (statement) => runStatement(statement, params, raw));
+        Effect.flatMap(Cache.get(prepareCache, sql), (statement) =>
+          runStatement(statement, params, raw),
+        );
 
       const runValues = (sql: string, params: ReadonlyArray<unknown>) =>
         Effect.acquireUseRelease(
@@ -191,7 +196,9 @@ export const make = (
       const scope = Context.getUnsafe(fiber.context, Scope.Scope);
 
       return Effect.as(
-        Effect.tap(restore(semaphore.take(1)), () => Scope.addFinalizer(scope, semaphore.release(1))),
+        Effect.tap(restore(semaphore.take(1)), () =>
+          Scope.addFinalizer(scope, semaphore.release(1)),
+        ),
         connection,
       );
     });
@@ -211,9 +218,9 @@ export const make = (
 export const layerConfig = (
   config: Config.Wrap<SqliteClientConfig>,
 ): Layer.Layer<Client.SqlClient, Config.ConfigError> =>
-  Layer.effect(Client.SqlClient)(
-    Config.unwrap(config).asEffect().pipe(Effect.flatMap(make)),
-  ).pipe(Layer.provide(Reactivity.layer));
+  Layer.effect(Client.SqlClient)(Config.unwrap(config).asEffect().pipe(Effect.flatMap(make))).pipe(
+    Layer.provide(Reactivity.layer),
+  );
 
 export const layer = (config: SqliteClientConfig): Layer.Layer<Client.SqlClient> =>
   Layer.effect(Client.SqlClient)(make(config)).pipe(Layer.provide(Reactivity.layer));

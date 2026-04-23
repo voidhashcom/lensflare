@@ -3,6 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 import {
   DatasetRpcGroup,
   DEFAULT_PROJECT_ICON,
+  decodeLensflareEnvironmentDescriptor,
   ProjectRpcGroup,
 } from "@lensflare/contracts";
 import { Duration, Effect, Fiber, Layer, ManagedRuntime, Stream } from "effect";
@@ -70,34 +71,30 @@ describe("startLocalServer", () => {
     });
 
     try {
-      const {
-        createdDataset,
-        createdProject,
-        fetchedProject,
-        listedProjects,
-      } = await clientRuntime.runPromise(
-        Effect.scoped(
-          Effect.gen(function* () {
-            const client = yield* RpcClient.make(CatalogRpcs);
-            const createdProject = yield* client.CreateProject({ name: " Lensflare " });
-            const listedProjects = yield* client.ListProjects();
-            const createdDataset = yield* client.CreateDataset({
-              projectId: createdProject.id,
-              input: { name: " traces " },
-            });
-            const fetchedProject = yield* client.GetProject({
-              projectId: createdProject.id,
-            });
+      const { createdDataset, createdProject, fetchedProject, listedProjects } =
+        await clientRuntime.runPromise(
+          Effect.scoped(
+            Effect.gen(function* () {
+              const client = yield* RpcClient.make(CatalogRpcs);
+              const createdProject = yield* client.CreateProject({ name: " Lensflare " });
+              const listedProjects = yield* client.ListProjects();
+              const createdDataset = yield* client.CreateDataset({
+                projectId: createdProject.id,
+                input: { name: " traces " },
+              });
+              const fetchedProject = yield* client.GetProject({
+                projectId: createdProject.id,
+              });
 
-            return {
-              createdProject,
-              listedProjects,
-              createdDataset,
-              fetchedProject,
-            };
-          }),
-        ),
-      );
+              return {
+                createdProject,
+                listedProjects,
+                createdDataset,
+                fetchedProject,
+              };
+            }),
+          ),
+        );
 
       expect(createdProject.name).toBe("Lensflare");
       expect(createdProject.icon).toBe(DEFAULT_PROJECT_ICON);
@@ -154,7 +151,7 @@ describe("startLocalServer", () => {
                 Effect.sync(() => {
                   const valueId = "value" in event ? event.value.id : event.id;
                   projectEvents.push(`${event.action}:${valueId}`);
-                })
+                }),
               ),
               Effect.forkChild,
             );
@@ -165,7 +162,7 @@ describe("startLocalServer", () => {
                 Effect.sync(() => {
                   const valueId = "value" in event ? event.value.id : event.id;
                   datasetEvents.push(`${event.action}:${valueId}`);
-                })
+                }),
               ),
               Effect.forkChild,
             );
@@ -211,6 +208,104 @@ describe("startLocalServer", () => {
         server.stop(),
         rm(directory, { recursive: true, force: true }),
       ]);
+    }
+  });
+
+  it("serves the environment descriptor at /.well-known/lensflare/environment", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "lensflare-local-server-"));
+    const port = await getAvailablePort();
+
+    const server = await startLocalServer({
+      mode: "server",
+      host: "127.0.0.1",
+      port,
+      sqliteDatabaseFile: join(directory, "lensflare.sqlite"),
+      duckdbDatabaseFile: join(directory, "lensflare.duckdb"),
+      otel: otelDisabled,
+    });
+
+    try {
+      const response = await fetch(new URL("/.well-known/lensflare/environment", server.origin));
+      expect(response.ok).toBe(true);
+
+      const descriptor = decodeLensflareEnvironmentDescriptor(await response.json());
+
+      expect(descriptor.httpBaseUrl).toBe(server.httpBaseUrl);
+      expect(descriptor.wsBaseUrl).toBe(server.wsBaseUrl);
+      expect(new URL(descriptor.wsBaseUrl).host).toBe(new URL(server.httpBaseUrl).host);
+      expect(descriptor.serverInstanceId).toBe(server.serverInstanceId);
+      expect(descriptor.port).toBe(port);
+      expect(descriptor.mode).toBe("server");
+    } finally {
+      await server.stop();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("surfaces serverInstanceId on /api/health", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "lensflare-local-server-"));
+    const port = await getAvailablePort();
+
+    const server = await startLocalServer({
+      mode: "server",
+      host: "127.0.0.1",
+      port,
+      sqliteDatabaseFile: join(directory, "lensflare.sqlite"),
+      duckdbDatabaseFile: join(directory, "lensflare.duckdb"),
+      otel: otelDisabled,
+    });
+
+    try {
+      const response = await fetch(new URL("/api/health", server.origin));
+      expect(response.ok).toBe(true);
+
+      const body = (await response.json()) as {
+        readonly serverInstanceId?: string;
+        readonly mode?: string;
+      };
+
+      expect(body.serverInstanceId).toBe(server.serverInstanceId);
+      expect(body.mode).toBe("server");
+    } finally {
+      await server.stop();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("routes backend-owned paths to the backend when a devClientUrl is configured", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "lensflare-local-server-"));
+    const port = await getAvailablePort();
+
+    const server = await startLocalServer({
+      mode: "desktop",
+      host: "127.0.0.1",
+      port,
+      devClientUrl: "http://127.0.0.1:6789",
+      sqliteDatabaseFile: join(directory, "lensflare.sqlite"),
+      duckdbDatabaseFile: join(directory, "lensflare.duckdb"),
+      otel: otelDisabled,
+    });
+
+    try {
+      const healthResponse = await fetch(new URL("/api/health", server.origin));
+      expect(healthResponse.status).toBe(200);
+
+      const descriptorResponse = await fetch(
+        new URL("/.well-known/lensflare/environment", server.origin),
+      );
+      expect(descriptorResponse.status).toBe(200);
+
+      const unknownStatic = await fetch(new URL("/some/page", server.origin), {
+        redirect: "manual",
+      });
+      expect(unknownStatic.status).toBe(307);
+      const redirectLocation = unknownStatic.headers.get("location");
+      expect(redirectLocation).not.toBeNull();
+      expect(new URL(redirectLocation ?? "").origin).toBe("http://127.0.0.1:6789");
+      expect(new URL(redirectLocation ?? "").pathname).toBe("/some/page");
+    } finally {
+      await server.stop();
+      await rm(directory, { recursive: true, force: true });
     }
   });
 });

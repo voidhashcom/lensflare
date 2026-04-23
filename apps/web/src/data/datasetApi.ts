@@ -4,7 +4,7 @@ import {
   type Dataset,
   type UpdateDatasetInput,
 } from "@lensflare/contracts";
-import { runRpc } from "./rpc";
+import { runRpc } from "./rpcConnectionManager";
 
 /**
  * Promise-returning wrappers around the dataset RPC endpoints. These are

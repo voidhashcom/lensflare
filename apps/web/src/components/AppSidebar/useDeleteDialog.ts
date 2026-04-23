@@ -67,10 +67,7 @@ export function useDeleteDialog(
         }
       } else {
         await deleteDataset(target.projectId, target.datasetId);
-        if (
-          activeProjectId === target.projectId &&
-          activeCollectionId === target.datasetId
-        ) {
+        if (activeProjectId === target.projectId && activeCollectionId === target.datasetId) {
           await navigate({
             params: { projectId: target.projectId },
             to: "/projects/$projectId",
@@ -82,10 +79,7 @@ export function useDeleteDialog(
     } catch (deleteFailure) {
       setState((current) => ({
         ...current,
-        error:
-          deleteFailure instanceof Error
-            ? deleteFailure.message
-            : "Failed to delete item.",
+        error: deleteFailure instanceof Error ? deleteFailure.message : "Failed to delete item.",
         submitting: false,
       }));
     }

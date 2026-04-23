@@ -6,10 +6,5 @@
     "exactOptionalPropertyTypes": false,
     "types": ["node"]
   },
-  "include": [
-    "src/**/*.ts",
-    "src/**/*.d.ts",
-    "scripts/**/*.ts",
-    "vite.config.ts"
-  ]
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "scripts/**/*.ts", "vite.config.ts"]
 }

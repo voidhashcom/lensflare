@@ -1,13 +1,7 @@
 "use client";
 
 import { Toast } from "@base-ui/react/toast";
-import {
-  useEffect,
-  useState,
-  type CSSProperties,
-  type KeyboardEvent,
-  type ReactNode,
-} from "react";
+import { useEffect, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -23,10 +17,7 @@ import {
 
 import { cn } from "~/lib/utils";
 import { buttonVariants } from "~/components/ui/button";
-import {
-  buildVisibleToastLayout,
-  shouldHideCollapsedToastContent,
-} from "./toast.logic";
+import { buildVisibleToastLayout, shouldHideCollapsedToastContent } from "./toast.logic";
 
 export type ThreadToastData = {
   tooltipStyle?: boolean;
@@ -429,7 +420,7 @@ function ToastProvider({ children, position = "top-right", ...props }: ToastProv
   );
 }
 
-function Toasts({ position = "top-right" }: { position: ToastPosition }) {
+function Toasts({ position }: { position: ToastPosition }) {
   const { toasts } = Toast.useToastManager<ThreadToastData>();
   const isTop = position.startsWith("top");
   const visibleToastLayout = buildVisibleToastLayout(toasts);

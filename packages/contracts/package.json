@@ -16,7 +16,7 @@
   },
   "devDependencies": {
     "typescript": "catalog:",
-    "vitest": "catalog:",
-    "vite-plus": "catalog:"
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
   }
 }

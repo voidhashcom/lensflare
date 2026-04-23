@@ -1,9 +1,6 @@
 import { HttpServerResponse } from "effect/unstable/http";
 import type { IngestErrorMapping } from "../../../http/ingestErrorMapping.ts";
-import {
-  exportLogsServiceResponseType,
-  googleRpcStatusType,
-} from "./proto.ts";
+import { exportLogsServiceResponseType, googleRpcStatusType } from "./proto.ts";
 import type { OtlpWireFormat } from "./normalize.ts";
 
 /**
@@ -152,10 +149,7 @@ export function otlpErrorResponse(
  * concerns inside the provider while letting the central error mapping
  * stay the single source of truth for HTTP status / gRPC code pairs.
  */
-export function otlpErrorResponseFromMapping(
-  format: OtlpWireFormat,
-  mapping: IngestErrorMapping,
-) {
+export function otlpErrorResponseFromMapping(format: OtlpWireFormat, mapping: IngestErrorMapping) {
   return otlpErrorResponse(format, {
     httpStatus: mapping.httpStatus,
     grpcCode: mapping.grpcCode,

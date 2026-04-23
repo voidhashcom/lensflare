@@ -46,9 +46,7 @@ const ROW_HEIGHT_OPTIONS: ReadonlyArray<{ value: RowHeightValue; label: string }
 export function AppearanceSettingsPanel() {
   const [density, setDensity] = useState<DensityValue>(DEFAULTS.density);
   const [rowHeight, setRowHeight] = useState<RowHeightValue>(DEFAULTS.rowHeight);
-  const [showSidebarSearch, setShowSidebarSearch] = useState<boolean>(
-    DEFAULTS.showSidebarSearch,
-  );
+  const [showSidebarSearch, setShowSidebarSearch] = useState<boolean>(DEFAULTS.showSidebarSearch);
   const [monospaceBody, setMonospaceBody] = useState<boolean>(DEFAULTS.monospaceBody);
 
   return (
@@ -56,10 +54,7 @@ export function AppearanceSettingsPanel() {
       <SettingsSection icon={<PaletteIcon className="size-3" />} title="Layout">
         <SettingsRow
           control={
-            <Select
-              onValueChange={(value) => setDensity(value as DensityValue)}
-              value={density}
-            >
+            <Select onValueChange={(value) => setDensity(value as DensityValue)} value={density}>
               <SelectTrigger aria-label="Sidebar density" className="w-full sm:w-40">
                 <SelectValue>
                   {DENSITY_OPTIONS.find((option) => option.value === density)?.label}
@@ -86,9 +81,7 @@ export function AppearanceSettingsPanel() {
           title="Sidebar density"
         />
         <SettingsRow
-          control={
-            <Switch checked={showSidebarSearch} onCheckedChange={setShowSidebarSearch} />
-          }
+          control={<Switch checked={showSidebarSearch} onCheckedChange={setShowSidebarSearch} />}
           description="Show the search row at the top of the sidebar."
           resetAction={
             showSidebarSearch !== DEFAULTS.showSidebarSearch ? (

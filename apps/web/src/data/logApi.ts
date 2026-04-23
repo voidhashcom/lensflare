@@ -1,4 +1,5 @@
 import { decodeTelemetryLogEntries, type TelemetryLogEntry } from "@lensflare/contracts";
+import { resolveBackendHttpUrl } from "./backendTarget";
 
 interface ListDatasetLogsOptions {
   readonly search?: string | undefined;
@@ -19,16 +20,18 @@ export async function listDatasetLogs(
   options: ListDatasetLogsOptions = {},
 ): Promise<Array<TelemetryLogEntry>> {
   try {
-    const url = new URL(
-      `/api/projects/${projectId}/datasets/${datasetId}/logs`,
-      window.location.href,
-    );
+    const search = new URLSearchParams();
     if (options.search) {
-      url.searchParams.set("search", options.search);
+      search.set("search", options.search);
     }
     if (options.limit !== undefined) {
-      url.searchParams.set("limit", String(options.limit));
+      search.set("limit", String(options.limit));
     }
+
+    const url = resolveBackendHttpUrl(
+      `/api/projects/${projectId}/datasets/${datasetId}/logs`,
+      search,
+    );
 
     const response = await fetch(url, {
       headers: {
@@ -39,7 +42,9 @@ export async function listDatasetLogs(
     const payload = await response.json();
     if (!response.ok) {
       const message =
-        typeof payload?.error?.message === "string" ? payload.error.message : "Failed to load logs.";
+        typeof payload?.error?.message === "string"
+          ? payload.error.message
+          : "Failed to load logs.";
       throw new Error(message);
     }
 

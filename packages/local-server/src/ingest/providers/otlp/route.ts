@@ -1,9 +1,7 @@
 import { gunzipSync } from "node:zlib";
 import { Effect, Layer } from "effect";
 import { HttpRouter } from "effect/unstable/http";
-import {
-  resolveIngestErrorStatus,
-} from "../../../http/ingestErrorMapping.ts";
+import { resolveIngestErrorStatus } from "../../../http/ingestErrorMapping.ts";
 import { logIngestFailure } from "../../../http/ingestLogging.ts";
 import {
   getRemoteAddress,

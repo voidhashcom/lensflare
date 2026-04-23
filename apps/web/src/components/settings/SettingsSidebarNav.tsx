@@ -12,10 +12,7 @@ import {
   SidebarSeparator,
 } from "~/components/ui/sidebar";
 
-export type SettingsSectionPath =
-  | "/settings/general"
-  | "/settings/appearance"
-  | "/settings/about";
+export type SettingsSectionPath = "/settings/general" | "/settings/appearance" | "/settings/about";
 
 export const SETTINGS_NAV_ITEMS: ReadonlyArray<{
   label: string;

@@ -42,11 +42,7 @@ export function DatasetDialog({
   const description = isEditing
     ? "Rename this dataset without leaving the current workspace."
     : "Add a dataset to the selected project.";
-  const submitLabel = submitting
-    ? "Saving..."
-    : isEditing
-      ? "Save Dataset"
-      : "Create Dataset";
+  const submitLabel = submitting ? "Saving..." : isEditing ? "Save Dataset" : "Create Dataset";
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -74,11 +70,7 @@ export function DatasetDialog({
           </form>
         </DialogPanel>
         <DialogFooter>
-          <Button
-            disabled={submitting}
-            onClick={() => onOpenChange(false)}
-            variant="outline"
-          >
+          <Button disabled={submitting} onClick={() => onOpenChange(false)} variant="outline">
             Cancel
           </Button>
           <Button disabled={submitting} form={formId} type="submit">

@@ -1,4 +1,4 @@
-import type { ServerSnapshot } from "@lensflare/contracts";
+import type { LensflareEnvironmentDescriptor, ServerSnapshot } from "@lensflare/contracts";
 import { APP_NAME, APP_VERSION } from "@lensflare/shared";
 import { Effect, Layer } from "effect";
 import { HttpRouter, HttpServerResponse } from "effect/unstable/http";
@@ -8,10 +8,44 @@ import { renderFallbackApp, serveStaticFile } from "./static.ts";
 export interface HttpRoutesOptions {
   readonly origin: string;
   readonly snapshot: () => ServerSnapshot;
+  readonly descriptor: LensflareEnvironmentDescriptor;
   readonly staticDir: string | undefined;
+  /**
+   * Dev-only client origin (e.g. Vite at `http://127.0.0.1:5173`). When
+   * set, non-API/non-RPC static routes are redirected here, preserving the
+   * original path + search + hash so deep links in dev still work.
+   */
+  readonly devClientUrl: string | undefined;
   readonly mode: "desktop" | "server";
   readonly sqliteDatabaseFile: string;
   readonly duckdbDatabaseFile: string;
+}
+
+function isBackendRoutedPath(pathname: string): boolean {
+  if (pathname === "/api" || pathname.startsWith("/api/")) {
+    return true;
+  }
+  if (pathname === "/rpc" || pathname.startsWith("/rpc/")) {
+    return true;
+  }
+  if (pathname === "/ingest" || pathname.startsWith("/ingest/")) {
+    return true;
+  }
+  if (
+    pathname === "/.well-known/lensflare/environment" ||
+    pathname.startsWith("/.well-known/lensflare/")
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function buildDevClientRedirectTarget(devClientUrl: string, requestUrl: URL): string {
+  const target = new URL(devClientUrl);
+  target.pathname = requestUrl.pathname;
+  target.search = requestUrl.search;
+  target.hash = requestUrl.hash;
+  return target.toString();
 }
 
 /**
@@ -37,7 +71,16 @@ export function makeHttpRoutesLayer(options: HttpRoutesOptions) {
       yield* router.add(
         "GET",
         "/api/health",
-        HttpServerResponse.jsonUnsafe(options.snapshot()),
+        HttpServerResponse.jsonUnsafe({
+          ...options.snapshot(),
+          serverInstanceId: options.descriptor.serverInstanceId,
+        }),
+      );
+
+      yield* router.add(
+        "GET",
+        "/.well-known/lensflare/environment",
+        HttpServerResponse.jsonUnsafe(options.descriptor),
       );
 
       yield* router.add(
@@ -53,40 +96,40 @@ export function makeHttpRoutesLayer(options: HttpRoutesOptions) {
         }),
       );
 
-      yield* router.add(
-        "GET",
-        "/api/projects/:projectId/datasets/:datasetId/logs",
-        (request) =>
-          Effect.gen(function* () {
-            const logs = yield* TelemetryLogQueryService;
-            const params = yield* HttpRouter.params;
-            const url = new URL(request.url, options.origin);
-            const search = url.searchParams.get("search")?.trim() || undefined;
-            const rawLimit = Number.parseInt(url.searchParams.get("limit") ?? "", 10);
-            const limit = Number.isInteger(rawLimit) ? rawLimit : undefined;
+      yield* router.add("GET", "/api/projects/:projectId/datasets/:datasetId/logs", (request) =>
+        Effect.gen(function* () {
+          const logs = yield* TelemetryLogQueryService;
+          const params = yield* HttpRouter.params;
+          const url = new URL(request.url, options.origin);
+          const search = url.searchParams.get("search")?.trim() || undefined;
+          const rawLimit = Number.parseInt(url.searchParams.get("limit") ?? "", 10);
+          const limit = Number.isInteger(rawLimit) ? rawLimit : undefined;
 
-            return yield* logs
-              .listDatasetLogs(params.projectId ?? "", params.datasetId ?? "", {
-                search,
-                limit,
-              })
-              .pipe(
-                Effect.map((entries) => HttpServerResponse.jsonUnsafe(entries)),
-                Effect.catchTag("DatasetNotFound", (error) =>
-                  Effect.succeed(
-                    HttpServerResponse.jsonUnsafe(
-                      {
-                        error: {
-                          tag: error._tag,
-                          message: "Dataset not found.",
-                        },
+          return yield* logs
+            .listDatasetLogs(params.projectId ?? "", params.datasetId ?? "", {
+              search,
+              limit,
+            })
+            .pipe(
+              Effect.map((entries) => HttpServerResponse.jsonUnsafe(entries)),
+              Effect.catchTag("DatasetNotFound", (error) =>
+                Effect.succeed(
+                  HttpServerResponse.jsonUnsafe(
+                    {
+                      error: {
+                        tag: error._tag,
+                        message: "Dataset not found.",
                       },
-                      { status: 404 },
-                    ),
-                  )
+                    },
+                    { status: 404 },
+                  ),
                 ),
-              );
-          }).pipe(Effect.catchTag("SqlError", Effect.die), Effect.catchTag("DuckDbError", Effect.die)),
+              ),
+            );
+        }).pipe(
+          Effect.catchTag("SqlError", Effect.die),
+          Effect.catchTag("DuckDbError", Effect.die),
+        ),
       );
 
       const apiNotFound = HttpServerResponse.jsonUnsafe(
@@ -101,10 +144,23 @@ export function makeHttpRoutesLayer(options: HttpRoutesOptions) {
 
       yield* router.add("GET", "/*", (request) =>
         Effect.gen(function* () {
-          const pathname = new URL(request.url, options.origin).pathname;
+          const requestUrl = new URL(request.url, options.origin);
+          const pathname = requestUrl.pathname;
 
           if (pathname === "/api" || pathname.startsWith("/api/")) {
             return apiNotFound;
+          }
+
+          // In dev, redirect static/app routes to the Vite dev client so the
+          // backend origin is still the source of truth for HTTP + WS,
+          // while the renderer loads the freshly-built assets from Vite.
+          // `/api`, `/rpc`, `/ingest`, and `/.well-known/lensflare/*` stay
+          // on the backend.
+          if (options.devClientUrl && !isBackendRoutedPath(pathname)) {
+            return HttpServerResponse.redirect(
+              buildDevClientRedirectTarget(options.devClientUrl, requestUrl),
+              { status: 307 },
+            );
           }
 
           const staticResponse = yield* Effect.promise(() =>

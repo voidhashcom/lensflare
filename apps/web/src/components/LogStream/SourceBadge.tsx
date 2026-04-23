@@ -34,9 +34,7 @@ export function SourceBadge({ name, icon = "default", flat = false, className }:
     <span
       className={cn(
         "inline-flex min-w-0 items-center gap-2",
-        flat
-          ? ""
-          : "rounded-md bg-white/5 pl-1 pr-2 py-0.5",
+        flat ? "" : "rounded-md bg-white/5 pl-1 pr-2 py-0.5",
         className,
       )}
     >

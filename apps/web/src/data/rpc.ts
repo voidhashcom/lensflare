@@ -1,12 +1,11 @@
 import { DatasetRpcGroup, ProjectRpcGroup } from "@lensflare/contracts";
-import { resolveWebSocketOrigin } from "@lensflare/shared/browser";
 import { Context, Effect, Layer, ManagedRuntime } from "effect";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import type { RpcClientError } from "effect/unstable/rpc/RpcClientError";
 import type * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as Socket from "effect/unstable/socket/Socket";
-import { reportRpcConnectionFailure } from "./rpcConnection";
+import { resolveBackendWsUrl } from "./backendTarget";
 
 /**
  * Transport-level plumbing shared by the project + dataset RPC wrappers
@@ -20,15 +19,18 @@ import { reportRpcConnectionFailure } from "./rpcConnection";
  * WebSocket endpoint, so the client mirrors that: we merge the groups
  * purely for transport so every mutation and every subscription can share
  * one socket and one client identity.
+ *
+ * The runtime itself is owned by {@link ../data/rpcConnectionManager} —
+ * this module exposes the {@link CatalogRpcClient} Context.Service, the
+ * merged RPC group, and a `createRpcRuntime` factory that the manager
+ * calls on each (re)connect.
  */
 
 function resolveRpcUrl(): string {
-  const url = new URL("/rpc", window.location.href);
-  url.href = resolveWebSocketOrigin(url.href);
-  return url.toString();
+  return resolveBackendWsUrl("/rpc");
 }
 
-const CatalogRpcs = ProjectRpcGroup.merge(DatasetRpcGroup);
+export const CatalogRpcs = ProjectRpcGroup.merge(DatasetRpcGroup);
 
 export type CatalogRpcClientShape = RpcClient.RpcClient<
   RpcGroup.Rpcs<typeof CatalogRpcs>,
@@ -51,38 +53,10 @@ const rpcClientLayer = Layer.effect(CatalogRpcClient)(RpcClient.make(CatalogRpcs
   Layer.provide(rpcSupportLayer),
 );
 
-function createRpcRuntime() {
+export type RpcRuntime = ManagedRuntime.ManagedRuntime<CatalogRpcClient, never>;
+
+export function createRpcRuntime(): RpcRuntime {
   return ManagedRuntime.make(rpcClientLayer, {
     memoMap: Layer.makeMemoMapUnsafe(),
   });
-}
-
-export let rpcRuntime = createRpcRuntime();
-
-export async function resetRpcRuntime(): Promise<void> {
-  const previousRuntime = rpcRuntime;
-
-  rpcRuntime = createRpcRuntime();
-
-  try {
-    await previousRuntime.dispose();
-  } catch {
-    // Ignore disposal failures while forcing a fresh runtime for retry flows.
-  }
-}
-
-/**
- * Run an effect against the shared RPC client and surface the result as a
- * Promise. The caller is expected to wrap the rejection with its own
- * domain-specific error formatter (e.g. {@link formatProjectError}).
- */
-export async function runRpc<A>(
-  f: (client: CatalogRpcClientShape) => Effect.Effect<A, unknown>,
-): Promise<A> {
-  try {
-    return await rpcRuntime.runPromise(Effect.flatMap(CatalogRpcClient.asEffect(), f));
-  } catch (error) {
-    reportRpcConnectionFailure(error);
-    throw error;
-  }
 }

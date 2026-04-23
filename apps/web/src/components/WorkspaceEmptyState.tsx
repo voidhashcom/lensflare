@@ -6,8 +6,8 @@ export function WorkspaceEmptyState() {
       <Logo className="h-12 w-auto opacity-30" />
       <h1 className="text-xl font-semibold tracking-tight mt-8">Welcome to Lensflare</h1>
       <p className="max-w-md text-sm text-muted-foreground">
-        Pick a project on the left to start exploring its OpenTelemetry collections, or create a
-        new one.
+        Pick a project on the left to start exploring its OpenTelemetry collections, or create a new
+        one.
       </p>
     </div>
   );

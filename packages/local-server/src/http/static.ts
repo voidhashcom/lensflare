@@ -50,14 +50,12 @@ export async function serveStaticFile(
 
   const rootDir = resolve(staticDir);
   const sanitizedPath = normalize(requestPath).replace(/^(\.\.(\/|\\|$))+/, "");
-  const relativePath =
-    sanitizedPath === "/" ? "index.html" : sanitizedPath.replace(/^\//, "");
+  const relativePath = sanitizedPath === "/" ? "index.html" : sanitizedPath.replace(/^\//, "");
   const candidatePath = resolve(rootDir, relativePath);
   const fallbackIndexPath = join(staticDir, "index.html");
 
   // Reject path-traversal attempts: candidatePath must be inside rootDir.
-  const isInsideRoot =
-    candidatePath === rootDir || candidatePath.startsWith(`${rootDir}${sep}`);
+  const isInsideRoot = candidatePath === rootDir || candidatePath.startsWith(`${rootDir}${sep}`);
 
   if (isInsideRoot && existsSync(candidatePath)) {
     return {

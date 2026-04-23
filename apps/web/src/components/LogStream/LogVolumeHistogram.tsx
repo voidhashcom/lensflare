@@ -38,9 +38,8 @@ function HistogramBar({ bucket, yMax }: { bucket: HistogramBucket; yMax: number 
   const heightPct = clampPct((bucket.count / yMax) * 100);
   // Keep the error strip visible even when the ratio is tiny — ensures the
   // red accent line at the bottom of each bar reads at a glance.
-  const errorPct = bucket.errorCount > 0
-    ? Math.max(2, clampPct((bucket.errorCount / yMax) * 100))
-    : 0;
+  const errorPct =
+    bucket.errorCount > 0 ? Math.max(2, clampPct((bucket.errorCount / yMax) * 100)) : 0;
 
   return (
     <div className="group relative flex h-full min-w-0 flex-1 flex-col justify-end">

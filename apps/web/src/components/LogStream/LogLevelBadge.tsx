@@ -8,10 +8,7 @@ import type { LogLevel } from "./types";
  * default colour ramp so it Just Works without having to extend the
  * project's design tokens.
  */
-const LEVEL_STYLE: Record<
-  LogLevel,
-  { label: string; dot: string; text: string }
-> = {
+const LEVEL_STYLE: Record<LogLevel, { label: string; dot: string; text: string }> = {
   trace: {
     label: "TRACE",
     dot: "bg-zinc-400",

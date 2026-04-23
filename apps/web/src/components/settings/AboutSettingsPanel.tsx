@@ -2,11 +2,7 @@ import { ExternalLinkIcon, InfoIcon } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 
-import {
-  SettingsPageContainer,
-  SettingsRow,
-  SettingsSection,
-} from "./settingsLayout";
+import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
 
 const APP_NAME = "Lensflare";
 const APP_VERSION = "0.1.0";
@@ -22,19 +18,19 @@ export function AboutSettingsPanel() {
       <SettingsSection icon={<InfoIcon className="size-3" />} title="About">
         <SettingsRow
           control={
-            <code className="text-[12px] text-muted-foreground tabular-nums">
-              v{APP_VERSION}
-            </code>
+            <code className="text-[12px] text-muted-foreground tabular-nums">v{APP_VERSION}</code>
           }
           description={`The version of ${APP_NAME} currently running.`}
           title="Version"
         />
         <SettingsRow
           control={
-            <code className="text-[12px] text-muted-foreground">{navigator.userAgent
-              .match(/\(([^)]+)\)/)?.[1]
-              ?.split(";")[0]
-              ?.trim() ?? "Unknown"}</code>
+            <code className="text-[12px] text-muted-foreground">
+              {navigator.userAgent
+                .match(/\(([^)]+)\)/)?.[1]
+                ?.split(";")[0]
+                ?.trim() ?? "Unknown"}
+            </code>
           }
           description="The runtime environment this build is executing in."
           title="Platform"
@@ -60,11 +56,7 @@ export function AboutSettingsPanel() {
           control={
             <Button
               onClick={() =>
-                window.open(
-                  "https://github.com/TheSpaceCompany/lensflare",
-                  "_blank",
-                  "noopener",
-                )
+                window.open("https://github.com/TheSpaceCompany/lensflare", "_blank", "noopener")
               }
               size="xs"
               variant="outline"

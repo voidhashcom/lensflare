@@ -48,9 +48,7 @@ const TIMESTAMP_OPTIONS: ReadonlyArray<{ value: TimestampValue; label: string }>
  */
 export function GeneralSettingsPanel() {
   const [theme, setTheme] = useState<ThemeValue>(DEFAULTS.theme);
-  const [timestampFormat, setTimestampFormat] = useState<TimestampValue>(
-    DEFAULTS.timestampFormat,
-  );
+  const [timestampFormat, setTimestampFormat] = useState<TimestampValue>(DEFAULTS.timestampFormat);
   const [autoRefresh, setAutoRefresh] = useState<boolean>(DEFAULTS.autoRefresh);
   const [confirmDelete, setConfirmDelete] = useState<boolean>(DEFAULTS.confirmDelete);
   const [streamTailing, setStreamTailing] = useState<boolean>(DEFAULTS.streamTailing);

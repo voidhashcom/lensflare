@@ -38,10 +38,13 @@ export class UnsupportedContentEncoding extends Schema.TaggedErrorClass<Unsuppor
   },
 ) {}
 
-export class MalformedPayload extends Schema.TaggedErrorClass<MalformedPayload>()("MalformedPayload", {
-  provider: Schema.String,
-  message: Schema.String,
-}) {}
+export class MalformedPayload extends Schema.TaggedErrorClass<MalformedPayload>()(
+  "MalformedPayload",
+  {
+    provider: Schema.String,
+    message: Schema.String,
+  },
+) {}
 
 export class NormalizationFailure extends Schema.TaggedErrorClass<NormalizationFailure>()(
   "NormalizationFailure",

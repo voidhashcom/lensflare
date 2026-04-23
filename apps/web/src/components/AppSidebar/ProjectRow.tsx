@@ -42,8 +42,7 @@ export function ProjectRow({
   onOpenContextMenu,
 }: ProjectRowProps) {
   const Icon = getProjectIconComponent(project.icon);
-  const isProjectActive =
-    activeProjectId === project.id && activeCollectionId === undefined;
+  const isProjectActive = activeProjectId === project.id && activeCollectionId === undefined;
 
   return (
     <SidebarMenuItem>
@@ -59,9 +58,7 @@ export function ProjectRow({
         >
           <Icon className="size-3.5 shrink-0 text-muted-foreground/70" />
           <span className="flex min-w-0 flex-1 items-center gap-2">
-            <span className="truncate font-medium text-foreground/90 text-xs">
-              {project.name}
-            </span>
+            <span className="truncate font-medium text-foreground/90 text-xs">{project.name}</span>
           </span>
         </SidebarMenuButton>
 
@@ -105,12 +102,7 @@ interface DatasetSubRowProps {
   ) => void;
 }
 
-function DatasetSubRow({
-  project,
-  dataset,
-  isActive,
-  onOpenContextMenu,
-}: DatasetSubRowProps) {
+function DatasetSubRow({ project, dataset, isActive, onOpenContextMenu }: DatasetSubRowProps) {
   return (
     <SidebarMenuSubItem>
       <SidebarMenuSubButton

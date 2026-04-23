@@ -64,7 +64,7 @@ function anyValueToJson(value: unknown): unknown {
   }
   if ("bytesValue" in record || "bytes_value" in record) {
     const bytes = getRecordValue(record, "bytesValue", "bytes_value");
-    return bytes instanceof Uint8Array ? Buffer.from(bytes).toString("base64") : bytes ?? null;
+    return bytes instanceof Uint8Array ? Buffer.from(bytes).toString("base64") : (bytes ?? null);
   }
 
   const arrayValue = toObjectRecord(getRecordValue(record, "arrayValue", "array_value"));

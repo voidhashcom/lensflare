@@ -2,7 +2,6 @@
   "name": "lensflare",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@10.18.3",
   "scripts": {
     "dev": "vp run --filter @lensflare/server --filter @lensflare/web dev",
     "dev:server": "vp run --filter @lensflare/server dev",
@@ -20,12 +19,13 @@
     "@effect/language-service": "^0.85.1",
     "effect-solutions": "^0.5.2",
     "typescript": "catalog:",
-    "vitest": "catalog:",
-    "vite-plus": "catalog:"
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
   },
   "engines": {
     "node": ">=24.0.0"
   },
+  "packageManager": "pnpm@10.18.3",
   "pnpm": {
     "onlyBuiltDependencies": [
       "electron"

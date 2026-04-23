@@ -1,10 +1,16 @@
 import { NodeHttpServer } from "@effect/platform-node";
-import { DatasetRpcGroup, ProjectRpcGroup, type ServerSnapshot } from "@lensflare/contracts";
+import {
+  DatasetRpcGroup,
+  type LensflareEnvironmentDescriptor,
+  ProjectRpcGroup,
+  type ServerSnapshot,
+} from "@lensflare/contracts";
 import {
   APP_NAME,
   APP_VERSION,
   DEFAULT_HOST,
   DEFAULT_SERVER_PORT,
+  httpUrlToWsUrl,
   resolveDataPaths,
   resolveServerOrigin,
 } from "@lensflare/shared";
@@ -12,6 +18,7 @@ import { Effect, Layer, ManagedRuntime } from "effect";
 import { FetchHttpClient, HttpRouter } from "effect/unstable/http";
 import { OtlpLogger, OtlpSerialization } from "effect/unstable/observability";
 import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
+import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { createServer } from "node:http";
 import { dirname } from "node:path";
@@ -41,6 +48,13 @@ export interface StartLocalServerOptions {
   readonly staticAssetMode?: ServerSnapshot["staticAssetMode"];
   readonly sqliteDatabaseFile?: string;
   readonly duckdbDatabaseFile?: string;
+  /**
+   * When set, non-API/non-RPC static routes are redirected to this URL so
+   * desktop dev can load the Vite dev client through the backend origin
+   * without losing the dev transport guarantees. Leave unset in production
+   * and server mode.
+   */
+  readonly devClientUrl?: string;
   readonly otel?: {
     readonly enabled: boolean;
     readonly projectSlug: string;
@@ -50,6 +64,10 @@ export interface StartLocalServerOptions {
 
 export interface LocalServerHandle {
   readonly origin: string;
+  readonly httpBaseUrl: string;
+  readonly wsBaseUrl: string;
+  readonly serverInstanceId: string;
+  readonly descriptor: LensflareEnvironmentDescriptor;
   readonly stop: () => Promise<void>;
 }
 
@@ -171,6 +189,8 @@ export async function startLocalServer(
   const host = options.host ?? DEFAULT_HOST;
   const port = options.port ?? DEFAULT_SERVER_PORT;
   const origin = resolveServerOrigin({ host, serverPort: port });
+  const wsBaseUrl = httpUrlToWsUrl(origin);
+  const serverInstanceId = randomUUID();
   const startedAt = new Date();
   const otel = options.otel ?? defaultOtelConfig;
   const dataPaths = resolveDataPaths();
@@ -192,6 +212,19 @@ export async function startLocalServer(
     uptimeMs: Date.now() - startedAt.getTime(),
     staticAssetMode: options.staticAssetMode ?? (options.staticDir ? "filesystem" : "none"),
   });
+
+  const descriptor: LensflareEnvironmentDescriptor = {
+    appName: APP_NAME,
+    appVersion: APP_VERSION,
+    mode: options.mode,
+    platform: process.platform,
+    host,
+    port,
+    httpBaseUrl: origin,
+    wsBaseUrl,
+    serverInstanceId,
+    startedAt: startedAt.toISOString(),
+  };
 
   // Captured once so every consumer (the services, the eager warmup, and
   // — implicitly — the RPC handlers) shares the same Layer reference, which
@@ -241,11 +274,26 @@ export async function startLocalServer(
   const rpcGroup = ProjectRpcGroup.merge(DatasetRpcGroup);
   const rpcHandlersLayer = Layer.merge(projectRpcLayer, datasetRpcLayer);
 
+  // Desktop dev serves the renderer from Vite (`options.devClientUrl`) while
+  // HTTP + RPC stay on this origin, so `fetch` calls from the renderer are
+  // cross-origin and need CORS. Packaged desktop and cloud server mode
+  // don't set `devClientUrl`, and either serve the renderer same-origin
+  // (desktop) or handle CORS at the deployment layer (cloud), so we skip
+  // the middleware in those cases.
+  const corsLayer = options.devClientUrl
+    ? HttpRouter.cors({
+        allowedOrigins: [options.devClientUrl],
+        credentials: true,
+      })
+    : Layer.empty;
+
   const routesLayer = Layer.mergeAll(
     makeHttpRoutesLayer({
       origin,
       snapshot,
+      descriptor,
       staticDir: options.staticDir,
+      devClientUrl: options.devClientUrl,
       mode: options.mode,
       sqliteDatabaseFile,
       duckdbDatabaseFile,
@@ -256,6 +304,7 @@ export async function startLocalServer(
       path: "/rpc",
       protocol: "websocket",
     }).pipe(Layer.provide(rpcHandlersLayer)),
+    corsLayer,
   );
 
   const platformLayer = Layer.mergeAll(
@@ -312,6 +361,10 @@ export async function startLocalServer(
 
   return {
     origin,
+    httpBaseUrl: origin,
+    wsBaseUrl,
+    serverInstanceId,
+    descriptor,
     stop() {
       return runtime.dispose();
     },

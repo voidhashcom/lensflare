@@ -102,14 +102,16 @@ async function queryDuckDb(
   try {
     const reader = await connection.runAndReadAll(sql);
     await reader.readAll();
-    return reader.getRowObjectsJson().map((row) =>
-      Object.fromEntries(
-        Object.entries(row).map(([key, value]) => [
-          key,
-          typeof value === "string" && /^-?\d+$/.test(value) ? Number(value) : value,
-        ]),
-      ),
-    );
+    return reader
+      .getRowObjectsJson()
+      .map((row) =>
+        Object.fromEntries(
+          Object.entries(row).map(([key, value]) => [
+            key,
+            typeof value === "string" && /^-?\d+$/.test(value) ? Number(value) : value,
+          ]),
+        ),
+      );
   } finally {
     connection.closeSync();
     instance.closeSync();
@@ -134,48 +136,45 @@ describe("HTTP ingest", () => {
     });
 
     try {
-      const response = await fetch(
-        `${server.origin}/ingest/otlp/v1/logs/lensflare/traces`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({
-            resourceLogs: [
-              {
-                resource: {
-                  attributes: [
-                    {
-                      key: "service.name",
-                      value: { stringValue: "api" },
-                    },
-                  ],
-                },
-                scopeLogs: [
+      const response = await fetch(`${server.origin}/ingest/otlp/v1/logs/lensflare/traces`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          resourceLogs: [
+            {
+              resource: {
+                attributes: [
                   {
-                    scope: { name: "tests", version: "1.0.0" },
-                    logRecords: [
-                      {
-                        timeUnixNano: "1716201600000000000",
-                        severityNumber: 9,
-                        severityText: "INFO",
-                        body: { stringValue: "hello from otlp json" },
-                        attributes: [
-                          {
-                            key: "env",
-                            value: { stringValue: "dev" },
-                          },
-                        ],
-                      },
-                    ],
+                    key: "service.name",
+                    value: { stringValue: "api" },
                   },
                 ],
               },
-            ],
-          }),
-        },
-      );
+              scopeLogs: [
+                {
+                  scope: { name: "tests", version: "1.0.0" },
+                  logRecords: [
+                    {
+                      timeUnixNano: "1716201600000000000",
+                      severityNumber: 9,
+                      severityText: "INFO",
+                      body: { stringValue: "hello from otlp json" },
+                      attributes: [
+                        {
+                          key: "env",
+                          value: { stringValue: "dev" },
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        }),
+      });
 
       expect(response.status).toBe(200);
       expect(response.headers.get("content-type")).toContain("application/json");
@@ -220,10 +219,7 @@ describe("HTTP ingest", () => {
         }),
       ]);
     } finally {
-      await Promise.all([
-        server.stop(),
-        rm(directory, { recursive: true, force: true }),
-      ]);
+      await Promise.all([server.stop(), rm(directory, { recursive: true, force: true })]);
     }
   });
 
@@ -274,17 +270,14 @@ describe("HTTP ingest", () => {
         }),
       );
 
-      const response = await fetch(
-        `${server.origin}/ingest/otlp/v1/logs/lensflare/traces`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/x-protobuf",
-            "content-encoding": "gzip",
-          },
-          body: payload,
+      const response = await fetch(`${server.origin}/ingest/otlp/v1/logs/lensflare/traces`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-protobuf",
+          "content-encoding": "gzip",
         },
-      );
+        body: payload,
+      });
 
       expect(response.status).toBe(200);
       expect(response.headers.get("content-type")).toContain("application/x-protobuf");
@@ -300,10 +293,7 @@ describe("HTTP ingest", () => {
         },
       ]);
     } finally {
-      await Promise.all([
-        server.stop(),
-        rm(directory, { recursive: true, force: true }),
-      ]);
+      await Promise.all([server.stop(), rm(directory, { recursive: true, force: true })]);
     }
   });
 
@@ -327,42 +317,39 @@ describe("HTTP ingest", () => {
     });
 
     try {
-      const selfResponse = await fetch(
-        `${server.origin}/ingest/otlp/v1/logs/lensflare/dev`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({
-            resourceLogs: [
-              {
-                resource: {
-                  attributes: [
-                    {
-                      key: "service.name",
-                      value: { stringValue: "lensflare-server" },
-                    },
-                  ],
-                },
-                scopeLogs: [
+      const selfResponse = await fetch(`${server.origin}/ingest/otlp/v1/logs/lensflare/dev`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          resourceLogs: [
+            {
+              resource: {
+                attributes: [
                   {
-                    scope: { name: "tests", version: "1.0.0" },
-                    logRecords: [
-                      {
-                        timeUnixNano: "1716201600000000000",
-                        severityNumber: 9,
-                        severityText: "INFO",
-                        body: { stringValue: "loop me back" },
-                      },
-                    ],
+                    key: "service.name",
+                    value: { stringValue: "lensflare-server" },
                   },
                 ],
               },
-            ],
-          }),
-        },
-      );
+              scopeLogs: [
+                {
+                  scope: { name: "tests", version: "1.0.0" },
+                  logRecords: [
+                    {
+                      timeUnixNano: "1716201600000000000",
+                      severityNumber: 9,
+                      severityText: "INFO",
+                      body: { stringValue: "loop me back" },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        }),
+      });
 
       expect(selfResponse.status).toBe(200);
       expect(await selfResponse.json()).toEqual({
@@ -373,42 +360,39 @@ describe("HTTP ingest", () => {
         },
       });
 
-      const normalResponse = await fetch(
-        `${server.origin}/ingest/otlp/v1/logs/lensflare/dev`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({
-            resourceLogs: [
-              {
-                resource: {
-                  attributes: [
-                    {
-                      key: "service.name",
-                      value: { stringValue: "api" },
-                    },
-                  ],
-                },
-                scopeLogs: [
+      const normalResponse = await fetch(`${server.origin}/ingest/otlp/v1/logs/lensflare/dev`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          resourceLogs: [
+            {
+              resource: {
+                attributes: [
                   {
-                    scope: { name: "tests", version: "1.0.0" },
-                    logRecords: [
-                      {
-                        timeUnixNano: "1716201600000000000",
-                        severityNumber: 9,
-                        severityText: "INFO",
-                        body: { stringValue: "hello from dev" },
-                      },
-                    ],
+                    key: "service.name",
+                    value: { stringValue: "api" },
                   },
                 ],
               },
-            ],
-          }),
-        },
-      );
+              scopeLogs: [
+                {
+                  scope: { name: "tests", version: "1.0.0" },
+                  logRecords: [
+                    {
+                      timeUnixNano: "1716201600000000000",
+                      severityNumber: 9,
+                      severityText: "INFO",
+                      body: { stringValue: "hello from dev" },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        }),
+      });
 
       expect(normalResponse.status).toBe(200);
       expect(await normalResponse.json()).toEqual({});
@@ -439,10 +423,7 @@ describe("HTTP ingest", () => {
         },
       ]);
     } finally {
-      await Promise.all([
-        server.stop(),
-        rm(directory, { recursive: true, force: true }),
-      ]);
+      await Promise.all([server.stop(), rm(directory, { recursive: true, force: true })]);
     }
   });
 
@@ -523,10 +504,7 @@ describe("HTTP ingest", () => {
       });
     } finally {
       console.error = originalError;
-      await Promise.all([
-        server.stop(),
-        rm(directory, { recursive: true, force: true }),
-      ]);
+      await Promise.all([server.stop(), rm(directory, { recursive: true, force: true })]);
     }
   });
 
@@ -570,13 +548,17 @@ describe("HTTP ingest", () => {
 
       expect(records).toEqual(
         expect.arrayContaining([
-        expect.objectContaining({
-          service_name: "lensflare-server",
-          dataset_slug: "runtime-logs",
-        }),
+          expect.objectContaining({
+            service_name: "lensflare-server",
+            dataset_slug: "runtime-logs",
+          }),
         ]),
       );
-      expect(records.some((record) => String(record.body_text ?? "").includes("lensflare server listening"))).toBe(true);
+      expect(
+        records.some((record) =>
+          String(record.body_text ?? "").includes("lensflare server listening"),
+        ),
+      ).toBe(true);
       expect(
         records.some((record) => {
           if (record.body_text !== "Sent HTTP response") {
@@ -592,10 +574,7 @@ describe("HTTP ingest", () => {
         }),
       ).toBe(true);
     } finally {
-      await Promise.all([
-        server.stop(),
-        rm(directory, { recursive: true, force: true }),
-      ]);
+      await Promise.all([server.stop(), rm(directory, { recursive: true, force: true })]);
     }
   });
 });

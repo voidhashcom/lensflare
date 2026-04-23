@@ -45,12 +45,12 @@ catalog:
   vite-plus: latest
 overrides:
   "@effect/platform-node-shared": "catalog:"
-  vite: 'catalog:'
-  vitest: 'catalog:'
+  vite: "catalog:"
+  vitest: "catalog:"
 peerDependencyRules:
   allowAny:
     - vite
     - vitest
   allowedVersions:
-    vite: '*'
-    vitest: '*'
+    vite: "*"
+    vitest: "*"

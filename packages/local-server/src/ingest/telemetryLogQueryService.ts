@@ -1,4 +1,8 @@
-import { DatasetNotFound, type TelemetryLogEntry, type TelemetryLogLevel } from "@lensflare/contracts";
+import {
+  DatasetNotFound,
+  type TelemetryLogEntry,
+  type TelemetryLogLevel,
+} from "@lensflare/contracts";
 import { Context, Effect, Layer } from "effect";
 import { SqlError } from "effect/unstable/sql";
 import { DatasetsRepository } from "../repositories/datasetsRepository.ts";

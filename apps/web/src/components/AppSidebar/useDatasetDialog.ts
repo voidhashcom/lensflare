@@ -120,8 +120,7 @@ export function useDatasetDialog(): UseDatasetDialogResult {
       } catch (submitError) {
         setState((current) => ({
           ...current,
-          error:
-            submitError instanceof Error ? submitError.message : "Failed to save dataset.",
+          error: submitError instanceof Error ? submitError.message : "Failed to save dataset.",
           submitting: false,
         }));
       }

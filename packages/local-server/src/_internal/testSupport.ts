@@ -18,9 +18,7 @@ export function withTempDirectory<A, E, R, LE>(
 ): Effect.Effect<A, E | LE> {
   return Effect.acquireUseRelease(
     Effect.tryPromise(() => mkdtemp(join(tmpdir(), prefix))).pipe(Effect.orDie),
-    (directory) =>
-      program.pipe(Effect.provide(buildLayer(join(directory, "catalog.sqlite")))),
-    (directory) =>
-      Effect.promise(() => rm(directory, { recursive: true, force: true })),
+    (directory) => program.pipe(Effect.provide(buildLayer(join(directory, "catalog.sqlite")))),
+    (directory) => Effect.promise(() => rm(directory, { recursive: true, force: true })),
   );
 }
