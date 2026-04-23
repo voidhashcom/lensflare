@@ -14,7 +14,7 @@ import {
   UnsupportedContentType,
 } from "../../errors.ts";
 import { LogIngestService } from "../../logIngestService.ts";
-import { OtlpLogsDecoder } from "./decoder.ts";
+import { OtlpLogsDecoder, OtlpTracesDecoder } from "./decoder.ts";
 import { otlpErrorResponseFromMapping, otlpSuccessResponse } from "./responses.ts";
 
 /**
@@ -42,7 +42,8 @@ export const otlpRouteLayer = Layer.effectDiscard(
   Effect.gen(function* () {
     const router = yield* HttpRouter.HttpRouter;
     const ingest = yield* LogIngestService;
-    const decoder = yield* OtlpLogsDecoder;
+    const logsDecoder = yield* OtlpLogsDecoder;
+    const tracesDecoder = yield* OtlpTracesDecoder;
 
     yield* router.add("POST", "/ingest/otlp/v1/logs/:projectSlug/:datasetSlug", (request) =>
       Effect.gen(function* () {
@@ -78,7 +79,7 @@ export const otlpRouteLayer = Layer.effectDiscard(
                 message: error instanceof Error ? error.message : String(error),
               }),
           });
-          const batch = yield* decoder.decode(format, body);
+          const batch = yield* logsDecoder.decode(format, body);
           const result = yield* ingest.ingest({
             projectSlug,
             datasetSlug,
@@ -97,6 +98,75 @@ export const otlpRouteLayer = Layer.effectDiscard(
             const mapping = resolveIngestErrorStatus(error);
             logIngestFailure({
               provider: "otlp_http_logs",
+              route: request.originalUrl,
+              contentType: request.headers["content-type"] ?? null,
+              contentEncoding: request.headers["content-encoding"] ?? null,
+              projectSlug,
+              datasetSlug,
+              requestBytes: rawBody.byteLength,
+              errorCategory: mapping.tag,
+              errorMessage: error instanceof Error ? error.message : String(error),
+            });
+            return Effect.succeed(otlpErrorResponseFromMapping(format, mapping));
+          }),
+        );
+      }),
+    );
+
+    yield* router.add("POST", "/ingest/otlp/v1/traces/:projectSlug/:datasetSlug", (request) =>
+      Effect.gen(function* () {
+        const params = yield* HttpRouter.params;
+        const projectSlug = params.projectSlug ?? "";
+        const datasetSlug = params.datasetSlug ?? "";
+        const contentType = normalizeContentType(request.headers["content-type"]);
+        const contentEncoding = normalizeContentEncoding(request.headers["content-encoding"]);
+        const rawBody = new Uint8Array(yield* request.arrayBuffer);
+        const format = contentType === "application/x-protobuf" ? "protobuf" : "json";
+
+        return yield* Effect.gen(function* () {
+          if (contentType !== "application/x-protobuf" && contentType !== "application/json") {
+            return yield* new UnsupportedContentType({
+              provider: "otlp_http_traces",
+              contentType,
+            });
+          }
+          if (contentEncoding !== null && contentEncoding !== "gzip") {
+            return yield* new UnsupportedContentEncoding({
+              provider: "otlp_http_traces",
+              contentEncoding,
+            });
+          }
+          const body = yield* Effect.try({
+            try: () =>
+              contentEncoding === "gzip"
+                ? new Uint8Array(gunzipSync(Buffer.from(rawBody)))
+                : rawBody,
+            catch: (error) =>
+              new MalformedPayload({
+                provider: "otlp_http_traces",
+                message: error instanceof Error ? error.message : String(error),
+              }),
+          });
+          const batch = yield* tracesDecoder.decode(format, body);
+          const result = yield* ingest.ingest({
+            projectSlug,
+            datasetSlug,
+            batch,
+            requestContentType: contentType,
+            requestContentEncoding: contentEncoding,
+            requestBytes: rawBody.byteLength,
+            clientAddr: getRemoteAddress(request),
+          });
+          return otlpSuccessResponse(format, {
+            signal: "traces",
+            rejectedRecords: result.rejectedRecords,
+            warnings: result.warnings,
+          });
+        }).pipe(
+          Effect.catch((error) => {
+            const mapping = resolveIngestErrorStatus(error);
+            logIngestFailure({
+              provider: "otlp_http_traces",
               route: request.originalUrl,
               contentType: request.headers["content-type"] ?? null,
               contentEncoding: request.headers["content-encoding"] ?? null,

@@ -62,6 +62,8 @@ function toTelemetryLogEntry(request: IngestWriteRequest, written: WrittenLogRec
     sourceName: record.serviceName ?? request.datasetSlug ?? request.providerKind,
     level: toLevel(record),
     message: record.bodyText || record.bodyJson || record.rawRecordJson,
+    ...(record.traceId ? { traceId: record.traceId } : {}),
+    ...(record.spanId ? { spanId: record.spanId } : {}),
   };
 }
 

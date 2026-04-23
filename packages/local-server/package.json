@@ -13,9 +13,17 @@
   },
   "dependencies": {
     "@duckdb/node-api": "catalog:",
+    "@effect/opentelemetry": "catalog:",
     "@effect/platform-node": "catalog:",
     "@lensflare/contracts": "workspace:*",
     "@lensflare/shared": "workspace:*",
+    "@opentelemetry/exporter-logs-otlp-http": "^0.215.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.215.0",
+    "@opentelemetry/resources": "^2.7.0",
+    "@opentelemetry/sdk-logs": "^0.215.0",
+    "@opentelemetry/sdk-trace-base": "^2.7.0",
+    "@opentelemetry/sdk-trace-node": "^2.7.0",
+    "@opentelemetry/sdk-trace-web": "^2.7.0",
     "effect": "catalog:",
     "protobufjs": "catalog:"
   },

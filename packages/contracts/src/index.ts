@@ -299,11 +299,41 @@ export const TelemetryLogEntrySchema = Schema.Struct({
   sourceName: Schema.String,
   level: TelemetryLogLevelSchema,
   message: Schema.String,
+  traceId: Schema.optional(Schema.String),
+  spanId: Schema.optional(Schema.String),
 });
 
 export type TelemetryLogEntry = Schema.Schema.Type<typeof TelemetryLogEntrySchema>;
 
 export const TelemetryLogEntriesSchema = Schema.Array(TelemetryLogEntrySchema);
+
+export const TelemetryTraceSpanStatusSchema = Schema.Literals(["ok", "error", "unset"]);
+
+export type TelemetryTraceSpanStatus = Schema.Schema.Type<typeof TelemetryTraceSpanStatusSchema>;
+
+export const TelemetryTraceSpanSchema = Schema.Struct({
+  id: Schema.String,
+  parentSpanId: Schema.NullOr(Schema.String),
+  name: Schema.String,
+  serviceName: Schema.String,
+  startOffsetUs: Schema.Number,
+  durationUs: Schema.Number,
+  status: TelemetryTraceSpanStatusSchema,
+});
+
+export type TelemetryTraceSpan = Schema.Schema.Type<typeof TelemetryTraceSpanSchema>;
+
+export const TelemetryTraceContextSchema = Schema.Struct({
+  traceId: Schema.String,
+  startTime: Schema.String,
+  totalDurationUs: Schema.Number,
+  spans: Schema.Array(TelemetryTraceSpanSchema),
+  currentSpanId: Schema.String,
+});
+
+export type TelemetryTraceContext = Schema.Schema.Type<typeof TelemetryTraceContextSchema>;
+
+export const NullableTelemetryTraceContextSchema = Schema.NullOr(TelemetryTraceContextSchema);
 
 export const TelemetryLogPageInfoSchema = Schema.Struct({
   hasPreviousPage: Schema.Boolean,
@@ -333,6 +363,9 @@ const decodeDatasetChangeEventSchema = Schema.decodeUnknownSync(DatasetChangeEve
 const decodeTelemetryLogEntrySchema = Schema.decodeUnknownSync(TelemetryLogEntrySchema);
 const decodeTelemetryLogEntriesSchema = Schema.decodeUnknownSync(TelemetryLogEntriesSchema);
 const decodeTelemetryLogPageSchema = Schema.decodeUnknownSync(TelemetryLogPageSchema);
+const decodeNullableTelemetryTraceContextSchema = Schema.decodeUnknownSync(
+  NullableTelemetryTraceContextSchema,
+);
 
 export function decodeProjectEntity(input: unknown): ProjectEntity {
   return decodeProjectEntitySchema(input);
@@ -380,6 +413,10 @@ export function decodeTelemetryLogEntries(input: unknown): Array<TelemetryLogEnt
 
 export function decodeTelemetryLogPage(input: unknown): TelemetryLogPage {
   return decodeTelemetryLogPageSchema(input);
+}
+
+export function decodeTelemetryTraceContext(input: unknown): TelemetryTraceContext | null {
+  return decodeNullableTelemetryTraceContextSchema(input);
 }
 
 class ListProjectEntities extends Rpc.make("ListProjectEntities", {

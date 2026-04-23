@@ -18,6 +18,8 @@ const LOG_DETAIL_FIELDS: ReadonlyArray<string> = [
   "source.name",
   "source.icon",
   "message",
+  "trace.id",
+  "span.id",
 ];
 
 export interface LogDetailEntry {
@@ -48,6 +50,10 @@ function getLogDetailValue(log: LogEntry, field: string): unknown {
       return log.sourceIcon;
     case "message":
       return log.message;
+    case "trace.id":
+      return log.traceId ?? null;
+    case "span.id":
+      return log.spanId ?? null;
     default:
       return null;
   }
@@ -68,6 +74,8 @@ export function buildLogRawData(log: LogEntry): unknown {
       icon: log.sourceIcon,
     },
     message: log.message,
+    traceId: log.traceId ?? null,
+    spanId: log.spanId ?? null,
   };
 }
 

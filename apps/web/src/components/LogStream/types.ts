@@ -1,7 +1,6 @@
 /**
  * Shared types for the log stream UI. Kept lightweight and UI-only so the
- * view can be driven by mock data while the ingest/query backend is still
- * being wired up.
+ * view can adapt backend telemetry payloads into browser-native Date values.
  */
 
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal";
