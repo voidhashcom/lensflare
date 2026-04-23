@@ -1,6 +1,6 @@
 import { useParams } from "@tanstack/react-router";
 import { GitBranchIcon, XIcon } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, type MouseEvent } from "react";
 
 import { LogoSymbol } from "~/components/Logo";
 import { cn } from "~/lib/utils";
@@ -77,10 +77,24 @@ interface DatasetTabButtonProps {
 }
 
 function DatasetTabButton({ active, tab, onSelect, onClose }: DatasetTabButtonProps) {
+  const handleSelectMouseDown = (event: MouseEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) {
+      return;
+    }
+    event.preventDefault();
+    onSelect(tab.id);
+  };
+
+  const handleSelectClick = (event: MouseEvent<HTMLButtonElement>) => {
+    if (event.detail === 0) {
+      onSelect(tab.id);
+    }
+  };
+
   return (
     <div
       className={cn(
-        "group -mb-px relative inline-flex min-w-24 max-w-56 items-center border-b-2 text-sm transition-colors",
+        "group -mb-px relative inline-flex min-w-24 max-w-56 items-center border-b-2 text-sm",
         active
           ? "border-foreground text-foreground"
           : "border-transparent text-muted-foreground hover:text-foreground",
@@ -90,7 +104,8 @@ function DatasetTabButton({ active, tab, onSelect, onClose }: DatasetTabButtonPr
       <button
         aria-selected={active}
         className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 px-4 py-3 text-left outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        onClick={() => onSelect(tab.id)}
+        onClick={handleSelectClick}
+        onMouseDown={handleSelectMouseDown}
         role="tab"
         type="button"
       >
@@ -100,7 +115,7 @@ function DatasetTabButton({ active, tab, onSelect, onClose }: DatasetTabButtonPr
       {tab.closable ? (
         <button
           aria-label={`Close ${tab.title}`}
-          className="mr-2 inline-flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-70 transition hover:bg-accent hover:text-foreground group-hover:opacity-100"
+          className="mr-2 inline-flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-70 hover:bg-accent hover:text-foreground group-hover:opacity-100"
           onClick={() => onClose(tab.id)}
           type="button"
         >

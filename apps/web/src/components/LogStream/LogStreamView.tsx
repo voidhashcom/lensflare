@@ -4,14 +4,22 @@ import {
   type TelemetryLogEntry,
   type TelemetryLogPageInfo,
 } from "@lensflare/contracts";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Activity,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 
 import { Sheet, SheetPopup } from "~/components/ui/sheet";
 import { listDatasetLogs, subscribeDatasetLogEntries } from "~/data/logApi";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
 
 import { DatasetTabsTitlebar } from "./DatasetTabsTitlebar";
-import { getDatasetTabState } from "./datasetTabs";
+import { getDatasetTabState, type DatasetTab } from "./datasetTabs";
 import { useDatasetTabsSnapshot } from "./datasetTabsStore";
 import { LogDetailsPanel } from "./LogDetailsPanel";
 import { LogStreamHeader } from "./LogStreamHeader";
@@ -73,10 +81,6 @@ export function LogStreamView({
   const tabState = useMemo(
     () => getDatasetTabState(tabsByDataset, datasetId),
     [datasetId, tabsByDataset],
-  );
-  const activeTab = useMemo(
-    () => tabState.tabs.find((tab) => tab.id === tabState.activeTabId) ?? tabState.tabs[0],
-    [tabState],
   );
 
   // Derive the selected log from the current list so it stays in sync as new
@@ -211,33 +215,6 @@ export function LogStreamView({
     table.scrollToBottom();
   };
 
-  // The inline details column is only rendered when a log is selected *and*
-  // the viewport is wide enough. Narrow viewports fall back to a sheet that
-  // overlays the table instead of squeezing it.
-  const showInlineDetails = selectedLog !== null && !shouldUseDetailsSheet;
-  const showSheetDetails = selectedLog !== null && shouldUseDetailsSheet;
-
-  if (activeTab?.kind === "trace") {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col bg-background/40">
-        {!hasDesktopTitleTabs ? (
-          <div className="shrink-0 border-b border-border/70 bg-background">
-            <DatasetTabsTitlebar />
-          </div>
-        ) : null}
-        <TraceExplorer
-          className="min-h-0 flex-1"
-          datasetId={datasetId}
-          projectId={projectId}
-          traceId={activeTab.traceId}
-          {...(activeTab.initialSpanId !== undefined
-            ? { initialSpanId: activeTab.initialSpanId }
-            : {})}
-        />
-      </div>
-    );
-  }
-
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-background/40">
       {!hasDesktopTitleTabs ? (
@@ -245,6 +222,99 @@ export function LogStreamView({
           <DatasetTabsTitlebar />
         </div>
       ) : null}
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+        {tabState.tabs.map((tab) =>
+          tab.kind === "trace" ? (
+            <TraceTabPanel
+              active={tab.id === tabState.activeTabId}
+              datasetId={datasetId}
+              key={tab.id}
+              projectId={projectId}
+              tab={tab}
+            />
+          ) : (
+            <LiveTabPanel
+              active={tab.id === tabState.activeTabId}
+              closeDetails={closeDetails}
+              datasetIcon={datasetIcon}
+              datasetId={datasetId}
+              datasetName={datasetName}
+              dateRange={dateRange}
+              errorMessage={errorMessage}
+              handleLoadOlder={handleLoadOlder}
+              handleScrollClick={handleScrollClick}
+              isLoading={isLoading}
+              isLoadingOlder={isLoadingOlder}
+              key={tab.id}
+              logs={logs}
+              pageInfo={pageInfo}
+              projectId={projectId}
+              selectedLog={selectedLog}
+              selectedLogId={selectedLogId}
+              setFilter={setFilter}
+              setSelectedLogId={setSelectedLogId}
+              shouldUseDetailsSheet={shouldUseDetailsSheet}
+              tableRef={tableRef}
+            />
+          ),
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface LiveTabPanelProps {
+  active: boolean;
+  closeDetails: () => void;
+  datasetIcon: SourceIconKind;
+  datasetId: string;
+  datasetName: string;
+  dateRange: DateRangePreset;
+  errorMessage: string | null;
+  handleLoadOlder: () => void;
+  handleScrollClick: () => void;
+  isLoading: boolean;
+  isLoadingOlder: boolean;
+  logs: ReadonlyArray<LogEntry>;
+  pageInfo: TelemetryLogPageInfo | null;
+  projectId: string;
+  selectedLog: LogEntry | null;
+  selectedLogId: string | null;
+  setFilter: (filter: FilterNode | null) => void;
+  setSelectedLogId: (logId: string | null) => void;
+  shouldUseDetailsSheet: boolean;
+  tableRef: RefObject<LogTableHandle | null>;
+}
+
+function LiveTabPanel({
+  active,
+  closeDetails,
+  datasetIcon,
+  datasetId,
+  datasetName,
+  dateRange,
+  errorMessage,
+  handleLoadOlder,
+  handleScrollClick,
+  isLoading,
+  isLoadingOlder,
+  logs,
+  pageInfo,
+  projectId,
+  selectedLog,
+  selectedLogId,
+  setFilter,
+  setSelectedLogId,
+  shouldUseDetailsSheet,
+  tableRef,
+}: LiveTabPanelProps) {
+  // Keep the live tab mounted so table + details state survive tab switches,
+  // but only surface the mobile sheet while this panel is active.
+  const showInlineDetails = selectedLog !== null && !shouldUseDetailsSheet;
+  const showSheetDetails = active && selectedLog !== null && shouldUseDetailsSheet;
+
+  return (
+    <Activity mode={active ? "visible" : "hidden"} name={`dataset-tab:${datasetId}:live`}>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <div className="flex min-h-0 flex-1">
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -310,7 +380,32 @@ export function LogStreamView({
           </Sheet>
         </div>
       </div>
-    </div>
+    </Activity>
+  );
+}
+
+interface TraceTabPanelProps {
+  active: boolean;
+  datasetId: string;
+  projectId: string;
+  tab: Extract<DatasetTab, { kind: "trace" }>;
+}
+
+function TraceTabPanel({ active, datasetId, projectId, tab }: TraceTabPanelProps) {
+  return (
+    <Activity mode={active ? "visible" : "hidden"} name={`dataset-tab:${datasetId}:${tab.id}`}>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <TraceExplorer
+          className="min-h-0 flex-1"
+          datasetId={datasetId}
+          projectId={projectId}
+          traceId={tab.traceId}
+          {...(tab.initialSpanId !== undefined
+            ? { initialSpanId: tab.initialSpanId }
+            : {})}
+        />
+      </div>
+    </Activity>
   );
 }
 
