@@ -5,6 +5,7 @@ import {
   DEFAULT_PROJECT_ICON,
   decodeLensflareEnvironmentDescriptor,
   ProjectRpcGroup,
+  TelemetryLogRpcGroup,
 } from "@lensflare/contracts";
 import { Duration, Effect, Fiber, Layer, ManagedRuntime, Stream } from "effect";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
@@ -15,7 +16,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startLocalServer } from "./index.ts";
 
-const CatalogRpcs = ProjectRpcGroup.merge(DatasetRpcGroup);
+const CatalogRpcs = ProjectRpcGroup.merge(DatasetRpcGroup).merge(TelemetryLogRpcGroup);
 const otelDisabled = {
   enabled: false,
   projectName: "Disabled",
@@ -202,6 +203,114 @@ describe("startLocalServer", () => {
         expect.stringMatching(/^upsert:/),
         expect.stringMatching(/^delete:/),
       ]);
+    } finally {
+      await Promise.all([
+        clientRuntime.dispose(),
+        server.stop(),
+        rm(directory, { recursive: true, force: true }),
+      ]);
+    }
+  });
+
+  it("streams ingested dataset logs over Effect RPC websockets", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "lensflare-local-server-"));
+    const port = await getAvailablePort();
+
+    const server = await startLocalServer({
+      mode: "server",
+      host: "127.0.0.1",
+      port,
+      sqliteDatabaseFile: join(directory, "lensflare.sqlite"),
+      duckdbDatabaseFile: join(directory, "lensflare.duckdb"),
+      otel: otelDisabled,
+    });
+
+    const clientLayer = RpcClient.layerProtocolSocket().pipe(
+      Layer.provide(RpcSerialization.layerJson),
+      Layer.provide(NodeSocket.layerWebSocket(`${server.origin}/rpc`)),
+    );
+    const clientRuntime = ManagedRuntime.make(clientLayer, {
+      memoMap: Layer.makeMemoMapUnsafe(),
+    });
+
+    try {
+      const event = await clientRuntime.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const client = yield* RpcClient.make(CatalogRpcs);
+            const project = yield* client.CreateProject({ name: "Lensflare" });
+            const dataset = yield* client.CreateDataset({
+              projectId: project.id,
+              input: { name: "traces" },
+            });
+            const events: Array<unknown> = [];
+
+            const fiber = yield* client
+              .SubscribeTelemetryLogEvents({
+                projectId: project.id,
+                datasetId: dataset.id,
+              })
+              .pipe(
+                Stream.take(1),
+                Stream.runForEach((event) =>
+                  Effect.sync(() => {
+                    events.push(event);
+                  }),
+                ),
+                Effect.forkChild,
+              );
+
+            yield* Effect.sleep(Duration.millis(100));
+
+            const response = yield* Effect.tryPromise(() =>
+              fetch(`${server.origin}/ingest/otlp/v1/logs/lensflare/traces`, {
+                method: "POST",
+                headers: {
+                  "content-type": "application/json",
+                },
+                body: JSON.stringify({
+                  resourceLogs: [
+                    {
+                      resource: {
+                        attributes: [
+                          {
+                            key: "service.name",
+                            value: { stringValue: "api" },
+                          },
+                        ],
+                      },
+                      scopeLogs: [
+                        {
+                          scope: { name: "tests", version: "1.0.0" },
+                          logRecords: [
+                            {
+                              timeUnixNano: "1716201600000000000",
+                              severityNumber: 9,
+                              severityText: "INFO",
+                              body: { stringValue: "hello realtime" },
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                }),
+              }),
+            );
+            expect(response.status).toBe(200);
+
+            yield* Fiber.join(fiber);
+            return events[0];
+          }),
+        ),
+      );
+
+      expect(event).toMatchObject({
+        sourceName: "api",
+        level: "info",
+        message: "hello realtime",
+      });
+      expect(event).toHaveProperty("id", expect.any(String));
     } finally {
       await Promise.all([
         clientRuntime.dispose(),

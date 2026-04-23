@@ -4,6 +4,7 @@ import {
   type LensflareEnvironmentDescriptor,
   ProjectRpcGroup,
   type ServerSnapshot,
+  TelemetryLogRpcGroup,
 } from "@lensflare/contracts";
 import {
   APP_NAME,
@@ -26,6 +27,7 @@ import { makeSqliteDatabaseLayer } from "./db/database.ts";
 import { AxiomNativeDecoder } from "./ingest/providers/axiom/decoder.ts";
 import { axiomRouteLayer } from "./ingest/providers/axiom/route.ts";
 import { LogIngestService } from "./ingest/logIngestService.ts";
+import { TelemetryLogEventService } from "./ingest/telemetryLogEventService.ts";
 import { OtlpLogsDecoder } from "./ingest/providers/otlp/decoder.ts";
 import { otlpRouteLayer } from "./ingest/providers/otlp/route.ts";
 import { TelemetryLogQueryService } from "./ingest/telemetryLogQueryService.ts";
@@ -36,6 +38,7 @@ import { DatasetsRepository } from "./repositories/datasetsRepository.ts";
 import { ProjectsRepository } from "./repositories/projectsRepository.ts";
 import { datasetRpcLayer } from "./rpc/datasetRpc.ts";
 import { projectRpcLayer } from "./rpc/projectRpc.ts";
+import { telemetryLogRpcLayer } from "./rpc/telemetryLogRpc.ts";
 import { makeHttpRoutesLayer } from "./http/routes.ts";
 import { DatasetService } from "./services/datasetService.ts";
 import { ProjectService } from "./services/projectService.ts";
@@ -246,7 +249,9 @@ export async function startLocalServer(
   // `LogIngestService` is provider-agnostic — its only deps are the catalog
   // resolver and the telemetry repository. Decoders move down into the
   // per-provider route layers where they're actually consumed.
+  const telemetryLogEventLayer = TelemetryLogEventService.layer;
   const ingestServicesLayer = LogIngestService.layer.pipe(
+    Layer.provide(telemetryLogEventLayer),
     Layer.provide(TelemetryLogsRepository.layer),
     Layer.provide(IngestTargetResolver.layer),
     Layer.provide(ProjectsRepository.layer),
@@ -271,8 +276,8 @@ export async function startLocalServer(
     Layer.provide(AxiomNativeDecoder.layer),
   );
 
-  const rpcGroup = ProjectRpcGroup.merge(DatasetRpcGroup);
-  const rpcHandlersLayer = Layer.merge(projectRpcLayer, datasetRpcLayer);
+  const rpcGroup = ProjectRpcGroup.merge(DatasetRpcGroup).merge(TelemetryLogRpcGroup);
+  const rpcHandlersLayer = Layer.mergeAll(projectRpcLayer, datasetRpcLayer, telemetryLogRpcLayer);
 
   // Desktop dev serves the renderer from Vite (`options.devClientUrl`) while
   // HTTP + RPC stay on this origin, so `fetch` calls from the renderer are
@@ -317,6 +322,7 @@ export async function startLocalServer(
     catalogServicesLayer,
     ingestServicesLayer,
     telemetryQueryLayer,
+    telemetryLogEventLayer,
   );
   const infrastructureLayer = Layer.merge(platformLayer, servicesLayer);
   const observabilityLayer = makeObservabilityLayer(origin, options.mode, otel);

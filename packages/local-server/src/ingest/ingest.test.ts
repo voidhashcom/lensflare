@@ -1,6 +1,6 @@
 import { DuckDBInstance } from "@duckdb/node-api";
 import { describe, expect, it } from "@effect/vitest";
-import { decodeTelemetryLogEntries } from "@lensflare/contracts";
+import { decodeTelemetryLogPage } from "@lensflare/contracts";
 import { Effect, Layer } from "effect";
 import { gzipSync } from "node:zlib";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -210,14 +210,98 @@ describe("HTTP ingest", () => {
       expect(logResponse.status).toBe(200);
       expect(logResponse.headers.get("content-type")).toContain("application/json");
 
-      const logEntries = decodeTelemetryLogEntries(await logResponse.json());
-      expect(logEntries).toEqual([
+      const logPage = decodeTelemetryLogPage(await logResponse.json());
+      expect(logPage.entries).toEqual([
         expect.objectContaining({
           sourceName: "api",
           level: "info",
           message: "hello from otlp json",
         }),
       ]);
+    } finally {
+      await Promise.all([server.stop(), rm(directory, { recursive: true, force: true })]);
+    }
+  });
+
+  it("paginates dataset logs with stable cursors", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "lensflare-ingest-"));
+    const sqliteDatabaseFile = join(directory, "lensflare.sqlite");
+    const duckdbDatabaseFile = join(directory, "lensflare.duckdb");
+    const port = await getAvailablePort();
+
+    const { project, dataset } = await seedProjectAndDataset(sqliteDatabaseFile);
+    const server = await startLocalServer({
+      mode: "server",
+      host: "127.0.0.1",
+      port,
+      sqliteDatabaseFile,
+      duckdbDatabaseFile,
+      otel: otelDisabled,
+    });
+
+    try {
+      const response = await fetch(`${server.origin}/ingest/otlp/v1/logs/lensflare/traces`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          resourceLogs: [
+            {
+              resource: {
+                attributes: [
+                  {
+                    key: "service.name",
+                    value: { stringValue: "api" },
+                  },
+                ],
+              },
+              scopeLogs: [
+                {
+                  scope: { name: "tests", version: "1.0.0" },
+                  logRecords: Array.from({ length: 5 }, (_, index) => ({
+                    timeUnixNano: String(1_716_201_600_000_000_000n + BigInt(index) * 1_000_000_000n),
+                    severityNumber: 9,
+                    severityText: "INFO",
+                    body: { stringValue: `log-${index}` },
+                  })),
+                },
+              ],
+            },
+          ],
+        }),
+      });
+
+      expect(response.status).toBe(200);
+
+      const latestResponse = await fetch(
+        `${server.origin}/api/projects/${project.id}/datasets/${dataset.id}/logs?limit=2`,
+      );
+      expect(latestResponse.status).toBe(200);
+
+      const latestPage = decodeTelemetryLogPage(await latestResponse.json());
+      expect(latestPage.entries.map((entry) => entry.message)).toEqual(["log-3", "log-4"]);
+      expect(latestPage.pageInfo.hasPreviousPage).toBe(true);
+      expect(latestPage.pageInfo.startCursor).toEqual(expect.any(String));
+      expect(latestPage.pageInfo.endCursor).toEqual(expect.any(String));
+
+      const olderResponse = await fetch(
+        `${server.origin}/api/projects/${project.id}/datasets/${dataset.id}/logs?limit=2&direction=older&cursor=${encodeURIComponent(latestPage.pageInfo.startCursor ?? "")}`,
+      );
+      expect(olderResponse.status).toBe(200);
+
+      const olderPage = decodeTelemetryLogPage(await olderResponse.json());
+      expect(olderPage.entries.map((entry) => entry.message)).toEqual(["log-1", "log-2"]);
+      expect(olderPage.pageInfo.hasPreviousPage).toBe(true);
+
+      const oldestResponse = await fetch(
+        `${server.origin}/api/projects/${project.id}/datasets/${dataset.id}/logs?limit=2&direction=older&cursor=${encodeURIComponent(olderPage.pageInfo.startCursor ?? "")}`,
+      );
+      expect(oldestResponse.status).toBe(200);
+
+      const oldestPage = decodeTelemetryLogPage(await oldestResponse.json());
+      expect(oldestPage.entries.map((entry) => entry.message)).toEqual(["log-0"]);
+      expect(oldestPage.pageInfo.hasPreviousPage).toBe(false);
     } finally {
       await Promise.all([server.stop(), rm(directory, { recursive: true, force: true })]);
     }
@@ -297,7 +381,7 @@ describe("HTTP ingest", () => {
     }
   });
 
-  it("ignores Lensflare self-telemetry posted back into lensflare/dev without dropping normal dev logs", async () => {
+  it("ingests Lensflare self-telemetry posted back into lensflare/dev", async () => {
     const directory = await mkdtemp(join(tmpdir(), "lensflare-ingest-"));
     const sqliteDatabaseFile = join(directory, "lensflare.sqlite");
     const duckdbDatabaseFile = join(directory, "lensflare.duckdb");
@@ -352,13 +436,7 @@ describe("HTTP ingest", () => {
       });
 
       expect(selfResponse.status).toBe(200);
-      expect(await selfResponse.json()).toEqual({
-        partialSuccess: {
-          rejectedLogRecords: 1,
-          errorMessage:
-            "Ignored 1 Lensflare self-telemetry record(s) sent to lensflare/dev to prevent an ingest loop.",
-        },
-      });
+      expect(await selfResponse.json()).toEqual({});
 
       const normalResponse = await fetch(`${server.origin}/ingest/otlp/v1/logs/lensflare/dev`, {
         method: "POST",
@@ -406,19 +484,24 @@ describe("HTTP ingest", () => {
       );
       expect(finalCounts).toEqual([
         {
-          batches: 1,
-          records: 1,
+          batches: 2,
+          records: 2,
         },
       ]);
 
       const records = await queryDuckDb(
         duckdbDatabaseFile,
-        "SELECT body_text, service_name, dataset_slug FROM log_records",
+        "SELECT body_text, service_name, dataset_slug FROM log_records ORDER BY body_text",
       );
       expect(records).toEqual([
         {
           body_text: "hello from dev",
           service_name: "api",
+          dataset_slug: "dev",
+        },
+        {
+          body_text: "loop me back",
+          service_name: "lensflare-server",
           dataset_slug: "dev",
         },
       ]);

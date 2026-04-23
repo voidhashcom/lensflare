@@ -1,4 +1,4 @@
-import { DatasetRpcGroup, ProjectRpcGroup } from "@lensflare/contracts";
+import { DatasetRpcGroup, ProjectRpcGroup, TelemetryLogRpcGroup } from "@lensflare/contracts";
 import { Context, Effect, Layer, ManagedRuntime } from "effect";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import type { RpcClientError } from "effect/unstable/rpc/RpcClientError";
@@ -30,7 +30,7 @@ function resolveRpcUrl(): string {
   return resolveBackendWsUrl("/rpc");
 }
 
-export const CatalogRpcs = ProjectRpcGroup.merge(DatasetRpcGroup);
+export const CatalogRpcs = ProjectRpcGroup.merge(DatasetRpcGroup).merge(TelemetryLogRpcGroup);
 
 export type CatalogRpcClientShape = RpcClient.RpcClient<
   RpcGroup.Rpcs<typeof CatalogRpcs>,

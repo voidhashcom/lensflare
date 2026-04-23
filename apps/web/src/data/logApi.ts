@@ -1,9 +1,13 @@
-import { decodeTelemetryLogEntries, type TelemetryLogEntry } from "@lensflare/contracts";
+import { decodeTelemetryLogPage, type TelemetryLogPage } from "@lensflare/contracts";
+import { Effect, Stream } from "effect";
 import { resolveBackendHttpUrl } from "./backendTarget";
+import { runRpcCallback } from "./rpcConnectionManager";
 
 interface ListDatasetLogsOptions {
   readonly search?: string | undefined;
   readonly limit?: number | undefined;
+  readonly cursor?: string | undefined;
+  readonly direction?: "older" | "newer" | undefined;
 }
 
 function toLogApiError(error: unknown): Error {
@@ -18,7 +22,7 @@ export async function listDatasetLogs(
   projectId: string,
   datasetId: string,
   options: ListDatasetLogsOptions = {},
-): Promise<Array<TelemetryLogEntry>> {
+): Promise<TelemetryLogPage> {
   try {
     const search = new URLSearchParams();
     if (options.search) {
@@ -26,6 +30,12 @@ export async function listDatasetLogs(
     }
     if (options.limit !== undefined) {
       search.set("limit", String(options.limit));
+    }
+    if (options.cursor) {
+      search.set("cursor", options.cursor);
+    }
+    if (options.direction) {
+      search.set("direction", options.direction);
     }
 
     const url = resolveBackendHttpUrl(
@@ -48,8 +58,31 @@ export async function listDatasetLogs(
       throw new Error(message);
     }
 
-    return decodeTelemetryLogEntries(payload);
+    return decodeTelemetryLogPage(payload);
   } catch (error) {
     throw toLogApiError(error);
   }
+}
+
+export function subscribeDatasetLogEntries(
+  projectId: string,
+  datasetId: string,
+  onEntry: (entry: TelemetryLogPage["entries"][number]) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  return runRpcCallback(
+    (client) =>
+      client.SubscribeTelemetryLogEvents({ projectId, datasetId }).pipe(
+        Stream.runForEach((entry) =>
+          Effect.sync(() => {
+            onEntry(entry);
+          }),
+        ),
+      ),
+    {
+      onError: (error) => {
+        onError?.(toLogApiError(error));
+      },
+    },
+  );
 }

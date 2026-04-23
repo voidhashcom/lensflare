@@ -2,7 +2,11 @@ import type { LensflareEnvironmentDescriptor, ServerSnapshot } from "@lensflare/
 import { APP_NAME, APP_VERSION } from "@lensflare/shared";
 import { Effect, Layer } from "effect";
 import { HttpRouter, HttpServerResponse } from "effect/unstable/http";
-import { TelemetryLogQueryService } from "../ingest/telemetryLogQueryService.ts";
+import {
+  decodeTelemetryLogCursor,
+  TelemetryLogQueryService,
+  type TelemetryLogPageDirection,
+} from "../ingest/telemetryLogQueryService.ts";
 import { renderFallbackApp, serveStaticFile } from "./static.ts";
 
 export interface HttpRoutesOptions {
@@ -46,6 +50,13 @@ function buildDevClientRedirectTarget(devClientUrl: string, requestUrl: URL): st
   target.search = requestUrl.search;
   target.hash = requestUrl.hash;
   return target.toString();
+}
+
+function parseLogPageDirection(value: string | null): TelemetryLogPageDirection | undefined {
+  if (value === "older" || value === "newer") {
+    return value;
+  }
+  return undefined;
 }
 
 /**
@@ -104,14 +115,44 @@ export function makeHttpRoutesLayer(options: HttpRoutesOptions) {
           const search = url.searchParams.get("search")?.trim() || undefined;
           const rawLimit = Number.parseInt(url.searchParams.get("limit") ?? "", 10);
           const limit = Number.isInteger(rawLimit) ? rawLimit : undefined;
+          const rawCursor = url.searchParams.get("cursor")?.trim() || undefined;
+          const parsedCursor = rawCursor ? decodeTelemetryLogCursor(rawCursor) : undefined;
+          const rawDirection = url.searchParams.get("direction");
+          const direction = parseLogPageDirection(rawDirection) ?? "older";
+
+          if (rawCursor && parsedCursor === null) {
+            return HttpServerResponse.jsonUnsafe(
+              {
+                error: {
+                  tag: "InvalidCursor",
+                  message: "Invalid log page cursor.",
+                },
+              },
+              { status: 400 },
+            );
+          }
+
+          if (rawDirection !== null && parseLogPageDirection(rawDirection) === undefined) {
+            return HttpServerResponse.jsonUnsafe(
+              {
+                error: {
+                  tag: "InvalidDirection",
+                  message: "Log page direction must be either older or newer.",
+                },
+              },
+              { status: 400 },
+            );
+          }
 
           return yield* logs
             .listDatasetLogs(params.projectId ?? "", params.datasetId ?? "", {
               search,
               limit,
+              cursor: parsedCursor ?? undefined,
+              direction,
             })
             .pipe(
-              Effect.map((entries) => HttpServerResponse.jsonUnsafe(entries)),
+              Effect.map((page) => HttpServerResponse.jsonUnsafe(page)),
               Effect.catchTag("DatasetNotFound", (error) =>
                 Effect.succeed(
                   HttpServerResponse.jsonUnsafe(

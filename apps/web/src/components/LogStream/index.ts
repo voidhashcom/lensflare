@@ -1,3 +1,4 @@
+export { LogDetailsPanel } from "./LogDetailsPanel";
 export { LogStreamView } from "./LogStreamView";
 export { LogStreamHeader } from "./LogStreamHeader";
 export { LogTable } from "./LogTable";

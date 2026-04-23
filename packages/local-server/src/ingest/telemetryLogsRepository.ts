@@ -1,14 +1,15 @@
 import { Context, Effect, Layer } from "effect";
 import { DuckDbError, TelemetryStore } from "./telemetryStore.ts";
-import type { IngestWriteRequest, NormalizedLogRecord } from "./types.ts";
+import type { IngestWriteRequest, NormalizedLogRecord, WrittenLogRecord } from "./types.ts";
 
 function recordValues(
   batchId: string,
+  id: string,
   request: IngestWriteRequest,
   record: NormalizedLogRecord,
 ): Record<string, string | number | null> {
   return {
-    id: crypto.randomUUID(),
+    id,
     batch_id: batchId,
     project_id: request.projectId,
     project_slug: request.projectSlug,
@@ -103,7 +104,13 @@ export class TelemetryLogsRepository extends Context.Service<
   {
     readonly writeBatch: (
       request: IngestWriteRequest,
-    ) => Effect.Effect<{ readonly batchId: string }, DuckDbError>;
+    ) => Effect.Effect<
+      {
+        readonly batchId: string;
+        readonly records: ReadonlyArray<WrittenLogRecord>;
+      },
+      DuckDbError
+    >;
   }
 >()("@lensflare/local-server/TelemetryLogsRepository") {
   static readonly layer = Layer.effect(
@@ -116,6 +123,11 @@ export class TelemetryLogsRepository extends Context.Service<
           Effect.tryPromise({
             try: async () => {
               const batchId = crypto.randomUUID();
+              const records = request.records.map((record) => ({
+                id: crypto.randomUUID(),
+                record,
+              }));
+
               await connection.run(
                 `
                   INSERT INTO ingest_batches (
@@ -165,11 +177,11 @@ export class TelemetryLogsRepository extends Context.Service<
                 },
               );
 
-              for (const record of request.records) {
-                await connection.run(insertLogRecordSql, recordValues(batchId, request, record));
+              for (const { id, record } of records) {
+                await connection.run(insertLogRecordSql, recordValues(batchId, id, request, record));
               }
 
-              return { batchId };
+              return { batchId, records };
             },
             catch: (error) =>
               new DuckDbError({

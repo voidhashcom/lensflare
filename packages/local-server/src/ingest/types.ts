@@ -44,3 +44,8 @@ export interface IngestWriteRequest {
   readonly receivedAt: string;
   readonly records: ReadonlyArray<NormalizedLogRecord>;
 }
+
+export interface WrittenLogRecord {
+  readonly id: string;
+  readonly record: NormalizedLogRecord;
+}

@@ -1,12 +1,28 @@
 import {
   DatasetNotFound,
   type TelemetryLogEntry,
+  type TelemetryLogPage,
   type TelemetryLogLevel,
 } from "@lensflare/contracts";
 import { Context, Effect, Layer } from "effect";
+import { Buffer } from "node:buffer";
 import { SqlError } from "effect/unstable/sql";
 import { DatasetsRepository } from "../repositories/datasetsRepository.ts";
 import { DuckDbError, TelemetryStore } from "./telemetryStore.ts";
+
+export type TelemetryLogPageDirection = "older" | "newer";
+
+export interface TelemetryLogCursor {
+  readonly timestamp: string;
+  readonly id: string;
+}
+
+interface ListDatasetLogsOptions {
+  readonly search?: string | undefined;
+  readonly limit?: number | undefined;
+  readonly cursor?: TelemetryLogCursor | undefined;
+  readonly direction?: TelemetryLogPageDirection | undefined;
+}
 
 interface TelemetryLogRow {
   readonly id: string;
@@ -17,12 +33,13 @@ interface TelemetryLogRow {
   readonly message: string;
 }
 
-const selectRecentLogsSql = `
-  SELECT id, timestamp, severity_number, severity_text, source_name, message
-  FROM (
+const duckDbTimestampPattern = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/;
+
+const selectLogsPageSql = `
+  WITH filtered AS (
     SELECT
       id,
-      CAST(COALESCE(timestamp, ingested_at) AS VARCHAR) AS timestamp,
+      COALESCE(timestamp, ingested_at) AS sort_timestamp,
       severity_number,
       severity_text,
       COALESCE(service_name, dataset_slug, provider_kind) AS source_name,
@@ -47,14 +64,43 @@ const selectRecentLogsSql = `
         OR LOWER(COALESCE(service_name, dataset_slug, provider_kind, '')) LIKE $search_pattern
         OR LOWER(COALESCE(severity_text, '')) LIKE $search_pattern
       )
-    ORDER BY COALESCE(timestamp, ingested_at) DESC
-    LIMIT $limit
-  ) recent
-  ORDER BY timestamp ASC, id ASC
+  )
+  SELECT
+    id,
+    CAST(sort_timestamp AS VARCHAR) AS timestamp,
+    severity_number,
+    severity_text,
+    source_name,
+    message
+  FROM filtered
+  WHERE (
+    $cursor_timestamp IS NULL
+    OR (
+      $direction = 'older'
+      AND (
+        sort_timestamp < CAST($cursor_timestamp AS TIMESTAMP)
+        OR (sort_timestamp = CAST($cursor_timestamp AS TIMESTAMP) AND id < $cursor_id)
+      )
+    )
+    OR (
+      $direction = 'newer'
+      AND (
+        sort_timestamp > CAST($cursor_timestamp AS TIMESTAMP)
+        OR (sort_timestamp = CAST($cursor_timestamp AS TIMESTAMP) AND id > $cursor_id)
+      )
+    )
+  )
+  ORDER BY
+    CASE WHEN $direction = 'newer' THEN sort_timestamp END ASC,
+    CASE WHEN $direction = 'newer' THEN id END ASC,
+    CASE WHEN $direction = 'older' THEN sort_timestamp END DESC,
+    CASE WHEN $direction = 'older' THEN id END DESC
+  LIMIT $limit
 `;
 
 function toTimestamp(raw: string): string {
-  const parsed = new Date(raw);
+  const normalized = duckDbTimestampPattern.test(raw) ? `${raw.replace(" ", "T")}Z` : raw;
+  const parsed = new Date(normalized);
   return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
 }
 
@@ -137,20 +183,67 @@ function mapRow(row: TelemetryLogRow): TelemetryLogEntry {
   };
 }
 
+function encodeTelemetryLogCursor(row: TelemetryLogRow): string {
+  return Buffer.from(JSON.stringify({ timestamp: toTimestamp(row.timestamp), id: row.id })).toString(
+    "base64url",
+  );
+}
+
+export function decodeTelemetryLogCursor(input: string): TelemetryLogCursor | null {
+  try {
+    const value = JSON.parse(Buffer.from(input, "base64url").toString("utf8")) as unknown;
+    if (
+      typeof value === "object" &&
+      value !== null &&
+      typeof (value as { readonly timestamp?: unknown }).timestamp === "string" &&
+      typeof (value as { readonly id?: unknown }).id === "string"
+    ) {
+      const timestamp = (value as { readonly timestamp: string }).timestamp;
+      const id = (value as { readonly id: string }).id;
+      if (!Number.isNaN(new Date(timestamp).getTime()) && id.length > 0) {
+        return { timestamp, id };
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function toLogPage(
+  rows: ReadonlyArray<Record<string, unknown>>,
+  args: {
+    readonly direction: TelemetryLogPageDirection;
+    readonly limit: number;
+  },
+): TelemetryLogPage {
+  const hasMore = rows.length > args.limit;
+  const pageRows = rows.slice(0, args.limit).map((row) => decodeTelemetryLogRow(row));
+  const orderedRows = args.direction === "older" ? [...pageRows].reverse() : pageRows;
+  const entries = orderedRows.map((row) => mapRow(row));
+  const first = orderedRows[0];
+  const last = orderedRows.at(-1);
+
+  return {
+    entries,
+    pageInfo: {
+      hasPreviousPage: args.direction === "older" ? hasMore : Boolean(first),
+      hasNextPage: args.direction === "newer" ? hasMore : false,
+      startCursor: first ? encodeTelemetryLogCursor(first) : null,
+      endCursor: last ? encodeTelemetryLogCursor(last) : null,
+    },
+  };
+}
+
 export class TelemetryLogQueryService extends Context.Service<
   TelemetryLogQueryService,
   {
     readonly listDatasetLogs: (
       projectId: string,
       datasetId: string,
-      options?: {
-        readonly search?: string | undefined;
-        readonly limit?: number | undefined;
-      },
-    ) => Effect.Effect<
-      ReadonlyArray<TelemetryLogEntry>,
-      DatasetNotFound | DuckDbError | SqlError.SqlError
-    >;
+      options?: ListDatasetLogsOptions,
+    ) => Effect.Effect<TelemetryLogPage, DatasetNotFound | DuckDbError | SqlError.SqlError>;
   }
 >()("@lensflare/local-server/TelemetryLogQueryService") {
   static readonly layer = Layer.effect(
@@ -162,10 +255,7 @@ export class TelemetryLogQueryService extends Context.Service<
       const listDatasetLogs = Effect.fn("TelemetryLogQueryService.listDatasetLogs")(function* (
         projectId: string,
         datasetId: string,
-        options?: {
-          readonly search?: string | undefined;
-          readonly limit?: number | undefined;
-        },
+        options?: ListDatasetLogsOptions,
       ) {
         const dataset = yield* datasets.findById(projectId, datasetId);
         if (dataset === undefined) {
@@ -173,14 +263,19 @@ export class TelemetryLogQueryService extends Context.Service<
         }
 
         const trimmedSearch = options?.search?.trim().toLowerCase();
-        const rows = yield* telemetry.queryRows<Record<string, unknown>>(selectRecentLogsSql, {
+        const direction = options?.cursor ? (options.direction ?? "older") : "older";
+        const limit = Math.max(1, Math.min(options?.limit ?? 100, 500));
+        const rows = yield* telemetry.queryRows<Record<string, unknown>>(selectLogsPageSql, {
           project_id: projectId,
           dataset_id: datasetId,
           search_pattern: trimmedSearch ? `%${trimmedSearch}%` : null,
-          limit: Math.max(1, Math.min(options?.limit ?? 500, 1_000)),
+          cursor_timestamp: options?.cursor?.timestamp ?? null,
+          cursor_id: options?.cursor?.id ?? null,
+          direction,
+          limit: limit + 1,
         });
 
-        return rows.map((row) => mapRow(decodeTelemetryLogRow(row)));
+        return toLogPage(rows, { direction, limit });
       });
 
       return TelemetryLogQueryService.of({ listDatasetLogs });

@@ -1,10 +1,23 @@
-import { useDeferredValue, useEffect, useRef, useState } from "react";
+import type { TelemetryLogPageInfo } from "@lensflare/contracts";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
-import { listDatasetLogs } from "~/data/logApi";
+import { Sheet, SheetPopup } from "~/components/ui/sheet";
+import { listDatasetLogs, subscribeDatasetLogEntries } from "~/data/logApi";
+import { useMediaQuery } from "~/hooks/useMediaQuery";
 
+import { LogDetailsPanel } from "./LogDetailsPanel";
 import { LogStreamHeader } from "./LogStreamHeader";
 import { LogTable, type LogTableHandle } from "./LogTable";
 import type { DateRangePreset, LogEntry, SourceIconKind } from "./types";
+
+/**
+ * Below this viewport width we switch the log details panel from an inline
+ * split-view column to a modal sheet. The value mirrors the right-panel
+ * breakpoint used elsewhere so the UI stays consistent across features.
+ */
+const LOG_DETAILS_SHEET_MEDIA_QUERY = "(max-width: 1024px)";
+
+const LOG_PAGE_SIZE = 100;
 
 interface LogStreamViewProps {
   projectId: string;
@@ -15,8 +28,8 @@ interface LogStreamViewProps {
 
 /**
  * Full-height live log stream view shown when a dataset is selected.
- * Fetches the real dataset log stream from the local server and refreshes
- * it periodically so recent OTLP ingests show up without a full reload.
+ * Fetches the initial dataset log page from the local server, then merges
+ * pushed log events from the RPC websocket stream.
  */
 export function LogStreamView({
   projectId,
@@ -27,26 +40,53 @@ export function LogStreamView({
   const [searchValue, setSearchValue] = useState("");
   const [dateRange, _setDateRange] = useState<DateRangePreset>("Last 30 days");
   const [logs, setLogs] = useState<ReadonlyArray<LogEntry>>([]);
+  const [pageInfo, setPageInfoState] = useState<TelemetryLogPageInfo | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
   const tableRef = useRef<LogTableHandle | null>(null);
+  const pageInfoRef = useRef<TelemetryLogPageInfo | null>(null);
   const deferredSearchValue = useDeferredValue(searchValue);
+  const shouldUseDetailsSheet = useMediaQuery(LOG_DETAILS_SHEET_MEDIA_QUERY);
+
+  // Derive the selected log from the current list so it stays in sync as new
+  // entries stream in. If the selection disappears (e.g. pagination trims it)
+  // the details view closes automatically.
+  const selectedLog = useMemo<LogEntry | null>(() => {
+    if (selectedLogId === null) return null;
+    return logs.find((log) => log.id === selectedLogId) ?? null;
+  }, [logs, selectedLogId]);
+
+  const closeDetails = useCallback(() => {
+    setSelectedLogId(null);
+  }, []);
+
+  const updatePageInfo = useCallback((next: TelemetryLogPageInfo | null) => {
+    pageInfoRef.current = next;
+    setPageInfoState(next);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    let timerId: number | undefined;
 
-    const load = async () => {
+    const loadInitial = async () => {
+      setIsLoading(true);
+      setLogs([]);
+      updatePageInfo(null);
+
       try {
-        const entries = await listDatasetLogs(projectId, datasetId, {
+        const page = await listDatasetLogs(projectId, datasetId, {
           search: deferredSearchValue || undefined,
-          limit: 500,
+          limit: LOG_PAGE_SIZE,
         });
         if (cancelled) {
           return;
         }
 
-        setLogs(entries.map((entry) => toLogEntry(entry, datasetName, datasetIcon)));
+        const entries = page.entries.map((entry) => toLogEntry(entry, datasetName, datasetIcon));
+        setLogs((currentLogs) => mergeUniqueLogs(entries, currentLogs));
+        updatePageInfo(page.pageInfo);
         setErrorMessage(null);
       } catch (error) {
         if (cancelled) {
@@ -60,20 +100,75 @@ export function LogStreamView({
         }
 
         setIsLoading(false);
-        timerId = window.setTimeout(load, 5_000);
       }
     };
 
-    setIsLoading(true);
-    void load();
+    void loadInitial();
 
     return () => {
       cancelled = true;
-      if (timerId !== undefined) {
-        window.clearTimeout(timerId);
-      }
     };
+  }, [datasetIcon, datasetId, datasetName, deferredSearchValue, projectId, updatePageInfo]);
+
+  useEffect(() => {
+    return subscribeDatasetLogEntries(
+      projectId,
+      datasetId,
+      (entry) => {
+        if (!matchesSearch(entry, deferredSearchValue)) {
+          return;
+        }
+
+        setLogs((currentLogs) =>
+          mergeUniqueLogs(currentLogs, [toLogEntry(entry, datasetName, datasetIcon)]),
+        );
+        setErrorMessage(null);
+      },
+      (error) => {
+        setErrorMessage(error.message);
+      },
+    );
   }, [datasetIcon, datasetId, datasetName, deferredSearchValue, projectId]);
+
+  const handleLoadOlder = useCallback(async () => {
+    const currentPageInfo = pageInfoRef.current;
+    if (!currentPageInfo?.hasPreviousPage || !currentPageInfo.startCursor || isLoadingOlder) {
+      return;
+    }
+
+    setIsLoadingOlder(true);
+    try {
+      const page = await listDatasetLogs(projectId, datasetId, {
+        cursor: currentPageInfo.startCursor,
+        direction: "older",
+        search: deferredSearchValue || undefined,
+        limit: LOG_PAGE_SIZE,
+      });
+      const entries = page.entries.map((entry) => toLogEntry(entry, datasetName, datasetIcon));
+      const latestPageInfo = pageInfoRef.current ?? currentPageInfo;
+
+      setLogs((currentLogs) => mergeUniqueLogs(entries, currentLogs));
+      updatePageInfo({
+        hasPreviousPage: page.pageInfo.hasPreviousPage,
+        hasNextPage: latestPageInfo.hasNextPage,
+        startCursor: page.pageInfo.startCursor ?? latestPageInfo.startCursor,
+        endCursor: latestPageInfo.endCursor ?? page.pageInfo.endCursor,
+      });
+      setErrorMessage(null);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to load logs.");
+    } finally {
+      setIsLoadingOlder(false);
+    }
+  }, [
+    datasetIcon,
+    datasetId,
+    datasetName,
+    deferredSearchValue,
+    isLoadingOlder,
+    projectId,
+    updatePageInfo,
+  ]);
 
   const handleScrollClick = () => {
     const table = tableRef.current;
@@ -82,6 +177,12 @@ export function LogStreamView({
     }
     table.scrollToBottom();
   };
+
+  // The inline details column is only rendered when a log is selected *and*
+  // the viewport is wide enough. Narrow viewports fall back to a sheet that
+  // overlays the table instead of squeezing it.
+  const showInlineDetails = selectedLog !== null && !shouldUseDetailsSheet;
+  const showSheetDetails = selectedLog !== null && shouldUseDetailsSheet;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-background/40">
@@ -98,7 +199,41 @@ export function LogStreamView({
           {errorMessage}
         </div>
       ) : null}
-      <LogTable logs={logs} ref={tableRef} waiting={errorMessage === null || isLoading} />
+      <div className="flex min-h-0 min-w-0 flex-1">
+        <LogTable
+          hasPreviousPage={pageInfo?.hasPreviousPage ?? false}
+          isLoadingPrevious={isLoadingOlder}
+          logs={logs}
+          onLoadPrevious={handleLoadOlder}
+          onSelectLog={setSelectedLogId}
+          ref={tableRef}
+          selectedLogId={selectedLogId}
+          waiting={errorMessage === null || isLoading}
+        />
+        {showInlineDetails ? (
+          <div className="flex w-[min(42vw,560px)] min-w-[360px] shrink-0 flex-col">
+            <LogDetailsPanel log={selectedLog} onClose={closeDetails} variant="inline" />
+          </div>
+        ) : null}
+      </div>
+      <Sheet
+        onOpenChange={(open) => {
+          if (!open) {
+            closeDetails();
+          }
+        }}
+        open={showSheetDetails}
+      >
+        <SheetPopup
+          className="w-[min(88vw,560px)] max-w-[560px] p-0"
+          showCloseButton={false}
+          side="right"
+        >
+          {selectedLog !== null ? (
+            <LogDetailsPanel log={selectedLog} onClose={closeDetails} variant="sheet" />
+          ) : null}
+        </SheetPopup>
+      </Sheet>
     </div>
   );
 }
@@ -150,4 +285,47 @@ function inferSourceIcon(sourceName: string, fallback: SourceIconKind): SourceIc
     return "java";
   }
   return fallback;
+}
+
+function matchesSearch(
+  entry: {
+    readonly sourceName: string;
+    readonly level: string;
+    readonly message: string;
+  },
+  search: string,
+): boolean {
+  const needle = search.trim().toLowerCase();
+  if (!needle) {
+    return true;
+  }
+
+  return (
+    entry.message.toLowerCase().includes(needle) ||
+    entry.sourceName.toLowerCase().includes(needle) ||
+    entry.level.toLowerCase().includes(needle)
+  );
+}
+
+function mergeUniqueLogs(
+  first: ReadonlyArray<LogEntry>,
+  second: ReadonlyArray<LogEntry>,
+): ReadonlyArray<LogEntry> {
+  const byId = new Map<string, LogEntry>();
+  for (const log of first) {
+    byId.set(log.id, log);
+  }
+  for (const log of second) {
+    byId.set(log.id, log);
+  }
+
+  return [...byId.values()].sort(compareLogEntries);
+}
+
+function compareLogEntries(left: LogEntry, right: LogEntry): number {
+  const timestampDelta = left.timestamp.getTime() - right.timestamp.getTime();
+  if (timestampDelta !== 0) {
+    return timestampDelta;
+  }
+  return left.id.localeCompare(right.id);
 }

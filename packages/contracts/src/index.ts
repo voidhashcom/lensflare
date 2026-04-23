@@ -248,6 +248,22 @@ export type TelemetryLogEntry = Schema.Schema.Type<typeof TelemetryLogEntrySchem
 
 export const TelemetryLogEntriesSchema = Schema.Array(TelemetryLogEntrySchema);
 
+export const TelemetryLogPageInfoSchema = Schema.Struct({
+  hasPreviousPage: Schema.Boolean,
+  hasNextPage: Schema.Boolean,
+  startCursor: Schema.NullOr(Schema.String),
+  endCursor: Schema.NullOr(Schema.String),
+});
+
+export type TelemetryLogPageInfo = Schema.Schema.Type<typeof TelemetryLogPageInfoSchema>;
+
+export const TelemetryLogPageSchema = Schema.Struct({
+  entries: TelemetryLogEntriesSchema,
+  pageInfo: TelemetryLogPageInfoSchema,
+});
+
+export type TelemetryLogPage = Schema.Schema.Type<typeof TelemetryLogPageSchema>;
+
 const decodeProjectEntitySchema = Schema.decodeUnknownSync(ProjectEntitySchema);
 const decodeProjectSchema = Schema.decodeUnknownSync(ProjectSchema);
 const decodeDatasetSchema = Schema.decodeUnknownSync(DatasetSchema);
@@ -259,6 +275,7 @@ const decodeProjectChangeEventSchema = Schema.decodeUnknownSync(ProjectChangeEve
 const decodeDatasetChangeEventSchema = Schema.decodeUnknownSync(DatasetChangeEventSchema);
 const decodeTelemetryLogEntrySchema = Schema.decodeUnknownSync(TelemetryLogEntrySchema);
 const decodeTelemetryLogEntriesSchema = Schema.decodeUnknownSync(TelemetryLogEntriesSchema);
+const decodeTelemetryLogPageSchema = Schema.decodeUnknownSync(TelemetryLogPageSchema);
 
 export function decodeProjectEntity(input: unknown): ProjectEntity {
   return decodeProjectEntitySchema(input);
@@ -302,6 +319,10 @@ export function decodeTelemetryLogEntry(input: unknown): TelemetryLogEntry {
 
 export function decodeTelemetryLogEntries(input: unknown): Array<TelemetryLogEntry> {
   return [...decodeTelemetryLogEntriesSchema(input)];
+}
+
+export function decodeTelemetryLogPage(input: unknown): TelemetryLogPage {
+  return decodeTelemetryLogPageSchema(input);
 }
 
 class ListProjectEntities extends Rpc.make("ListProjectEntities", {
@@ -410,6 +431,17 @@ export const DatasetRpcGroup = RpcGroup.make(
   DeleteDataset,
   SubscribeDatasetEvents,
 );
+
+class SubscribeTelemetryLogEvents extends Rpc.make("SubscribeTelemetryLogEvents", {
+  payload: {
+    projectId: Schema.String,
+    datasetId: Schema.String,
+  },
+  success: TelemetryLogEntrySchema,
+  stream: true,
+}) {}
+
+export const TelemetryLogRpcGroup = RpcGroup.make(SubscribeTelemetryLogEvents);
 
 export function formatProjectError(error: unknown): string {
   if (error instanceof ValidationError) {
