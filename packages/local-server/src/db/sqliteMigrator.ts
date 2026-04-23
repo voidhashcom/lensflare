@@ -1,0 +1,20 @@
+import type * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Migrator from "effect/unstable/sql/Migrator";
+import type * as Client from "effect/unstable/sql/SqlClient";
+import type { SqlError } from "effect/unstable/sql/SqlError";
+
+export * from "effect/unstable/sql/Migrator";
+
+export const run: <R2 = never>(
+  options: Migrator.MigratorOptions<R2>,
+) => Effect.Effect<
+  ReadonlyArray<readonly [id: number, name: string]>,
+  Migrator.MigrationError | SqlError,
+  Client.SqlClient | R2
+> = Migrator.make({});
+
+export const layer = <R>(
+  options: Migrator.MigratorOptions<R>,
+): Layer.Layer<never, Migrator.MigrationError | SqlError, Client.SqlClient | R> =>
+  Layer.effectDiscard(run(options));

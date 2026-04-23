@@ -6,6 +6,7 @@ import type { RpcClientError } from "effect/unstable/rpc/RpcClientError";
 import type * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as Socket from "effect/unstable/socket/Socket";
+import { reportRpcConnectionFailure } from "./rpcConnection";
 
 /**
  * Transport-level plumbing shared by the project + dataset RPC wrappers
@@ -50,9 +51,25 @@ const rpcClientLayer = Layer.effect(CatalogRpcClient)(RpcClient.make(CatalogRpcs
   Layer.provide(rpcSupportLayer),
 );
 
-export const rpcRuntime = ManagedRuntime.make(rpcClientLayer, {
-  memoMap: Layer.makeMemoMapUnsafe(),
-});
+function createRpcRuntime() {
+  return ManagedRuntime.make(rpcClientLayer, {
+    memoMap: Layer.makeMemoMapUnsafe(),
+  });
+}
+
+export let rpcRuntime = createRpcRuntime();
+
+export async function resetRpcRuntime(): Promise<void> {
+  const previousRuntime = rpcRuntime;
+
+  rpcRuntime = createRpcRuntime();
+
+  try {
+    await previousRuntime.dispose();
+  } catch {
+    // Ignore disposal failures while forcing a fresh runtime for retry flows.
+  }
+}
 
 /**
  * Run an effect against the shared RPC client and surface the result as a
@@ -62,5 +79,10 @@ export const rpcRuntime = ManagedRuntime.make(rpcClientLayer, {
 export async function runRpc<A>(
   f: (client: CatalogRpcClientShape) => Effect.Effect<A, unknown>,
 ): Promise<A> {
-  return rpcRuntime.runPromise(Effect.flatMap(CatalogRpcClient.asEffect(), f));
+  try {
+    return await rpcRuntime.runPromise(Effect.flatMap(CatalogRpcClient.asEffect(), f));
+  } catch (error) {
+    reportRpcConnectionFailure(error);
+    throw error;
+  }
 }

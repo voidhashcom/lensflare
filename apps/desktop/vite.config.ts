@@ -2,7 +2,7 @@ import { defineConfig } from "vite-plus";
 
 export default defineConfig({
   pack: {
-    entry: ["src/main/index.ts"],
+    entry: ["src/main/index.ts", "src/preload/index.ts"],
     outDir: "dist",
     format: ["cjs"],
     platform: "node",
@@ -15,10 +15,8 @@ export default defineConfig({
     deps: {
       neverBundle: [
         "electron",
-        "@effect/sql-sqlite-node",
         "@duckdb/node-api",
         "@duckdb/node-bindings",
-        "better-sqlite3",
         "bindings",
         "file-uri-to-path",
       ],

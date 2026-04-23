@@ -1,4 +1,4 @@
-import { SqliteMigrator } from "@effect/sql-sqlite-node";
+import { SqliteMigrator } from "../sqliteNode.ts";
 import migration0001 from "./0001_create_catalog_tables.ts";
 import migration0002 from "./0002_add_slugs.ts";
 

@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { app, BrowserWindow, screen } from "electron";
-import { startLocalServer } from "@lensflare/local-server";
+import { app, BrowserWindow, ipcMain, screen } from "electron";
+import { type LocalServerHandle, startLocalServer } from "@lensflare/local-server";
 import {
   APP_NAME,
   APP_VERSION,
@@ -10,6 +10,7 @@ import {
   readRuntimeConfigFromEnv,
   resolveWebDevUrl,
 } from "@lensflare/shared";
+import { RESTART_LOCAL_SERVER_CHANNEL } from "../ipc.ts";
 
 const config = readRuntimeConfigFromEnv(process.env);
 let mainWindow: BrowserWindow | null = null;
@@ -22,9 +23,13 @@ function resolveEmbeddedWebDir(): string | undefined {
   return existsSync(candidate) ? candidate : undefined;
 }
 
+function resolvePreloadPath(): string {
+  return resolve(app.getAppPath(), "dist/preload.cjs");
+}
+
 async function main(): Promise<void> {
   const embeddedWebDir = resolveEmbeddedWebDir();
-  const localServer = await startLocalServer({
+  const localServerOptions = {
     mode: "desktop",
     host: config.host,
     port: config.serverPort,
@@ -35,15 +40,47 @@ async function main(): Promise<void> {
       datasetSlug: config.otelDatasetSlug,
     },
     ...(embeddedWebDir ? { staticDir: embeddedWebDir } : {}),
-  });
+  } as const;
+
+  let localServer: LocalServerHandle | null = await startLocalServer(localServerOptions);
+  let restartLocalServerPromise: Promise<void> | null = null;
   let stoppingServer: Promise<void> | null = null;
 
+  async function startDesktopLocalServer(): Promise<void> {
+    if (localServer !== null) {
+      return;
+    }
+
+    localServer = await startLocalServer(localServerOptions);
+  }
+
   function stopLocalServer(): Promise<void> {
+    if (localServer === null) {
+      return stoppingServer ?? Promise.resolve();
+    }
+
     if (!stoppingServer) {
-      stoppingServer = localServer.stop();
+      const server = localServer;
+      localServer = null;
+      stoppingServer = server.stop().finally(() => {
+        stoppingServer = null;
+      });
     }
 
     return stoppingServer;
+  }
+
+  function restartLocalServer(): Promise<void> {
+    if (!restartLocalServerPromise) {
+      restartLocalServerPromise = (async () => {
+        await stopLocalServer();
+        await startDesktopLocalServer();
+      })().finally(() => {
+        restartLocalServerPromise = null;
+      });
+    }
+
+    return restartLocalServerPromise;
   }
 
   async function createMainWindow(): Promise<void> {
@@ -53,7 +90,11 @@ async function main(): Promise<void> {
     const y =
       Math.round((display.workArea.height - DEFAULT_WINDOW_HEIGHT) / 2) + display.workArea.y;
 
-    const windowUrl = config.desktopDev ? resolveWebDevUrl(config) : localServer.origin;
+    const windowUrl = config.desktopDev ? resolveWebDevUrl(config) : localServer?.origin;
+
+    if (!windowUrl) {
+      throw new Error("Local server is unavailable.");
+    }
 
     mainWindow = new BrowserWindow({
       title: `${APP_NAME} ${APP_VERSION}`,
@@ -76,6 +117,7 @@ async function main(): Promise<void> {
       webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,
+        preload: resolvePreloadPath(),
       },
     });
 
@@ -106,6 +148,10 @@ async function main(): Promise<void> {
 
   app.on("before-quit", () => {
     void stopLocalServer();
+  });
+
+  ipcMain.handle(RESTART_LOCAL_SERVER_CHANNEL, async () => {
+    await restartLocalServer();
   });
 
   await app.whenReady();

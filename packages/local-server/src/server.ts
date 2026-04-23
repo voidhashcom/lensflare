@@ -59,6 +59,10 @@ const defaultOtelConfig: NonNullable<StartLocalServerOptions["otel"]> = {
   datasetSlug: "runtime-logs",
 };
 
+const defaultOtelProjectName = "Lensflare Internal";
+const defaultOtelDatasetName = "Runtime Logs";
+const otelShutdownTimeout = "250 millis";
+
 function makeObservabilityLayer(
   origin: string,
   mode: StartLocalServerOptions["mode"],
@@ -79,7 +83,53 @@ function makeObservabilityLayer(
     },
     exportInterval: "1 second",
     maxBatchSize: 100,
+    shutdownTimeout: otelShutdownTimeout,
   }).pipe(Layer.provide(FetchHttpClient.layer), Layer.provide(OtlpSerialization.layerJson));
+}
+
+function ensureTelemetryCatalogTarget(
+  otel: NonNullable<StartLocalServerOptions["otel"]>,
+): Effect.Effect<void, never, ProjectService | DatasetService> {
+  return Effect.orDie(
+    Effect.gen(function* () {
+      if (!otel.enabled) {
+        return;
+      }
+
+      const projects = yield* ProjectService;
+      const datasets = yield* DatasetService;
+
+      const existingProject = (yield* projects.listProjectEntities()).find(
+        (project) => project.slug === otel.projectSlug,
+      );
+      const project =
+        existingProject ??
+        (yield* projects.createProject({
+          name: defaultOtelProjectName,
+          slug: otel.projectSlug,
+        }));
+
+      const existingDataset = (yield* datasets.listDatasets()).find(
+        (dataset) => dataset.slug === otel.datasetSlug,
+      );
+
+      if (existingDataset === undefined) {
+        yield* datasets.createDataset(project.id, {
+          name: defaultOtelDatasetName,
+          slug: otel.datasetSlug,
+        });
+        return;
+      }
+
+      if (existingDataset.projectId !== project.id) {
+        return yield* Effect.die(
+          new Error(
+            `Telemetry dataset slug "${otel.datasetSlug}" already belongs to project "${existingDataset.projectId}" and cannot be attached to "${project.id}".`,
+          ),
+        );
+      }
+    }),
+  );
 }
 
 /**
@@ -228,6 +278,13 @@ export async function startLocalServer(
     HttpRouter.serve(routesLayer).pipe(Layer.provide(applicationLayer)),
   );
 
+  const bootstrapRuntime = ManagedRuntime.make(catalogServicesLayer);
+  try {
+    await bootstrapRuntime.runPromise(ensureTelemetryCatalogTarget(otel));
+  } finally {
+    await bootstrapRuntime.dispose();
+  }
+
   const runtime = ManagedRuntime.make(runtimeLayer, {
     memoMap: Layer.makeMemoMapUnsafe(),
   });
@@ -246,8 +303,8 @@ export async function startLocalServer(
       Effect.annotateLogs({
         mode: options.mode,
         origin,
-        telemetryProjectSlug: options.otel?.projectSlug ?? "disabled",
-        telemetryDatasetSlug: options.otel?.datasetSlug ?? "disabled",
+        telemetryProjectSlug: otel.enabled ? otel.projectSlug : "disabled",
+        telemetryDatasetSlug: otel.enabled ? otel.datasetSlug : "disabled",
         otelEnabled: otel.enabled,
       }),
     ),

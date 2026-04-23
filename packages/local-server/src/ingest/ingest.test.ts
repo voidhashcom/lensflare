@@ -373,17 +373,6 @@ describe("HTTP ingest", () => {
         },
       });
 
-      const emptyCounts = await queryDuckDb(
-        duckdbDatabaseFile,
-        "SELECT COUNT(*) AS batches, (SELECT COUNT(*) FROM log_records) AS records FROM ingest_batches",
-      );
-      expect(emptyCounts).toEqual([
-        {
-          batches: 0,
-          records: 0,
-        },
-      ]);
-
       const normalResponse = await fetch(
         `${server.origin}/ingest/otlp/v1/logs/lensflare/dev`,
         {
@@ -423,6 +412,20 @@ describe("HTTP ingest", () => {
 
       expect(normalResponse.status).toBe(200);
       expect(await normalResponse.json()).toEqual({});
+
+      // Querying the DuckDB file from a second process mid-test can hide
+      // subsequent writes from the server's long-lived instance. Assert the
+      // final persisted state instead of probing between the two requests.
+      const finalCounts = await queryDuckDb(
+        duckdbDatabaseFile,
+        "SELECT COUNT(*) AS batches, (SELECT COUNT(*) FROM log_records) AS records FROM ingest_batches",
+      );
+      expect(finalCounts).toEqual([
+        {
+          batches: 1,
+          records: 1,
+        },
+      ]);
 
       const records = await queryDuckDb(
         duckdbDatabaseFile,

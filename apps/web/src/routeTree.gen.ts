@@ -9,15 +9,39 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SettingsGeneralRouteImport } from './routes/settings.general'
+import { Route as SettingsAppearanceRouteImport } from './routes/settings.appearance'
+import { Route as SettingsAboutRouteImport } from './routes/settings.about'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as ProjectsProjectIdIndexRouteImport } from './routes/projects.$projectId.index'
 import { Route as ProjectsProjectIdCollectionsCollectionIdRouteImport } from './routes/projects.$projectId.collections.$collectionId'
 
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsGeneralRoute = SettingsGeneralRouteImport.update({
+  id: '/general',
+  path: '/general',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsAppearanceRoute = SettingsAppearanceRouteImport.update({
+  id: '/appearance',
+  path: '/appearance',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsAboutRoute = SettingsAboutRouteImport.update({
+  id: '/about',
+  path: '/about',
+  getParentRoute: () => SettingsRoute,
 } as any)
 const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
   id: '/projects/$projectId',
@@ -38,19 +62,31 @@ const ProjectsProjectIdCollectionsCollectionIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
+  '/settings/about': typeof SettingsAboutRoute
+  '/settings/appearance': typeof SettingsAppearanceRoute
+  '/settings/general': typeof SettingsGeneralRoute
   '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
   '/projects/$projectId/collections/$collectionId': typeof ProjectsProjectIdCollectionsCollectionIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRouteWithChildren
+  '/settings/about': typeof SettingsAboutRoute
+  '/settings/appearance': typeof SettingsAppearanceRoute
+  '/settings/general': typeof SettingsGeneralRoute
   '/projects/$projectId': typeof ProjectsProjectIdIndexRoute
   '/projects/$projectId/collections/$collectionId': typeof ProjectsProjectIdCollectionsCollectionIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
+  '/settings/about': typeof SettingsAboutRoute
+  '/settings/appearance': typeof SettingsAppearanceRoute
+  '/settings/general': typeof SettingsGeneralRoute
   '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
   '/projects/$projectId/collections/$collectionId': typeof ProjectsProjectIdCollectionsCollectionIdRoute
 }
@@ -58,35 +94,76 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/settings'
     | '/projects/$projectId'
+    | '/settings/about'
+    | '/settings/appearance'
+    | '/settings/general'
     | '/projects/$projectId/'
     | '/projects/$projectId/collections/$collectionId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/settings'
+    | '/settings/about'
+    | '/settings/appearance'
+    | '/settings/general'
     | '/projects/$projectId'
     | '/projects/$projectId/collections/$collectionId'
   id:
     | '__root__'
     | '/'
+    | '/settings'
     | '/projects/$projectId'
+    | '/settings/about'
+    | '/settings/appearance'
+    | '/settings/general'
     | '/projects/$projectId/'
     | '/projects/$projectId/collections/$collectionId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SettingsRoute: typeof SettingsRouteWithChildren
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/settings/general': {
+      id: '/settings/general'
+      path: '/general'
+      fullPath: '/settings/general'
+      preLoaderRoute: typeof SettingsGeneralRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/appearance': {
+      id: '/settings/appearance'
+      path: '/appearance'
+      fullPath: '/settings/appearance'
+      preLoaderRoute: typeof SettingsAppearanceRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/about': {
+      id: '/settings/about'
+      path: '/about'
+      fullPath: '/settings/about'
+      preLoaderRoute: typeof SettingsAboutRouteImport
+      parentRoute: typeof SettingsRoute
     }
     '/projects/$projectId': {
       id: '/projects/$projectId'
@@ -112,6 +189,22 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface SettingsRouteChildren {
+  SettingsAboutRoute: typeof SettingsAboutRoute
+  SettingsAppearanceRoute: typeof SettingsAppearanceRoute
+  SettingsGeneralRoute: typeof SettingsGeneralRoute
+}
+
+const SettingsRouteChildren: SettingsRouteChildren = {
+  SettingsAboutRoute: SettingsAboutRoute,
+  SettingsAppearanceRoute: SettingsAppearanceRoute,
+  SettingsGeneralRoute: SettingsGeneralRoute,
+}
+
+const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
+  SettingsRouteChildren,
+)
+
 interface ProjectsProjectIdRouteChildren {
   ProjectsProjectIdIndexRoute: typeof ProjectsProjectIdIndexRoute
   ProjectsProjectIdCollectionsCollectionIdRoute: typeof ProjectsProjectIdCollectionsCollectionIdRoute
@@ -128,6 +221,7 @@ const ProjectsProjectIdRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SettingsRoute: SettingsRouteWithChildren,
   ProjectsProjectIdRoute: ProjectsProjectIdRouteWithChildren,
 }
 export const routeTree = rootRouteImport

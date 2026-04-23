@@ -5,15 +5,11 @@
   "type": "module",
   "main": "dist/index.cjs",
   "scripts": {
-    "rebuild:native": "node ./scripts/rebuild-native.mjs",
-    "predev": "pnpm run rebuild:native",
     "dev": "concurrently -k -s first -n web,bundle,electron \"pnpm --dir ../web run dev\" \"pnpm run dev:bundle\" \"pnpm run dev:electron\"",
     "dev:bundle": "vp pack --watch",
     "dev:desktop": "pnpm run dev",
     "dev:electron": "wait-on tcp:127.0.0.1:5173 dist/index.cjs && env -u ELECTRON_RUN_AS_NODE LENSFLARE_DESKTOP_DEV=1 electronmon .",
-    "prebuild": "pnpm run rebuild:native",
     "build": "vp pack && env -u ELECTRON_RUN_AS_NODE electron-builder",
-    "prestart": "pnpm run rebuild:native",
     "start": "env -u ELECTRON_RUN_AS_NODE electron .",
     "typecheck": "tsc --noEmit",
     "test": "vp test --passWithNoTests",
@@ -21,7 +17,6 @@
   },
   "dependencies": {
     "@duckdb/node-api": "catalog:",
-    "@effect/sql-sqlite-node": "catalog:",
     "@lensflare/local-server": "workspace:*",
     "@lensflare/shared": "workspace:*"
   },

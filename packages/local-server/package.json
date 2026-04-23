@@ -14,7 +14,6 @@
   "dependencies": {
     "@duckdb/node-api": "catalog:",
     "@effect/platform-node": "catalog:",
-    "@effect/sql-sqlite-node": "catalog:",
     "@lensflare/contracts": "workspace:*",
     "@lensflare/shared": "workspace:*",
     "effect": "catalog:",

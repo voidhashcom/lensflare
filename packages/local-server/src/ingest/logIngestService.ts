@@ -40,7 +40,6 @@ const lensflareDevTarget = {
 const lensflareSelfServiceNames = new Set(["lensflare-server", "lensflare-desktop"]);
 
 function isLensflareDevSelfRecord(input: IngestInput, record: NormalizedLogRecord): boolean {
-  return false;
   return (
     input.batch.providerKind === "otlp_http_logs" &&
     input.projectSlug === lensflareDevTarget.projectSlug &&

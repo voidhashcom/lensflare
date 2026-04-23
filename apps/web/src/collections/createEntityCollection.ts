@@ -1,6 +1,7 @@
 import type { ChangeMessageOrDeleteKeyMessage, CollectionConfig, SyncConfig } from "@tanstack/db";
 import { Cause, Effect, Exit, Stream } from "effect";
 import { CatalogRpcClient, type CatalogRpcClientShape, rpcRuntime } from "~/data/rpc";
+import { reportRpcConnectionFailure } from "~/data/rpcConnection";
 
 /**
  * The generic shape shared by both `ProjectChangeEvent` and
@@ -154,7 +155,9 @@ export function createEntityCollectionOptions<TItem extends object, TKey extends
                 ),
                 Effect.catchCause((cause) =>
                   Effect.sync(() => {
-                    state.lastError = config.formatError(Cause.squash(cause));
+                    const error = Cause.squash(cause);
+                    state.lastError = config.formatError(error);
+                    reportRpcConnectionFailure(error);
                     ensureReady();
                   }),
                 ),
@@ -188,7 +191,9 @@ export function createEntityCollectionOptions<TItem extends object, TKey extends
                 return;
               }
 
-              state.lastError = config.formatError(Cause.squash(exit.cause));
+              const error = Cause.squash(exit.cause);
+              state.lastError = config.formatError(error);
+              reportRpcConnectionFailure(error);
               ensureReady();
             },
           },

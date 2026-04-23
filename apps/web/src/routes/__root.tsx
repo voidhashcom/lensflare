@@ -1,6 +1,7 @@
 import { Outlet, createRootRoute } from "@tanstack/react-router";
 
 import { AppSidebar } from "~/components/AppSidebar";
+import { RpcConnectionModal } from "~/components/RpcConnectionModal";
 import {
   Sidebar,
   SidebarInset,
@@ -36,6 +37,7 @@ function RootLayout() {
           <Outlet />
         </div>
       </SidebarInset>
+      <RpcConnectionModal />
     </SidebarProvider>
   );
 }

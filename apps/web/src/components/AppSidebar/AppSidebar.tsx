@@ -1,10 +1,11 @@
 import type { Project } from "@lensflare/contracts";
 import { useLiveQuery } from "@tanstack/react-db";
-import { useParams } from "@tanstack/react-router";
+import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import { PlusIcon, SettingsIcon } from "lucide-react";
 
 import { datasetsCollection } from "~/collections/datasetsCollection";
 import { projectsCollection } from "~/collections/projectsCollection";
+import { SettingsSidebarNav } from "~/components/settings/SettingsSidebarNav";
 import {
   SidebarContent,
   SidebarFooter,
@@ -39,6 +40,9 @@ import { useSidebarContextMenu } from "./useSidebarContextMenu";
  */
 export function AppSidebar() {
   const isMacDesktop = detectMacDesktop();
+  const navigate = useNavigate();
+  const pathname = useLocation({ select: (location) => location.pathname });
+  const isOnSettings = pathname.startsWith("/settings");
 
   const params = useParams(ROUTE_PARAMS_OPTIONS);
   const activeProjectId = params.projectId;
@@ -108,73 +112,80 @@ export function AppSidebar() {
         )}
       >
         <BrandRow isMacDesktop={isMacDesktop} />
-        <SearchRow />
+        {isOnSettings ? null : <SearchRow />}
       </SidebarHeader>
 
-      <SidebarContent>
-        <SidebarGroup className="px-2 py-2">
-          <div className="mb-1 flex items-center justify-between pl-2 pr-1.5">
-            <span className="font-medium text-[10px] text-muted-foreground/60 uppercase tracking-wider">
-              Projects
-            </span>
-            <button
-              aria-label="New project"
-              className="desktop-no-drag inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
-              disabled={projectDialog.submitting}
-              onClick={projectDialog.openCreate}
-              title="New project"
-              type="button"
-            >
-              <PlusIcon className="size-3.5" />
-            </button>
-          </div>
+      {isOnSettings ? (
+        <SettingsSidebarNav pathname={pathname} />
+      ) : (
+        <>
+          <SidebarContent>
+            <SidebarGroup className="px-2 py-2">
+              <div className="mb-1 flex items-center justify-between pl-2 pr-1.5">
+                <span className="font-medium text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+                  Projects
+                </span>
+                <button
+                  aria-label="New project"
+                  className="desktop-no-drag inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+                  disabled={projectDialog.submitting}
+                  onClick={projectDialog.openCreate}
+                  title="New project"
+                  type="button"
+                >
+                  <PlusIcon className="size-3.5" />
+                </button>
+              </div>
 
-          <SidebarMenu>
-            {loading ? (
-              <SidebarMenuItem>
-                <div className="px-2 py-1.5 text-muted-foreground text-xs">
-                  Loading projects...
-                </div>
-              </SidebarMenuItem>
-            ) : error ? (
-              <SidebarMenuItem>
-                <div className="px-2 py-1.5 text-destructive text-xs">{error}</div>
-              </SidebarMenuItem>
-            ) : projects.length === 0 ? (
-              <SidebarMenuItem>
-                <div className="px-2 py-1.5 text-muted-foreground text-xs">
-                  No projects yet.
-                </div>
-              </SidebarMenuItem>
-            ) : (
-              projects.map((project) => (
-                <ProjectRow
-                  activeCollectionId={activeCollectionId}
-                  activeProjectId={activeProjectId}
-                  key={project.id}
-                  onCreateDataset={datasetDialog.openCreate}
-                  onOpenContextMenu={contextMenu.handleRowContextMenu}
-                  project={project}
-                />
-              ))
-            )}
-          </SidebarMenu>
-        </SidebarGroup>
-      </SidebarContent>
+              <SidebarMenu>
+                {loading ? (
+                  <SidebarMenuItem>
+                    <div className="px-2 py-1.5 text-muted-foreground text-xs">
+                      Loading projects...
+                    </div>
+                  </SidebarMenuItem>
+                ) : error ? (
+                  <SidebarMenuItem>
+                    <div className="px-2 py-1.5 text-destructive text-xs">{error}</div>
+                  </SidebarMenuItem>
+                ) : projects.length === 0 ? (
+                  <SidebarMenuItem>
+                    <div className="px-2 py-1.5 text-muted-foreground text-xs">
+                      No projects yet.
+                    </div>
+                  </SidebarMenuItem>
+                ) : (
+                  projects.map((project) => (
+                    <ProjectRow
+                      activeCollectionId={activeCollectionId}
+                      activeProjectId={activeProjectId}
+                      key={project.id}
+                      onCreateDataset={datasetDialog.openCreate}
+                      onOpenContextMenu={contextMenu.handleRowContextMenu}
+                      project={project}
+                    />
+                  ))
+                )}
+              </SidebarMenu>
+            </SidebarGroup>
+          </SidebarContent>
 
-      <SidebarFooter className="p-2">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
-              size="sm"
-            >
-              <SettingsIcon className="size-3.5" />
-              <span className="text-xs">Settings</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
+          <SidebarFooter className="p-2">
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
+                  onClick={() => void navigate({ to: "/settings" })}
+                  size="sm"
+                >
+                  <SettingsIcon className="size-3.5" />
+                  <span className="text-xs">Settings</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarFooter>
+        </>
+      )}
 
       <ProjectDialog
         error={projectDialog.error}

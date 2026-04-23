@@ -1,4 +1,4 @@
-import { SqliteClient, SqliteMigrator } from "@effect/sql-sqlite-node";
+import { SqliteClient, SqliteMigrator } from "./sqliteNode.ts";
 import { Effect, Layer } from "effect";
 import { SqlClient } from "effect/unstable/sql";
 import { catalogMigrations } from "./migrations/index.ts";
