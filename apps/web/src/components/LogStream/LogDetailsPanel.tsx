@@ -1,7 +1,6 @@
 import { XIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { TopTabsItem, TopTabsList, TopTabsTrigger } from "~/components/ui/top-tabs";
@@ -19,6 +18,8 @@ import { TraceOverview } from "./TraceOverview";
 import type { LogEntry, TraceContext } from "./types";
 
 type LogDetailsTab = "properties" | "raw";
+
+const SHEET_EXIT_ANIMATION_MS = 220;
 
 interface LogDetailsPanelProps {
   projectId: string;
@@ -87,33 +88,31 @@ export function LogDetailsPanel({
       rootSpan?.name && rootSpan.name.trim().length > 0
         ? rootSpan.name
         : shortenTraceId(traceContext.traceId);
-    openTraceTab(datasetId, {
+
+    const openTrace = () => openTraceTab(datasetId, {
       traceId: traceContext.traceId,
       title,
       ...(log.spanId ? { initialSpanId: log.spanId } : {}),
     });
-  }, [datasetId, log.spanId, traceContext]);
+
+    if (variant === "sheet") {
+      onClose();
+      window.setTimeout(openTrace, SHEET_EXIT_ANIMATION_MS);
+      return;
+    }
+
+    openTrace();
+  }, [datasetId, log.spanId, onClose, traceContext, variant]);
 
   return (
     <div
       className={cn(
-        "relative flex h-full min-h-0 min-w-0 flex-col bg-background",
+        "flex h-full min-h-0 min-w-0 flex-col bg-background",
         variant === "inline" && "border-l border-border/70",
         className,
       )}
     >
-      {/* Close button is anchored to the panel's top-right regardless of
-          whether the trace overview renders, so the dismiss affordance
-          doesn't drift down when a trace is present. */}
-      <Button
-        aria-label="Close log details"
-        className="absolute right-2 top-2 z-10"
-        onClick={onClose}
-        size="icon-sm"
-        variant="ghost"
-      >
-        <XIcon />
-      </Button>
+      <LogDetailsHeader log={log} onClose={onClose} />
 
       {traceContext !== null ? (
         <TraceOverview onExplore={handleExploreTrace} trace={traceContext} />
@@ -133,6 +132,35 @@ export function LogDetailsPanel({
   );
 }
 
+function LogDetailsHeader({
+  log,
+  onClose,
+}: {
+  log: LogEntry;
+  onClose: () => void;
+}) {
+  return (
+    <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-4">
+      <span className="font-mono text-muted-foreground/80 text-sm">Log</span>
+      <span className="text-muted-foreground/50">—</span>
+      <span
+        className="min-w-0 flex-1 truncate font-mono text-foreground text-sm"
+        title={log.message}
+      >
+        {log.message}
+      </span>
+      <button
+        aria-label="Close log details"
+        className="desktop-no-drag inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+        onClick={onClose}
+        type="button"
+      >
+        <XIcon className="size-3.5" />
+      </button>
+    </div>
+  );
+}
+
 interface TabBarProps {
   activeTab: LogDetailsTab;
   onSelect: (tab: LogDetailsTab) => void;
@@ -140,9 +168,7 @@ interface TabBarProps {
 
 function TabBar({ activeTab, onSelect }: TabBarProps) {
   return (
-    <TopTabsList aria-label="Log detail tabs" className="pr-10">
-      {/* `pr-10` reserves space on the right for the absolutely-positioned
-          close button so the tab labels never collide with it. */}
+    <TopTabsList aria-label="Log detail tabs">
       <TopTabsItem active={activeTab === "properties"}>
         <TopTabsTrigger active={activeTab === "properties"} onClick={() => onSelect("properties")}>
           Event Properties

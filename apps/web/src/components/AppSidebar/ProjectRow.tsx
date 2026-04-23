@@ -1,7 +1,7 @@
 import type { Dataset, Project } from "@lensflare/contracts";
 import { Link } from "@tanstack/react-router";
-import { PlusIcon } from "lucide-react";
-import type * as React from "react";
+import { ChevronRightIcon, PlusIcon } from "lucide-react";
+import * as React from "react";
 
 import {
   SidebarMenuButton,
@@ -10,6 +10,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "~/components/ui/sidebar";
+import { cn } from "~/lib/utils";
 
 import { getProjectIconComponent } from "./constants";
 import {
@@ -43,6 +44,8 @@ export function ProjectRow({
 }: ProjectRowProps) {
   const Icon = getProjectIconComponent(project.icon);
   const isProjectActive = activeProjectId === project.id && activeCollectionId === undefined;
+  const hasDatasets = project.datasets.length > 0;
+  const [datasetsOpen, setDatasetsOpen] = React.useState(true);
 
   return (
     <SidebarMenuItem>
@@ -50,12 +53,25 @@ export function ProjectRow({
         <SidebarMenuButton
           className="gap-2 px-2 py-1.5 pr-8 text-left"
           isActive={isProjectActive}
+          aria-expanded={hasDatasets ? datasetsOpen : undefined}
+          onClick={() => {
+            if (hasDatasets) {
+              setDatasetsOpen((open) => !open);
+            }
+          }}
           onContextMenu={(event: React.MouseEvent<HTMLElement>) => {
             onOpenContextMenu(event, createProjectContextMenuTarget(project));
           }}
-          render={<Link params={{ projectId: project.id }} to="/projects/$projectId" />}
           size="sm"
+          type="button"
         >
+          <ChevronRightIcon
+            aria-hidden="true"
+            className={cn(
+              "size-3 shrink-0 text-muted-foreground/60 transition-transform",
+              hasDatasets ? datasetsOpen && "rotate-90" : "opacity-0",
+            )}
+          />
           <Icon className="size-3.5 shrink-0 text-muted-foreground/70" />
           <span className="flex min-w-0 flex-1 items-center gap-2">
             <span className="truncate font-medium text-foreground/90 text-xs">{project.name}</span>
@@ -75,7 +91,7 @@ export function ProjectRow({
         </button>
       </div>
 
-      {project.datasets.length > 0 ? (
+      {hasDatasets && datasetsOpen ? (
         <SidebarMenuSub>
           {project.datasets.map((dataset) => (
             <DatasetSubRow

@@ -34,6 +34,8 @@ import type { LogEntry, SourceIconKind } from "./types";
  */
 const LOG_DETAILS_SHEET_MEDIA_QUERY = "(max-width: 1024px)";
 
+const SHEET_EXIT_ANIMATION_MS = 220;
+
 const LOG_PAGE_SIZE = 100;
 
 interface LogStreamViewProps {
@@ -289,8 +291,53 @@ function LiveTabPanel({
 }: LiveTabPanelProps) {
   // Keep the live tab mounted so table + details state survive tab switches,
   // but only surface the mobile sheet while this panel is active.
+  const sheetCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [closingSheetLog, setClosingSheetLog] = useState<LogEntry | null>(null);
+  const [isSheetClosing, setIsSheetClosing] = useState(false);
   const showInlineDetails = selectedLog !== null && !shouldUseDetailsSheet;
-  const showSheetDetails = active && selectedLog !== null && shouldUseDetailsSheet;
+  const showSheetDetails =
+    active && selectedLog !== null && shouldUseDetailsSheet && !isSheetClosing;
+  const sheetLog = selectedLog ?? closingSheetLog;
+
+  const clearSheetCloseTimer = useCallback(() => {
+    if (sheetCloseTimerRef.current === null) {
+      return;
+    }
+
+    clearTimeout(sheetCloseTimerRef.current);
+    sheetCloseTimerRef.current = null;
+  }, []);
+
+  const finishSheetClose = useCallback(() => {
+    clearSheetCloseTimer();
+    sheetCloseTimerRef.current = setTimeout(() => {
+      setClosingSheetLog(null);
+      setIsSheetClosing(false);
+      sheetCloseTimerRef.current = null;
+    }, SHEET_EXIT_ANIMATION_MS);
+  }, [clearSheetCloseTimer]);
+
+  const closeSheetDetails = useCallback(() => {
+    if (selectedLog !== null) {
+      setClosingSheetLog(selectedLog);
+    }
+
+    setIsSheetClosing(true);
+    closeDetails();
+    finishSheetClose();
+  }, [closeDetails, finishSheetClose, selectedLog]);
+
+  useEffect(() => {
+    if (selectedLog === null) {
+      return;
+    }
+
+    clearSheetCloseTimer();
+    setClosingSheetLog(null);
+    setIsSheetClosing(false);
+  }, [clearSheetCloseTimer, selectedLog]);
+
+  useEffect(() => clearSheetCloseTimer, [clearSheetCloseTimer]);
 
   return (
     <Activity mode={active ? "visible" : "hidden"} name={`dataset-tab:${datasetId}:live`}>
@@ -332,7 +379,7 @@ function LiveTabPanel({
           <Sheet
             onOpenChange={(open) => {
               if (!open) {
-                closeDetails();
+                closeSheetDetails();
               }
             }}
             open={showSheetDetails}
@@ -342,11 +389,11 @@ function LiveTabPanel({
               showCloseButton={false}
               side="right"
             >
-              {selectedLog !== null ? (
+              {sheetLog !== null ? (
                 <LogDetailsPanel
                   datasetId={datasetId}
-                  log={selectedLog}
-                  onClose={closeDetails}
+                  log={sheetLog}
+                  onClose={closeSheetDetails}
                   projectId={projectId}
                   variant="sheet"
                 />

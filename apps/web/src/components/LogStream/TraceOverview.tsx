@@ -85,10 +85,7 @@ interface TraceHeaderProps {
 
 function TraceHeader({ trace }: TraceHeaderProps) {
   return (
-    // `pr-10` leaves room for the details-panel close button which is
-    // absolutely positioned in the panel's top-right corner. Without the
-    // reservation the span-count and duration collide with the X icon.
-    <div className="flex h-8 items-center justify-between gap-3 px-4 pr-10 font-mono text-[10px] uppercase tracking-wide text-muted-foreground/70">
+    <div className="flex h-8 items-center justify-between gap-3 px-4 font-mono text-[10px] uppercase tracking-wide text-muted-foreground/70">
       <div className="flex min-w-0 items-center gap-2">
         <span className="text-muted-foreground/50">Trace</span>
         <span className="min-w-0 truncate text-foreground/70" title={trace.traceId}>

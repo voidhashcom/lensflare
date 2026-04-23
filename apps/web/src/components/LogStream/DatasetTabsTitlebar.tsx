@@ -83,10 +83,7 @@ function DatasetTabButton({ active, tab, onSelect, onClose }: DatasetTabButtonPr
   return (
     <TopTabsItem
       active={active}
-      className={cn(
-        "desktop-no-drag min-w-24 max-w-56 text-sm relative",
-        tab.closable && "pr-8",
-      )}
+      className={cn("desktop-no-drag relative min-w-24 max-w-56 text-sm")}
     >
       <TopTabsTrigger
         active={active}
