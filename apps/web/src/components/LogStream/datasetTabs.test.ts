@@ -5,6 +5,7 @@ import {
   LIVE_DATASET_TAB_ID,
   closeDatasetTab,
   getDatasetTabState,
+  openTraceTab,
   setActiveDatasetTab,
   type DatasetTabsByDataset,
 } from "./datasetTabs";
@@ -55,5 +56,85 @@ describe("dataset tabs", () => {
     };
 
     expect(closeDatasetTab(tabsByDataset, "dataset-a", LIVE_DATASET_TAB_ID)).toBe(tabsByDataset);
+  });
+
+  it("opens a trace tab and activates it", () => {
+    const next = openTraceTab({}, "dataset-a", {
+      traceId: "abc123",
+      title: "analytics-janitor.select-backlog",
+      initialSpanId: "span-1",
+    });
+
+    const state = getDatasetTabState(next, "dataset-a");
+    expect(state.activeTabId).toBe("trace:abc123");
+    expect(state.tabs).toHaveLength(2);
+    const traceTab = state.tabs.find((tab) => tab.id === "trace:abc123");
+    expect(traceTab).toMatchObject({
+      kind: "trace",
+      closable: true,
+      traceId: "abc123",
+      title: "analytics-janitor.select-backlog",
+      initialSpanId: "span-1",
+    });
+  });
+
+  it("reactivates an existing trace tab instead of duplicating it", () => {
+    const first = openTraceTab({}, "dataset-a", {
+      traceId: "abc123",
+      title: "root",
+    });
+    const switched = setActiveDatasetTab(first, "dataset-a", LIVE_DATASET_TAB_ID);
+    expect(getDatasetTabState(switched, "dataset-a").activeTabId).toBe(LIVE_DATASET_TAB_ID);
+
+    const second = openTraceTab(switched, "dataset-a", {
+      traceId: "abc123",
+      title: "ignored title on reopen",
+    });
+    const state = getDatasetTabState(second, "dataset-a");
+
+    // Reactivated, not duplicated.
+    expect(state.activeTabId).toBe("trace:abc123");
+    expect(state.tabs).toHaveLength(2);
+    // Title stays as it was first registered — late re-opens don't overwrite.
+    const traceTab = state.tabs.find((tab) => tab.id === "trace:abc123");
+    expect(traceTab?.title).toBe("root");
+  });
+
+  it("updates the initial span when reopening an existing trace tab", () => {
+    const first = openTraceTab({}, "dataset-a", {
+      traceId: "abc123",
+      title: "root",
+      initialSpanId: "span-1",
+    });
+    const switched = setActiveDatasetTab(first, "dataset-a", LIVE_DATASET_TAB_ID);
+
+    const second = openTraceTab(switched, "dataset-a", {
+      traceId: "abc123",
+      title: "ignored",
+      initialSpanId: "span-2",
+    });
+
+    const traceTab = getDatasetTabState(second, "dataset-a").tabs.find(
+      (tab) => tab.id === "trace:abc123",
+    );
+    expect(traceTab).toMatchObject({
+      id: "trace:abc123",
+      initialSpanId: "span-2",
+      title: "root",
+    });
+  });
+
+  it("returns the same reference when opening an already-active trace tab", () => {
+    const withTab = openTraceTab({}, "dataset-a", {
+      traceId: "abc123",
+      title: "root",
+    });
+
+    const next = openTraceTab(withTab, "dataset-a", {
+      traceId: "abc123",
+      title: "root",
+    });
+
+    expect(next).toBe(withTab);
   });
 });

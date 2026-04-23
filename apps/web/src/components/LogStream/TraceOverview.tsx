@@ -18,6 +18,12 @@ const CONTEXT_WINDOW = 2;
 interface TraceOverviewProps {
   trace: TraceContext;
   className?: string;
+  /**
+   * Fired when the user clicks the hover "Explore trace" overlay. Consumers
+   * usually open a full-screen trace explorer tab. Omit to leave the button
+   * inert — e.g. in Storybook or tests.
+   */
+  onExplore?: () => void;
 }
 
 /**
@@ -29,9 +35,10 @@ interface TraceOverviewProps {
  * Unlike Axiom's full trace viewer this component is designed to fit above
  * the details tabs without dominating the panel — rows reserve a fixed 24px
  * height, the ruler is intentionally unlabelled, and we don't render a tree
- * connector.
+ * connector. Clicking the hover overlay escalates the user to the full
+ * `TraceExplorer` view via the `onExplore` callback.
  */
-export function TraceOverview({ trace, className }: TraceOverviewProps) {
+export function TraceOverview({ trace, className, onExplore }: TraceOverviewProps) {
   const { visibleSpans, hiddenBefore, hiddenAfter, depthByParent } = useMemo(
     () => buildWindow(trace),
     [trace],
@@ -61,7 +68,9 @@ export function TraceOverview({ trace, className }: TraceOverviewProps) {
       </ol>
       <button
         aria-label="Explore trace"
-        className="absolute inset-0 flex cursor-pointer items-center justify-center bg-background/35 opacity-0 backdrop-blur-xs duration-100 hover:transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+        className="absolute inset-0 flex cursor-pointer items-center justify-center bg-background/35 opacity-0 backdrop-blur-xs duration-100 hover:transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 disabled:cursor-default"
+        disabled={onExplore === undefined}
+        onClick={onExplore}
         type="button"
       >
         <span className="font-medium text-sm text-foreground">Explore trace</span>

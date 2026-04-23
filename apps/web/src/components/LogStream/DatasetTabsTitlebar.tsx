@@ -1,18 +1,20 @@
 import { useParams } from "@tanstack/react-router";
 import { GitBranchIcon, XIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import { LogoSymbol } from "~/components/Logo";
 import { cn } from "~/lib/utils";
 
 import {
-  closeDatasetTab,
   getDatasetTabState,
-  setActiveDatasetTab,
   type DatasetTab,
   type DatasetTabId,
-  type DatasetTabsByDataset,
 } from "./datasetTabs";
+import {
+  closeDatasetTab,
+  setActiveDatasetTab,
+  useDatasetTabsSnapshot,
+} from "./datasetTabsStore";
 
 const ROUTE_PARAMS_OPTIONS = { strict: false } as const;
 
@@ -24,7 +26,7 @@ const ROUTE_PARAMS_OPTIONS = { strict: false } as const;
 export function DatasetTabsTitlebar() {
   const params = useParams(ROUTE_PARAMS_OPTIONS);
   const datasetId = params.collectionId;
-  const [tabsByDataset, setTabsByDataset] = useState<DatasetTabsByDataset>({});
+  const tabsByDataset = useDatasetTabsSnapshot();
 
   const tabState = useMemo(() => {
     if (!datasetId) {
@@ -39,11 +41,11 @@ export function DatasetTabsTitlebar() {
   }
 
   const selectTab = (tabId: DatasetTabId) => {
-    setTabsByDataset((current) => setActiveDatasetTab(current, datasetId, tabId));
+    setActiveDatasetTab(datasetId, tabId);
   };
 
   const closeTab = (tabId: DatasetTabId) => {
-    setTabsByDataset((current) => closeDatasetTab(current, datasetId, tabId));
+    closeDatasetTab(datasetId, tabId);
   };
 
   return (

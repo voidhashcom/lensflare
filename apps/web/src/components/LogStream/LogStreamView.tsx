@@ -10,9 +10,13 @@ import { Sheet, SheetPopup } from "~/components/ui/sheet";
 import { listDatasetLogs, subscribeDatasetLogEntries } from "~/data/logApi";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
 
+import { DatasetTabsTitlebar } from "./DatasetTabsTitlebar";
+import { getDatasetTabState } from "./datasetTabs";
+import { useDatasetTabsSnapshot } from "./datasetTabsStore";
 import { LogDetailsPanel } from "./LogDetailsPanel";
 import { LogStreamHeader } from "./LogStreamHeader";
 import { LogTable, type LogTableHandle } from "./LogTable";
+import { TraceExplorer } from "./TraceExplorer";
 import type { DateRangePreset, LogEntry, SourceIconKind } from "./types";
 
 /**
@@ -49,6 +53,7 @@ export function LogStreamView({
   datasetName,
   datasetIcon = "js",
 }: LogStreamViewProps) {
+  const tabsByDataset = useDatasetTabsSnapshot();
   const [filter, setFilter] = useState<FilterNode | null>(null);
   const [dateRange, _setDateRange] = useState<DateRangePreset>("Last 30 days");
   const [logs, setLogs] = useState<ReadonlyArray<LogEntry>>([]);
@@ -60,6 +65,19 @@ export function LogStreamView({
   const tableRef = useRef<LogTableHandle | null>(null);
   const pageInfoRef = useRef<TelemetryLogPageInfo | null>(null);
   const shouldUseDetailsSheet = useMediaQuery(LOG_DETAILS_SHEET_MEDIA_QUERY);
+  const hasDesktopTitleTabs =
+    typeof document !== "undefined" &&
+    document.documentElement.dataset.runtime === "electron" &&
+    document.documentElement.dataset.platform === "macos";
+
+  const tabState = useMemo(
+    () => getDatasetTabState(tabsByDataset, datasetId),
+    [datasetId, tabsByDataset],
+  );
+  const activeTab = useMemo(
+    () => tabState.tabs.find((tab) => tab.id === tabState.activeTabId) ?? tabState.tabs[0],
+    [tabState],
+  );
 
   // Derive the selected log from the current list so it stays in sync as new
   // entries stream in. If the selection disappears (e.g. pagination trims it)
@@ -199,69 +217,99 @@ export function LogStreamView({
   const showInlineDetails = selectedLog !== null && !shouldUseDetailsSheet;
   const showSheetDetails = selectedLog !== null && shouldUseDetailsSheet;
 
-  return (
-    <div className="flex min-h-0 flex-1 bg-background/40">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <LogStreamHeader
-          datasetIcon={datasetIcon}
-          datasetId={datasetId}
-          datasetName={datasetName}
-          dateRange={dateRange}
-          onFilterChange={setFilter}
-          onScrollClick={handleScrollClick}
-          projectId={projectId}
-        />
-        {errorMessage ? (
-          <div className="border-b border-rose-500/20 bg-rose-500/8 px-4 py-2 font-mono text-[11px] text-rose-200">
-            {errorMessage}
+  if (activeTab?.kind === "trace") {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col bg-background/40">
+        {!hasDesktopTitleTabs ? (
+          <div className="shrink-0 border-b border-border/70 bg-background">
+            <DatasetTabsTitlebar />
           </div>
         ) : null}
-        <LogTable
-          hasPreviousPage={pageInfo?.hasPreviousPage ?? false}
-          isLoadingPrevious={isLoadingOlder}
-          logs={logs}
-          onLoadPrevious={handleLoadOlder}
-          onSelectLog={setSelectedLogId}
-          ref={tableRef}
-          selectedLogId={selectedLogId}
-          waiting={errorMessage === null || isLoading}
+        <TraceExplorer
+          className="min-h-0 flex-1"
+          datasetId={datasetId}
+          projectId={projectId}
+          traceId={activeTab.traceId}
+          {...(activeTab.initialSpanId !== undefined
+            ? { initialSpanId: activeTab.initialSpanId }
+            : {})}
         />
       </div>
-      {showInlineDetails ? (
-        <div className="flex w-[min(42vw,560px)] min-w-[360px] shrink-0 flex-col">
-          <LogDetailsPanel
-            datasetId={datasetId}
-            log={selectedLog}
-            onClose={closeDetails}
-            projectId={projectId}
-            variant="inline"
-          />
+    );
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col bg-background/40">
+      {!hasDesktopTitleTabs ? (
+        <div className="shrink-0 border-b border-border/70 bg-background">
+          <DatasetTabsTitlebar />
         </div>
       ) : null}
-      <Sheet
-        onOpenChange={(open) => {
-          if (!open) {
-            closeDetails();
-          }
-        }}
-        open={showSheetDetails}
-      >
-        <SheetPopup
-          className="w-[min(88vw,560px)] max-w-[560px] p-0"
-          showCloseButton={false}
-          side="right"
-        >
-          {selectedLog !== null ? (
-            <LogDetailsPanel
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 flex-1">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <LogStreamHeader
+              datasetIcon={datasetIcon}
               datasetId={datasetId}
-              log={selectedLog}
-              onClose={closeDetails}
+              datasetName={datasetName}
+              dateRange={dateRange}
+              onFilterChange={setFilter}
+              onScrollClick={handleScrollClick}
               projectId={projectId}
-              variant="sheet"
             />
+            {errorMessage ? (
+              <div className="border-b border-rose-500/20 bg-rose-500/8 px-4 py-2 font-mono text-[11px] text-rose-200">
+                {errorMessage}
+              </div>
+            ) : null}
+            <LogTable
+              hasPreviousPage={pageInfo?.hasPreviousPage ?? false}
+              isLoadingPrevious={isLoadingOlder}
+              logs={logs}
+              onLoadPrevious={handleLoadOlder}
+              onSelectLog={setSelectedLogId}
+              ref={tableRef}
+              selectedLogId={selectedLogId}
+              waiting={errorMessage === null || isLoading}
+            />
+          </div>
+          {showInlineDetails ? (
+            <div className="flex w-[min(42vw,560px)] min-w-[360px] shrink-0 flex-col">
+              <LogDetailsPanel
+                datasetId={datasetId}
+                log={selectedLog}
+                onClose={closeDetails}
+                projectId={projectId}
+                variant="inline"
+              />
+            </div>
           ) : null}
-        </SheetPopup>
-      </Sheet>
+          <Sheet
+            onOpenChange={(open) => {
+              if (!open) {
+                closeDetails();
+              }
+            }}
+            open={showSheetDetails}
+          >
+            <SheetPopup
+              className="w-[min(88vw,560px)] max-w-[560px] p-0"
+              showCloseButton={false}
+              side="right"
+            >
+              {selectedLog !== null ? (
+                <LogDetailsPanel
+                  datasetId={datasetId}
+                  log={selectedLog}
+                  onClose={closeDetails}
+                  projectId={projectId}
+                  variant="sheet"
+                />
+              ) : null}
+            </SheetPopup>
+          </Sheet>
+        </div>
+      </div>
     </div>
   );
 }

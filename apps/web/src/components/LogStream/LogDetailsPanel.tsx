@@ -1,5 +1,5 @@
 import { XIcon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -7,6 +7,7 @@ import { ScrollArea } from "~/components/ui/scroll-area";
 import { getLogTraceContext } from "~/data/logApi";
 import { cn } from "~/lib/utils";
 
+import { openTraceTab } from "./datasetTabsStore";
 import {
   buildLogDetailEntries,
   buildLogRawData,
@@ -75,6 +76,23 @@ export function LogDetailsPanel({
     };
   }, [datasetId, log.spanId, log.traceId, projectId]);
 
+  const handleExploreTrace = useCallback(() => {
+    if (!traceContext) return;
+    // Title the tab after the root span — it's the most recognisable handle
+    // for a trace and matches what users see at the top of the waterfall.
+    // Fall back to the shortened trace id if the root span has no name.
+    const rootSpan = traceContext.spans.find((span) => span.parentSpanId === null);
+    const title =
+      rootSpan?.name && rootSpan.name.trim().length > 0
+        ? rootSpan.name
+        : shortenTraceId(traceContext.traceId);
+    openTraceTab(datasetId, {
+      traceId: traceContext.traceId,
+      title,
+      ...(log.spanId ? { initialSpanId: log.spanId } : {}),
+    });
+  }, [datasetId, log.spanId, traceContext]);
+
   return (
     <div
       className={cn(
@@ -96,7 +114,9 @@ export function LogDetailsPanel({
         <XIcon />
       </Button>
 
-      {traceContext !== null ? <TraceOverview trace={traceContext} /> : null}
+      {traceContext !== null ? (
+        <TraceOverview onExplore={handleExploreTrace} trace={traceContext} />
+      ) : null}
       <TabBar activeTab={tab} onSelect={setTab} />
 
       {tab === "properties" ? (
@@ -236,4 +256,14 @@ function RawDataTab({ log }: { log: LogEntry }) {
       <div className="p-4 font-mono text-xs leading-relaxed">{renderedRaw}</div>
     </ScrollArea>
   );
+}
+
+/**
+ * Produce a human-readable shortened trace id for tab titles when the trace
+ * has no root span name to borrow from. Mirrors the approach used by
+ * {@link TraceOverview} so both surfaces abbreviate identically.
+ */
+function shortenTraceId(traceId: string): string {
+  if (traceId.length <= 14) return traceId;
+  return `${traceId.slice(0, 8)}…${traceId.slice(-4)}`;
 }
