@@ -106,8 +106,7 @@ interface SpanRowProps {
 function SpanRow({ span, depth, isCurrent, totalDurationUs }: SpanRowProps) {
   // Proportional bar position. We clamp to a small minimum width so very
   // short spans still leave a visible mark on the timeline. When the trace
-  // duration is zero (shouldn't happen in practice, but guards against a
-  // degenerate mock trace) we render an empty strip rather than divide by 0.
+  // duration is zero we render an empty strip rather than divide by 0.
   const scale = totalDurationUs === 0 ? 0 : 100 / totalDurationUs;
   const startPercent = span.startOffsetUs * scale;
   const widthPercent = Math.max(span.durationUs * scale, 0.8);

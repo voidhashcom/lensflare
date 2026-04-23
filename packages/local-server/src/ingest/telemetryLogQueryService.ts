@@ -5,6 +5,8 @@ import {
   type TelemetryLogEntry,
   type TelemetryLogLevel,
   type TelemetryLogPage,
+  type TelemetryTraceContext,
+  type TelemetryTraceSpanStatus,
 } from "@lensflare/contracts";
 import type { DuckDBValue } from "@duckdb/node-api";
 import { Context, Effect, Layer } from "effect";
@@ -40,6 +42,17 @@ interface TelemetryLogRow {
   readonly traceId: string | null;
   readonly spanId: string | null;
   readonly attributesJson: string | null;
+}
+
+interface TelemetrySpanRow {
+  readonly spanId: string;
+  readonly parentSpanId: string | null;
+  readonly name: string;
+  readonly serviceName: string | null;
+  readonly startTime: string;
+  readonly endTime: string | null;
+  readonly durationUs: number | null;
+  readonly statusCode: number | null;
 }
 
 const duckDbTimestampPattern = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/;
@@ -112,6 +125,23 @@ const SELECT_SUFFIX = `
   LIMIT $limit
 `;
 
+const selectTraceSpansSql = `
+  SELECT
+    span_id,
+    parent_span_id,
+    name,
+    COALESCE(service_name, dataset_slug, provider_kind) AS service_name,
+    CAST(start_time AS VARCHAR) AS start_time,
+    CASE WHEN end_time IS NULL THEN NULL ELSE CAST(end_time AS VARCHAR) END AS end_time,
+    duration_us,
+    status_code
+  FROM span_records
+  WHERE project_id = $project_id
+    AND dataset_id = $dataset_id
+    AND trace_id = $trace_id
+  ORDER BY start_time ASC, span_id ASC
+`;
+
 function toTimestamp(raw: string): string {
   const normalized = duckDbTimestampPattern.test(raw) ? `${raw.replace(" ", "T")}Z` : raw;
   const parsed = new Date(normalized);
@@ -148,6 +178,19 @@ function decodeTelemetryLogRow(row: Record<string, unknown>): TelemetryLogRow {
     traceId: toNullableString(row.trace_id),
     spanId: toNullableString(row.span_id),
     attributesJson: toNullableString(row.attributes_json),
+  };
+}
+
+function decodeTelemetrySpanRow(row: Record<string, unknown>): TelemetrySpanRow {
+  return {
+    spanId: String(row.span_id ?? ""),
+    parentSpanId: toNullableString(row.parent_span_id),
+    name: String(row.name ?? ""),
+    serviceName: toNullableString(row.service_name),
+    startTime: String(row.start_time ?? ""),
+    endTime: toNullableString(row.end_time),
+    durationUs: toNullableNumber(row.duration_us),
+    statusCode: toNullableNumber(row.status_code),
   };
 }
 
@@ -219,6 +262,85 @@ function mapRow(row: TelemetryLogRow): TelemetryLogEntry {
     traceId: row.traceId,
     spanId: row.spanId,
     attributes: parseAttributes(row.attributesJson),
+  };
+}
+
+function toTraceSpanStatus(statusCode: number | null): TelemetryTraceSpanStatus {
+  if (statusCode === 2) {
+    return "error";
+  }
+  if (statusCode === 1) {
+    return "ok";
+  }
+  return "unset";
+}
+
+function durationUs(row: TelemetrySpanRow): number {
+  if (row.durationUs !== null && Number.isFinite(row.durationUs) && row.durationUs >= 0) {
+    return row.durationUs;
+  }
+
+  if (row.endTime === null) {
+    return 0;
+  }
+
+  const startMs = new Date(toTimestamp(row.startTime)).getTime();
+  const endMs = new Date(toTimestamp(row.endTime)).getTime();
+  return Number.isFinite(startMs) && Number.isFinite(endMs) && endMs >= startMs
+    ? (endMs - startMs) * 1_000
+    : 0;
+}
+
+function toTraceContext(
+  traceId: string,
+  rows: ReadonlyArray<TelemetrySpanRow>,
+  currentSpanId?: string | undefined,
+): TelemetryTraceContext | null {
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const startTimes = rows
+    .map((row) => new Date(toTimestamp(row.startTime)).getTime())
+    .filter((value) => Number.isFinite(value));
+  const traceStartMs = Math.min(...startTimes);
+  if (!Number.isFinite(traceStartMs)) {
+    return null;
+  }
+
+  let totalDurationUs = 0;
+  const spans = rows.map((row) => {
+    const rowStartMs = new Date(toTimestamp(row.startTime)).getTime();
+    const startOffsetUs = Number.isFinite(rowStartMs)
+      ? Math.max(0, (rowStartMs - traceStartMs) * 1_000)
+      : 0;
+    const spanDurationUs = durationUs(row);
+    totalDurationUs = Math.max(totalDurationUs, startOffsetUs + spanDurationUs);
+
+    return {
+      id: row.spanId,
+      parentSpanId: row.parentSpanId && row.parentSpanId.length > 0 ? row.parentSpanId : null,
+      name: row.name || "unnamed span",
+      serviceName: row.serviceName ?? "unknown",
+      startOffsetUs,
+      durationUs: spanDurationUs,
+      status: toTraceSpanStatus(row.statusCode),
+    };
+  });
+
+  const selectedSpan =
+    currentSpanId && spans.some((span) => span.id === currentSpanId) ? currentSpanId : spans[0]?.id;
+
+  if (!selectedSpan) {
+    return null;
+  }
+
+  return {
+    traceId,
+    startTime: new Date(traceStartMs).toISOString(),
+    totalDurationUs,
+    spans,
+    currentSpanId: selectedSpan,
   };
 }
 
@@ -330,6 +452,12 @@ export class TelemetryLogQueryService extends Context.Service<
       ReadonlyArray<string>,
       DatasetNotFound | DuckDbError | InvalidFilterError | SqlError.SqlError
     >;
+    readonly getTraceContext: (
+      projectId: string,
+      datasetId: string,
+      traceId: string,
+      currentSpanId?: string | undefined,
+    ) => Effect.Effect<TelemetryTraceContext | null, DatasetNotFound | DuckDbError | SqlError.SqlError>;
   }
 >()("@lensflare/local-server/TelemetryLogQueryService") {
   static readonly layer = Layer.effect(
@@ -463,7 +591,32 @@ export class TelemetryLogQueryService extends Context.Service<
           .map((value) => String(value));
       });
 
-      return TelemetryLogQueryService.of({ listDatasetLogs, listFields, listFieldValues });
+      const getTraceContext = Effect.fn("TelemetryLogQueryService.getTraceContext")(function* (
+        projectId: string,
+        datasetId: string,
+        traceId: string,
+        currentSpanId?: string | undefined,
+      ) {
+        const dataset = yield* datasets.findById(projectId, datasetId);
+        if (dataset === undefined) {
+          return yield* new DatasetNotFound({ datasetId, projectId });
+        }
+
+        const rows = yield* telemetry.queryRows<Record<string, unknown>>(selectTraceSpansSql, {
+          project_id: projectId,
+          dataset_id: datasetId,
+          trace_id: traceId,
+        });
+
+        return toTraceContext(traceId, rows.map((row) => decodeTelemetrySpanRow(row)), currentSpanId);
+      });
+
+      return TelemetryLogQueryService.of({
+        listDatasetLogs,
+        listFields,
+        listFieldValues,
+        getTraceContext,
+      });
     }),
   );
 }

@@ -1,9 +1,10 @@
 import { XIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { ScrollArea } from "~/components/ui/scroll-area";
+import { getLogTraceContext } from "~/data/logApi";
 import { cn } from "~/lib/utils";
 
 import {
@@ -12,13 +13,14 @@ import {
   isNullLike,
   renderDetailValue,
 } from "./logDetailsFormat";
-import { buildLogTraceContext } from "./mockTrace";
 import { TraceOverview } from "./TraceOverview";
-import type { LogEntry } from "./types";
+import type { LogEntry, TraceContext } from "./types";
 
 type LogDetailsTab = "properties" | "raw";
 
 interface LogDetailsPanelProps {
+  projectId: string;
+  datasetId: string;
   log: LogEntry;
   onClose: () => void;
   /** `sheet` is used when the panel renders inside a modal sheet — we drop
@@ -34,6 +36,8 @@ interface LogDetailsPanelProps {
  * container.
  */
 export function LogDetailsPanel({
+  projectId,
+  datasetId,
   log,
   onClose,
   variant = "inline",
@@ -41,12 +45,35 @@ export function LogDetailsPanel({
 }: LogDetailsPanelProps) {
   const [tab, setTab] = useState<LogDetailsTab>("properties");
   const [showNullValues, setShowNullValues] = useState(false);
+  const [traceContext, setTraceContext] = useState<TraceContext | null>(null);
 
-  // Trace context for the log, when the log is part of a trace. Rendered
-  // above the tab bar so users can see where in the request lifecycle the
-  // event fired before drilling into the event's raw fields. Memoised on
-  // `log` — the mock generator is pure but non-trivial.
-  const traceContext = useMemo(() => buildLogTraceContext(log), [log]);
+  useEffect(() => {
+    let cancelled = false;
+
+    setTraceContext(null);
+    if (!log.traceId) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void getLogTraceContext(projectId, datasetId, log.traceId, log.spanId).then(
+      (trace) => {
+        if (!cancelled) {
+          setTraceContext(trace);
+        }
+      },
+      () => {
+        if (!cancelled) {
+          setTraceContext(null);
+        }
+      },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [datasetId, log.spanId, log.traceId, projectId]);
 
   return (
     <div

@@ -33,7 +33,7 @@ export function decodeBatch(args: {
       }),
   }).pipe(
     Effect.flatMap((batch) =>
-      batch.records.length === 0
+      (batch.signal === "logs" ? batch.records.length : batch.spans.length) === 0
         ? Effect.fail(
             new NormalizationFailure({
               provider: args.provider,

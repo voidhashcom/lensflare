@@ -229,7 +229,13 @@ export function LogStreamView({
       </div>
       {showInlineDetails ? (
         <div className="flex w-[min(42vw,560px)] min-w-[360px] shrink-0 flex-col">
-          <LogDetailsPanel log={selectedLog} onClose={closeDetails} variant="inline" />
+          <LogDetailsPanel
+            datasetId={datasetId}
+            log={selectedLog}
+            onClose={closeDetails}
+            projectId={projectId}
+            variant="inline"
+          />
         </div>
       ) : null}
       <Sheet
@@ -246,7 +252,13 @@ export function LogStreamView({
           side="right"
         >
           {selectedLog !== null ? (
-            <LogDetailsPanel log={selectedLog} onClose={closeDetails} variant="sheet" />
+            <LogDetailsPanel
+              datasetId={datasetId}
+              log={selectedLog}
+              onClose={closeDetails}
+              projectId={projectId}
+              variant="sheet"
+            />
           ) : null}
         </SheetPopup>
       </Sheet>
@@ -268,6 +280,8 @@ function toLogEntry(
     sourceIcon: inferSourceIcon(entry.sourceName, datasetIcon),
     level: entry.level,
     message: entry.message,
+    ...(entry.traceId ? { traceId: entry.traceId } : {}),
+    ...(entry.spanId ? { spanId: entry.spanId } : {}),
   };
 }
 

@@ -1,6 +1,10 @@
 import { HttpServerResponse } from "effect/unstable/http";
 import type { IngestErrorMapping } from "../../../http/ingestErrorMapping.ts";
-import { exportLogsServiceResponseType, googleRpcStatusType } from "./proto.ts";
+import {
+  exportLogsServiceResponseType,
+  exportTraceServiceResponseType,
+  googleRpcStatusType,
+} from "./proto.ts";
 import type { OtlpWireFormat } from "./normalize.ts";
 
 /**
@@ -33,18 +37,21 @@ export function otlpResponseContentType(format: OtlpWireFormat): string {
  */
 function encodeOtlpSuccessBody(
   format: OtlpWireFormat,
+  signal: "logs" | "traces",
   partial:
     | {
-        readonly rejectedLogRecords: number;
+        readonly rejectedRecords: number;
         readonly errorMessage: string;
       }
     | undefined,
 ): Uint8Array | string {
   const payload =
-    partial && partial.rejectedLogRecords > 0
+    partial && partial.rejectedRecords > 0
       ? {
           partial_success: {
-            rejected_log_records: partial.rejectedLogRecords,
+            ...(signal === "logs"
+              ? { rejected_log_records: partial.rejectedRecords }
+              : { rejected_spans: partial.rejectedRecords }),
             error_message: partial.errorMessage,
           },
         }
@@ -52,10 +59,12 @@ function encodeOtlpSuccessBody(
 
   if (format === "json") {
     return JSON.stringify(
-      partial && partial.rejectedLogRecords > 0
+      partial && partial.rejectedRecords > 0
         ? {
             partialSuccess: {
-              rejectedLogRecords: partial.rejectedLogRecords,
+              ...(signal === "logs"
+                ? { rejectedLogRecords: partial.rejectedRecords }
+                : { rejectedSpans: partial.rejectedRecords }),
               errorMessage: partial.errorMessage,
             },
           }
@@ -63,7 +72,9 @@ function encodeOtlpSuccessBody(
     );
   }
 
-  return exportLogsServiceResponseType.encode(payload).finish();
+  return signal === "logs"
+    ? exportLogsServiceResponseType.encode(payload).finish()
+    : exportTraceServiceResponseType.encode(payload).finish();
 }
 
 /**
@@ -101,16 +112,21 @@ function asHttpResponse(body: Uint8Array | string, status: number, contentType: 
 export function otlpSuccessResponse(
   format: OtlpWireFormat,
   args: {
+    readonly signal?: "logs" | "traces";
     readonly rejectedRecords: number;
     readonly warnings: ReadonlyArray<string>;
   },
 ) {
+  const signal = args.signal ?? "logs";
   const body = encodeOtlpSuccessBody(
     format,
+    signal,
     args.rejectedRecords > 0
       ? {
-          rejectedLogRecords: args.rejectedRecords,
-          errorMessage: args.warnings.join("; ") || "Some log records were rejected.",
+          rejectedRecords: args.rejectedRecords,
+          errorMessage:
+            args.warnings.join("; ") ||
+            (signal === "logs" ? "Some log records were rejected." : "Some spans were rejected."),
         }
       : undefined,
   );

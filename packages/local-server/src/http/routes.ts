@@ -398,6 +398,45 @@ export function makeHttpRoutesLayer(options: HttpRoutesOptions) {
           ),
       );
 
+      yield* router.add(
+        "GET",
+        "/api/projects/:projectId/datasets/:datasetId/traces/:traceId",
+        (request) =>
+          Effect.gen(function* () {
+            const logs = yield* TelemetryLogQueryService;
+            const params = yield* HttpRouter.params;
+            const url = new URL(request.url, options.origin);
+            const currentSpanId = url.searchParams.get("spanId")?.trim() || undefined;
+
+            return yield* logs
+              .getTraceContext(
+                params.projectId ?? "",
+                params.datasetId ?? "",
+                params.traceId ?? "",
+                currentSpanId,
+              )
+              .pipe(
+                Effect.map((trace) => HttpServerResponse.jsonUnsafe(trace)),
+                Effect.catchTag("DatasetNotFound", (error) =>
+                  Effect.succeed(
+                    HttpServerResponse.jsonUnsafe(
+                      {
+                        error: {
+                          tag: error._tag,
+                          message: "Dataset not found.",
+                        },
+                      },
+                      { status: 404 },
+                    ),
+                  ),
+                ),
+              );
+          }).pipe(
+            Effect.catchTag("SqlError", Effect.die),
+            Effect.catchTag("DuckDbError", Effect.die),
+          ),
+      );
+
       const apiNotFound = HttpServerResponse.jsonUnsafe(
         {
           error: {

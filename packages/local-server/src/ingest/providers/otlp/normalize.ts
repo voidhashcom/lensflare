@@ -1,8 +1,8 @@
 import { Schema } from "effect";
 import { jsonStringOrNull } from "../../normalization/json.ts";
 import { parseTimestamp } from "../../normalization/timestamps.ts";
-import type { NormalizedIngestBatch, NormalizedLogRecord } from "../../types.ts";
-import { exportLogsServiceRequestType } from "./proto.ts";
+import type { NormalizedIngestBatch, NormalizedLogRecord, NormalizedSpanRecord } from "../../types.ts";
+import { exportLogsServiceRequestType, exportTraceServiceRequestType } from "./proto.ts";
 
 export type OtlpWireFormat = "json" | "protobuf";
 
@@ -41,6 +41,14 @@ function bytesToHex(value: unknown): string | null {
   }
 
   return null;
+}
+
+function attributeStringOrNull(
+  attributes: Readonly<Record<string, unknown>>,
+  key: string,
+): string | null {
+  const value = attributes[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 function anyValueToJson(value: unknown): unknown {
@@ -148,6 +156,134 @@ export function parseDocument(format: OtlpWireFormat, body: Uint8Array): Record<
   }) as Record<string, unknown>;
 }
 
+export function parseTraceDocument(
+  format: OtlpWireFormat,
+  body: Uint8Array,
+): Record<string, unknown> {
+  if (format === "json") {
+    return decodeUnknownJsonString(Buffer.from(body).toString("utf8")) as Record<string, unknown>;
+  }
+
+  return exportTraceServiceRequestType.toObject(exportTraceServiceRequestType.decode(body), {
+    longs: String,
+    enums: Number,
+    bytes: Uint8Array,
+  }) as Record<string, unknown>;
+}
+
+function requiredHex(value: unknown): string | null {
+  const hex = bytesToHex(value);
+  return hex && hex.length > 0 ? hex : null;
+}
+
+function optionalHex(value: unknown): string | null {
+  return bytesToHex(value);
+}
+
+function integerOrNull(value: unknown): number | null {
+  if (typeof value === "number" && Number.isInteger(value)) {
+    return value;
+  }
+  if (typeof value === "string" && /^-?\d+$/.test(value)) {
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function enumStringOrNumber(value: unknown): string | number | null {
+  return typeof value === "string" || typeof value === "number" ? value : null;
+}
+
+function normalizeSpanKind(value: unknown): string | null {
+  const raw = enumStringOrNumber(value);
+  if (raw === null) {
+    return null;
+  }
+
+  if (typeof raw === "number") {
+    switch (raw) {
+      case 1:
+        return "internal";
+      case 2:
+        return "server";
+      case 3:
+        return "client";
+      case 4:
+        return "producer";
+      case 5:
+        return "consumer";
+      default:
+        return "unspecified";
+    }
+  }
+
+  return raw.replace(/^SPAN_KIND_/, "").toLowerCase();
+}
+
+function normalizeStatusCode(value: unknown): number | null {
+  const raw = enumStringOrNumber(value);
+  if (raw === null) {
+    return null;
+  }
+  if (typeof raw === "number") {
+    return raw;
+  }
+  switch (raw) {
+    case "STATUS_CODE_OK":
+    case "Ok":
+    case "OK":
+      return 1;
+    case "STATUS_CODE_ERROR":
+    case "Error":
+    case "ERROR":
+      return 2;
+    case "STATUS_CODE_UNSET":
+    case "Unset":
+    case "UNSET":
+      return 0;
+    default:
+      return null;
+  }
+}
+
+function nanoStringToBigInt(value: unknown): bigint | null {
+  if (typeof value === "string" && /^\d+$/.test(value)) {
+    try {
+      return BigInt(value);
+    } catch {
+      return null;
+    }
+  }
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return BigInt(Math.trunc(value));
+  }
+  return null;
+}
+
+function durationUsFromNanos(start: unknown, end: unknown): number | null {
+  const startNanos = nanoStringToBigInt(start);
+  const endNanos = nanoStringToBigInt(end);
+  if (startNanos === null || endNanos === null || endNanos < startNanos) {
+    return null;
+  }
+
+  const duration = Number((endNanos - startNanos) / 1_000n);
+  return Number.isFinite(duration) ? duration : null;
+}
+
+function durationUsFromIso(startTime: string, endTime: string | null): number {
+  if (endTime === null) {
+    return 0;
+  }
+
+  const startMs = new Date(startTime).getTime();
+  const endMs = new Date(endTime).getTime();
+  return Number.isFinite(startMs) && Number.isFinite(endMs) && endMs >= startMs
+    ? (endMs - startMs) * 1_000
+    : 0;
+}
+
 /**
  * Walk the OTLP `ExportLogsServiceRequest` tree and flatten its
  * `ResourceLogs → ScopeLogs → LogRecord` hierarchy into the provider-agnostic
@@ -183,14 +319,20 @@ export function normalizeOtlpDocument(document: Record<string, unknown>): Normal
       for (const logRecord of logRecords) {
         const attributes = keyValueArrayToObject(getRecordValue(logRecord, "attributes"));
         const { bodyText, bodyJson } = normalizeBody(getRecordValue(logRecord, "body"));
+        const traceId =
+          bytesToHex(getRecordValue(logRecord, "traceId", "trace_id")) ??
+          attributeStringOrNull(attributes, "traceId");
+        const spanId =
+          bytesToHex(getRecordValue(logRecord, "spanId", "span_id")) ??
+          attributeStringOrNull(attributes, "spanId");
 
         records.push({
           timestamp: parseTimestamp(getRecordValue(logRecord, "timeUnixNano", "time_unix_nano")),
           observedTimestamp: parseTimestamp(
             getRecordValue(logRecord, "observedTimeUnixNano", "observed_time_unix_nano"),
           ),
-          traceId: bytesToHex(getRecordValue(logRecord, "traceId", "trace_id")),
-          spanId: bytesToHex(getRecordValue(logRecord, "spanId", "span_id")),
+          traceId,
+          spanId,
           traceFlags: scalarStringOrNull(getRecordValue(logRecord, "flags")),
           severityNumber: numberOrNull(
             getRecordValue(logRecord, "severityNumber", "severity_number"),
@@ -221,5 +363,84 @@ export function normalizeOtlpDocument(document: Record<string, unknown>): Normal
     records,
     droppedRecords: 0,
     warnings: [],
+  };
+}
+
+export function normalizeOtlpTraceDocument(document: Record<string, unknown>): NormalizedIngestBatch {
+  const spans: Array<NormalizedSpanRecord> = [];
+  const warnings: Array<string> = [];
+  let droppedRecords = 0;
+  const resourceSpans = toObjectArray(getRecordValue(document, "resourceSpans", "resource_spans"));
+
+  for (const resourceSpan of resourceSpans) {
+    const resource = toObjectRecord(getRecordValue(resourceSpan, "resource"));
+    const resourceAttributes = keyValueArrayToObject(getRecordValue(resource ?? {}, "attributes"));
+    const resourceJson = jsonStringOrNull(resourceAttributes);
+    const serviceNameValue = resourceAttributes["service.name"];
+    const serviceName = typeof serviceNameValue === "string" ? serviceNameValue : null;
+    const resourceSchemaUrl = stringOrNull(getRecordValue(resourceSpan, "schemaUrl", "schema_url"));
+
+    const scopeSpans = toObjectArray(getRecordValue(resourceSpan, "scopeSpans", "scope_spans"));
+    for (const scopeSpan of scopeSpans) {
+      const scope = toObjectRecord(getRecordValue(scopeSpan, "scope"));
+      const scopeAttributes = keyValueArrayToObject(getRecordValue(scope ?? {}, "attributes"));
+      const scopeJson = jsonStringOrNull(scopeAttributes);
+      const scopeName = stringOrNull(getRecordValue(scope ?? {}, "name"));
+      const scopeVersion = stringOrNull(getRecordValue(scope ?? {}, "version"));
+      const scopeSchemaUrl = stringOrNull(getRecordValue(scopeSpan, "schemaUrl", "schema_url"));
+
+      const rawSpans = toObjectArray(getRecordValue(scopeSpan, "spans"));
+      for (const span of rawSpans) {
+        const traceId = requiredHex(getRecordValue(span, "traceId", "trace_id"));
+        const spanId = requiredHex(getRecordValue(span, "spanId", "span_id"));
+        const name = stringOrNull(getRecordValue(span, "name"));
+        const startValue = getRecordValue(span, "startTimeUnixNano", "start_time_unix_nano");
+        const endValue = getRecordValue(span, "endTimeUnixNano", "end_time_unix_nano");
+        const startTime = parseTimestamp(startValue);
+        const endTime = parseTimestamp(endValue);
+
+        if (traceId === null || spanId === null || name === null || startTime === null) {
+          droppedRecords += 1;
+          warnings.push("Dropped OTLP span missing trace id, span id, name, or start time.");
+          continue;
+        }
+
+        const attributes = keyValueArrayToObject(getRecordValue(span, "attributes"));
+        const status = toObjectRecord(getRecordValue(span, "status"));
+
+        spans.push({
+          traceId,
+          spanId,
+          parentSpanId: optionalHex(getRecordValue(span, "parentSpanId", "parent_span_id")),
+          name,
+          kind: normalizeSpanKind(getRecordValue(span, "kind")),
+          startTime,
+          endTime,
+          durationUs: durationUsFromNanos(startValue, endValue) ?? durationUsFromIso(startTime, endTime),
+          statusCode: normalizeStatusCode(getRecordValue(status ?? {}, "code")),
+          statusMessage: stringOrNull(getRecordValue(status ?? {}, "message")),
+          serviceName,
+          resourceSchemaUrl,
+          scopeName,
+          scopeVersion,
+          scopeSchemaUrl,
+          resourceJson,
+          scopeJson,
+          attributesJson: jsonStringOrNull(attributes),
+          droppedAttributesCount: integerOrNull(
+            getRecordValue(span, "droppedAttributesCount", "dropped_attributes_count"),
+          ),
+          rawSpanJson: JSON.stringify(span),
+        });
+      }
+    }
+  }
+
+  return {
+    providerKind: "otlp_http_traces",
+    signal: "traces",
+    spans,
+    droppedRecords,
+    warnings,
   };
 }
