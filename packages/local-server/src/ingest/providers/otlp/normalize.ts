@@ -1,7 +1,12 @@
 import { Schema } from "effect";
 import { jsonStringOrNull } from "../../normalization/json.ts";
 import { parseTimestamp } from "../../normalization/timestamps.ts";
-import type { NormalizedIngestBatch, NormalizedLogRecord, NormalizedSpanRecord } from "../../types.ts";
+import type {
+  NormalizedIngestBatch,
+  NormalizedLogRecord,
+  NormalizedSpanEventRecord,
+  NormalizedSpanRecord,
+} from "../../types.ts";
 import { exportLogsServiceRequestType, exportTraceServiceRequestType } from "./proto.ts";
 
 export type OtlpWireFormat = "json" | "protobuf";
@@ -247,6 +252,47 @@ function normalizeStatusCode(value: unknown): number | null {
   }
 }
 
+function normalizeSpanEvents(
+  span: Record<string, unknown>,
+  args: {
+    readonly traceId: string;
+    readonly spanId: string;
+    readonly serviceName: string | null;
+    readonly resourceSchemaUrl: string | null;
+    readonly scopeName: string | null;
+    readonly scopeVersion: string | null;
+    readonly scopeSchemaUrl: string | null;
+  },
+): ReadonlyArray<NormalizedSpanEventRecord> {
+  const events: Array<NormalizedSpanEventRecord> = [];
+  for (const event of toObjectArray(getRecordValue(span, "events"))) {
+    const name = stringOrNull(getRecordValue(event, "name"));
+    const timestamp = parseTimestamp(getRecordValue(event, "timeUnixNano", "time_unix_nano"));
+    if (name === null || timestamp === null) {
+      continue;
+    }
+
+    const attributes = keyValueArrayToObject(getRecordValue(event, "attributes"));
+    events.push({
+      traceId: args.traceId,
+      spanId: args.spanId,
+      timestamp,
+      name,
+      serviceName: args.serviceName,
+      resourceSchemaUrl: args.resourceSchemaUrl,
+      scopeName: args.scopeName,
+      scopeVersion: args.scopeVersion,
+      scopeSchemaUrl: args.scopeSchemaUrl,
+      attributesJson: jsonStringOrNull(attributes),
+      droppedAttributesCount: integerOrNull(
+        getRecordValue(event, "droppedAttributesCount", "dropped_attributes_count"),
+      ),
+      rawEventJson: JSON.stringify(event),
+    });
+  }
+  return events;
+}
+
 function nanoStringToBigInt(value: unknown): bigint | null {
   if (typeof value === "string" && /^\d+$/.test(value)) {
     try {
@@ -431,6 +477,15 @@ export function normalizeOtlpTraceDocument(document: Record<string, unknown>): N
             getRecordValue(span, "droppedAttributesCount", "dropped_attributes_count"),
           ),
           rawSpanJson: JSON.stringify(span),
+          events: normalizeSpanEvents(span, {
+            traceId,
+            spanId,
+            serviceName,
+            resourceSchemaUrl,
+            scopeName,
+            scopeVersion,
+            scopeSchemaUrl,
+          }),
         });
       }
     }

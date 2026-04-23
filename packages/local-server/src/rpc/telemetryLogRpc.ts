@@ -9,6 +9,8 @@ export const telemetryLogRpcLayer = TelemetryLogRpcGroup.toLayer(
     return TelemetryLogRpcGroup.of({
       SubscribeTelemetryLogEvents: ({ projectId, datasetId, filter }) =>
         service.streamDatasetLogs(projectId, datasetId, filter),
+      SubscribeTelemetryEvents: ({ projectId, datasetId, filter }) =>
+        service.streamDatasetTelemetry(projectId, datasetId, filter),
     });
   }),
 );

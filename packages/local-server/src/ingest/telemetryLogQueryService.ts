@@ -55,6 +55,15 @@ interface TelemetrySpanRow {
   readonly statusCode: number | null;
 }
 
+interface TelemetrySpanEventRow {
+  readonly id: string;
+  readonly traceId: string;
+  readonly spanId: string;
+  readonly timestamp: string;
+  readonly name: string;
+  readonly attributesJson: string | null;
+}
+
 const duckDbTimestampPattern = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/;
 
 /**
@@ -142,6 +151,21 @@ const selectTraceSpansSql = `
   ORDER BY start_time ASC, span_id ASC
 `;
 
+const selectTraceSpanEventsSql = `
+  SELECT
+    id,
+    trace_id,
+    span_id,
+    CAST(timestamp AS VARCHAR) AS timestamp,
+    name,
+    CAST(attributes_json AS VARCHAR) AS attributes_json
+  FROM span_event_records
+  WHERE project_id = $project_id
+    AND dataset_id = $dataset_id
+    AND trace_id = $trace_id
+  ORDER BY timestamp ASC, id ASC
+`;
+
 function toTimestamp(raw: string): string {
   const normalized = duckDbTimestampPattern.test(raw) ? `${raw.replace(" ", "T")}Z` : raw;
   const parsed = new Date(normalized);
@@ -191,6 +215,17 @@ function decodeTelemetrySpanRow(row: Record<string, unknown>): TelemetrySpanRow 
     endTime: toNullableString(row.end_time),
     durationUs: toNullableNumber(row.duration_us),
     statusCode: toNullableNumber(row.status_code),
+  };
+}
+
+function decodeTelemetrySpanEventRow(row: Record<string, unknown>): TelemetrySpanEventRow {
+  return {
+    id: String(row.id ?? ""),
+    traceId: String(row.trace_id ?? ""),
+    spanId: String(row.span_id ?? ""),
+    timestamp: String(row.timestamp ?? ""),
+    name: String(row.name ?? ""),
+    attributesJson: toNullableString(row.attributes_json),
   };
 }
 
@@ -294,6 +329,7 @@ function durationUs(row: TelemetrySpanRow): number {
 function toTraceContext(
   traceId: string,
   rows: ReadonlyArray<TelemetrySpanRow>,
+  eventRows: ReadonlyArray<TelemetrySpanEventRow>,
   currentSpanId?: string | undefined,
 ): TelemetryTraceContext | null {
   if (rows.length === 0) {
@@ -309,6 +345,18 @@ function toTraceContext(
   }
 
   let totalDurationUs = 0;
+  const eventsBySpan = new Map<string, Array<TelemetryTraceContext["spans"][number]["events"][number]>>();
+  for (const event of eventRows) {
+    const events = eventsBySpan.get(event.spanId) ?? [];
+    events.push({
+      id: event.id,
+      timestamp: toTimestamp(event.timestamp),
+      name: event.name,
+      attributes: parseAttributes(event.attributesJson),
+    });
+    eventsBySpan.set(event.spanId, events);
+  }
+
   const spans = rows.map((row) => {
     const rowStartMs = new Date(toTimestamp(row.startTime)).getTime();
     const startOffsetUs = Number.isFinite(rowStartMs)
@@ -325,6 +373,7 @@ function toTraceContext(
       startOffsetUs,
       durationUs: spanDurationUs,
       status: toTraceSpanStatus(row.statusCode),
+      events: eventsBySpan.get(row.spanId) ?? [],
     };
   });
   const orderedSpans = orderTraceSpansForDisplay(spans);
@@ -679,8 +728,22 @@ export class TelemetryLogQueryService extends Context.Service<
             trace_id: traceId,
           },
         );
+        const eventRows = yield* telemetry.queryRows<Record<string, unknown>>(
+          datasetId,
+          selectTraceSpanEventsSql,
+          {
+            project_id: projectId,
+            dataset_id: datasetId,
+            trace_id: traceId,
+          },
+        );
 
-        return toTraceContext(traceId, rows.map((row) => decodeTelemetrySpanRow(row)), currentSpanId);
+        return toTraceContext(
+          traceId,
+          rows.map((row) => decodeTelemetrySpanRow(row)),
+          eventRows.map((row) => decodeTelemetrySpanEventRow(row)),
+          currentSpanId,
+        );
       });
 
       return TelemetryLogQueryService.of({

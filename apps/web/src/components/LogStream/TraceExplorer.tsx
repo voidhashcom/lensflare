@@ -585,7 +585,7 @@ function SpanDetailsPanel({
     <>
       <SpanDetailsHeader span={selectedSpan} />
       <SpanIdentityFields span={selectedSpan} />
-      <SpanDetailsTabs active={activeTab} onSelect={onSelectTab} />
+      <SpanDetailsTabs active={activeTab} onSelect={onSelectTab} span={selectedSpan} />
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {activeTab === "fields" ? (
           <SpanFieldsTab span={selectedSpan} trace={trace} />
@@ -650,13 +650,14 @@ function SpanIdentityFields({ span }: { span: TraceSpan }) {
 interface SpanDetailsTabsProps {
   active: DetailsTab;
   onSelect: (tab: DetailsTab) => void;
+  span: TraceSpan;
 }
 
-function SpanDetailsTabs({ active, onSelect }: SpanDetailsTabsProps) {
+function SpanDetailsTabs({ active, onSelect, span }: SpanDetailsTabsProps) {
   return (
     <TopTabsList aria-label="Span detail tabs" className="gap-1 px-2">
       <TabHeader active={active === "fields"} label="Fields" onClick={() => onSelect("fields")} />
-      <TabHeader active={active === "events"} badge={0} label="Events" onClick={() => onSelect("events")} />
+      <TabHeader active={active === "events"} badge={span.events.length} label="Events" onClick={() => onSelect("events")} />
       <TabHeader active={active === "links"} badge={0} label="Links" onClick={() => onSelect("links")} />
     </TopTabsList>
   );
@@ -713,8 +714,26 @@ function SpanFieldsTab({ span, trace }: SpanTabContentProps) {
 }
 
 function SpanEventsTab({ span }: SpanTabContentProps) {
-  // The backend payload doesn't yet include events — show an empty state
-  // while keeping the tab so the UI layout stays stable once events land.
+  if (span.events.length > 0) {
+    return (
+      <div className="flex min-h-0 flex-col overflow-auto font-mono text-xs">
+        {span.events.map((event) => (
+          <div className="border-b border-border/40 px-4 py-3 last:border-b-0" key={event.id}>
+            <div className="flex items-center gap-2">
+              <span className="truncate text-foreground">{event.name}</span>
+              <time className="shrink-0 text-[11px] text-muted-foreground/70" dateTime={event.timestamp.toISOString()}>
+                {event.timestamp.toISOString()}
+              </time>
+            </div>
+            <pre className="mt-2 whitespace-pre-wrap break-all text-muted-foreground/80">
+              {JSON.stringify(event.attributes, null, 2)}
+            </pre>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-2 px-4 py-4 font-mono text-muted-foreground/70 text-xs">
       <p>No events recorded for this span.</p>

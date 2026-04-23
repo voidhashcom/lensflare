@@ -43,6 +43,22 @@ export interface NormalizedSpanRecord {
   readonly attributesJson: string | null;
   readonly droppedAttributesCount: number | null;
   readonly rawSpanJson: string;
+  readonly events: ReadonlyArray<NormalizedSpanEventRecord>;
+}
+
+export interface NormalizedSpanEventRecord {
+  readonly traceId: string;
+  readonly spanId: string;
+  readonly timestamp: string;
+  readonly name: string;
+  readonly serviceName: string | null;
+  readonly resourceSchemaUrl: string | null;
+  readonly scopeName: string | null;
+  readonly scopeVersion: string | null;
+  readonly scopeSchemaUrl: string | null;
+  readonly attributesJson: string | null;
+  readonly droppedAttributesCount: number | null;
+  readonly rawEventJson: string;
 }
 
 export interface NormalizedLogIngestBatch {
@@ -101,4 +117,9 @@ export interface WrittenLogRecord {
 export interface WrittenSpanRecord {
   readonly id: string;
   readonly record: NormalizedSpanRecord;
+}
+
+export interface WrittenSpanEventRecord {
+  readonly id: string;
+  readonly record: NormalizedSpanEventRecord;
 }

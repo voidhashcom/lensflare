@@ -1,6 +1,11 @@
 import { DuckDBInstance } from "@duckdb/node-api";
 import { describe, expect, it } from "@effect/vitest";
-import { decodeTelemetryLogPage, decodeTelemetryTraceContext } from "@lensflare/contracts";
+import {
+  decodeTelemetryLogPage,
+  decodeTelemetryRecordPage,
+  decodeTelemetryTraceContext,
+  Filter,
+} from "@lensflare/contracts";
 import { Effect, Layer } from "effect";
 import { gzipSync } from "node:zlib";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -79,18 +84,6 @@ async function seedNamedProjectAndDataset(
     const dataset = yield* datasets.createDataset(project.id, { name: args.datasetName });
 
     return { project, dataset };
-  }).pipe(Effect.provide(sqliteLayerFor(sqliteDatabaseFile)), Effect.runPromise);
-}
-
-async function listProjectsAndDatasets(sqliteDatabaseFile: string) {
-  return Effect.gen(function* () {
-    const projects = yield* ProjectService;
-    const datasets = yield* DatasetService;
-
-    return {
-      projects: yield* projects.listProjects(),
-      datasets: yield* datasets.listDatasets(),
-    };
   }).pipe(Effect.provide(sqliteLayerFor(sqliteDatabaseFile)), Effect.runPromise);
 }
 
@@ -290,6 +283,22 @@ describe("HTTP ingest", () => {
                       startTimeUnixNano: "1716201600010000000",
                       endTimeUnixNano: "1716201600085000000",
                       status: { code: "STATUS_CODE_ERROR", message: "timeout" },
+                      events: [
+                        {
+                          timeUnixNano: "1716201600070000000",
+                          name: "exception",
+                          attributes: [
+                            {
+                              key: "exception.type",
+                              value: { stringValue: "TimeoutError" },
+                            },
+                            {
+                              key: "exception.message",
+                              value: { stringValue: "query timed out" },
+                            },
+                          ],
+                        },
+                      ],
                     },
                     {
                       traceId,
@@ -424,6 +433,59 @@ describe("HTTP ingest", () => {
         childSpanId,
         grandchildSpanId,
         siblingSpanId,
+      ]);
+      expect(traceContext?.spans.find((span) => span.id === childSpanId)?.events).toEqual([
+        expect.objectContaining({
+          name: "exception",
+          attributes: expect.objectContaining({
+            "exception.type": "TimeoutError",
+          }),
+        }),
+      ]);
+
+      const eventRecords = await queryDuckDb(
+        duckdbDatabaseFile,
+        dataset.id,
+        "SELECT name, trace_id, span_id FROM span_event_records",
+      );
+      expect(eventRecords).toEqual([
+        {
+          name: "exception",
+          trace_id: traceId,
+          span_id: Number(childSpanId),
+        },
+      ]);
+
+      const telemetryFilter = encodeURIComponent(
+        JSON.stringify(
+          Filter.and([
+            Filter.cmp(["kind"], "eq", Filter.stringValue("span")),
+            Filter.cmp(["status"], "eq", Filter.stringValue("error")),
+            Filter.cmp(
+              ["relatedEvents", "attributes", "exception.type"],
+              "contains",
+              Filter.stringValue("TimeoutError"),
+            ),
+          ]),
+        ),
+      );
+      const telemetryResponse = await fetch(
+        `${server.origin}/api/projects/${project.id}/datasets/${dataset.id}/telemetry?filter=${telemetryFilter}`,
+      );
+      expect(telemetryResponse.status).toBe(200);
+
+      const telemetryPage = decodeTelemetryRecordPage(await telemetryResponse.json());
+      expect(telemetryPage.entries).toEqual([
+        expect.objectContaining({
+          kind: "span",
+          spanId: childSpanId,
+          status: "error",
+          events: [
+            expect.objectContaining({
+              name: "exception",
+            }),
+          ],
+        }),
       ]);
     } finally {
       await Promise.all([server.stop(), rm(directory, { recursive: true, force: true })]);

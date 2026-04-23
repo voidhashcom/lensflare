@@ -15,7 +15,7 @@ import {
   renderDetailValue,
 } from "./logDetailsFormat";
 import { TraceOverview } from "./TraceOverview";
-import type { LogEntry, TraceContext } from "./types";
+import type { TelemetryEntry, TraceContext } from "./types";
 
 type LogDetailsTab = "properties" | "raw";
 
@@ -24,7 +24,7 @@ const SHEET_EXIT_ANIMATION_MS = 220;
 interface LogDetailsPanelProps {
   projectId: string;
   datasetId: string;
-  log: LogEntry;
+  log: TelemetryEntry;
   onClose: () => void;
   /** `sheet` is used when the panel renders inside a modal sheet — we drop
    *  the left border so it sits flush with the sheet edge. */
@@ -136,18 +136,19 @@ function LogDetailsHeader({
   log,
   onClose,
 }: {
-  log: LogEntry;
+  log: TelemetryEntry;
   onClose: () => void;
 }) {
+  const title = log.kind === "log" ? log.message : log.name;
   return (
     <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-4">
-      <span className="font-mono text-muted-foreground/80 text-sm">Log</span>
+      <span className="font-mono text-muted-foreground/80 text-sm">{detailKindLabel(log.kind)}</span>
       <span className="text-muted-foreground/50">—</span>
       <span
         className="min-w-0 flex-1 truncate font-mono text-foreground text-sm"
-        title={log.message}
+        title={title}
       >
-        {log.message}
+        {title}
       </span>
       <button
         aria-label="Close log details"
@@ -159,6 +160,17 @@ function LogDetailsHeader({
       </button>
     </div>
   );
+}
+
+function detailKindLabel(kind: TelemetryEntry["kind"]): string {
+  switch (kind) {
+    case "log":
+      return "Log";
+    case "span":
+      return "Span";
+    case "spanEvent":
+      return "Event";
+  }
 }
 
 interface TabBarProps {
@@ -184,7 +196,7 @@ function TabBar({ activeTab, onSelect }: TabBarProps) {
 }
 
 interface EventPropertiesTabProps {
-  log: LogEntry;
+  log: TelemetryEntry;
   showNullValues: boolean;
   onToggleShowNullValues: (next: boolean) => void;
 }
@@ -253,7 +265,7 @@ function EventPropertiesTab({
   );
 }
 
-function RawDataTab({ log }: { log: LogEntry }) {
+function RawDataTab({ log }: { log: TelemetryEntry }) {
   // `renderDetailValue` already pretty-prints objects with syntax
   // highlighting, so reusing it here keeps the Raw Data tab visually in sync
   // with the coloured JSON blocks on the Event Properties tab.

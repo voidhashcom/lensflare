@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import type { LogEntry } from "./types";
+import type { TelemetryEntry } from "./types";
 
 /**
  * Ordered list of fields surfaced on the Event Properties tab. Order is
@@ -12,14 +12,23 @@ import type { LogEntry } from "./types";
  * moving entries here reshuffles the UI.
  */
 const LOG_DETAIL_FIELDS: ReadonlyArray<string> = [
+  "kind",
   "id",
   "timestamp",
   "level",
+  "status",
   "source.name",
   "source.icon",
   "message",
+  "name",
+  "duration.us",
   "trace.id",
   "span.id",
+  "parent.span.id",
+  "service.name",
+  "status.message",
+  "attributes",
+  "events",
 ];
 
 export interface LogDetailEntry {
@@ -32,28 +41,46 @@ export interface LogDetailEntry {
  * Values are raw (not yet stringified) so the renderer can colour them
  * according to type.
  */
-export function buildLogDetailEntries(log: LogEntry): ReadonlyArray<LogDetailEntry> {
+export function buildLogDetailEntries(log: TelemetryEntry): ReadonlyArray<LogDetailEntry> {
   return LOG_DETAIL_FIELDS.map((field) => ({ field, value: getLogDetailValue(log, field) }));
 }
 
-function getLogDetailValue(log: LogEntry, field: string): unknown {
+function getLogDetailValue(log: TelemetryEntry, field: string): unknown {
   switch (field) {
+    case "kind":
+      return log.kind;
     case "id":
       return log.id;
     case "timestamp":
       return log.timestamp.toISOString();
     case "level":
-      return log.level;
+      return log.kind === "log" ? log.level : null;
+    case "status":
+      return log.kind === "span" ? log.status : null;
     case "source.name":
       return log.sourceName;
     case "source.icon":
       return log.sourceIcon;
     case "message":
-      return log.message;
+      return log.kind === "log" ? log.message : null;
+    case "name":
+      return log.kind === "span" || log.kind === "spanEvent" ? log.name : null;
+    case "duration.us":
+      return log.kind === "span" ? log.durationUs : null;
     case "trace.id":
       return log.traceId ?? null;
     case "span.id":
       return log.spanId ?? null;
+    case "parent.span.id":
+      return log.kind === "span" ? log.parentSpanId : null;
+    case "service.name":
+      return log.kind === "span" || log.kind === "spanEvent" ? log.serviceName : null;
+    case "status.message":
+      return log.kind === "span" ? log.statusMessage : null;
+    case "attributes":
+      return log.attributes;
+    case "events":
+      return log.kind === "span" ? log.events : null;
     default:
       return null;
   }
@@ -64,9 +91,44 @@ function getLogDetailValue(log: LogEntry, field: string): unknown {
  * JSON-friendly shape (timestamps serialised to ISO strings) so it round-trips
  * through `JSON.stringify` without losing information.
  */
-export function buildLogRawData(log: LogEntry): unknown {
+export function buildLogRawData(log: TelemetryEntry): unknown {
+  if (log.kind === "span") {
+    return {
+      id: log.id,
+      kind: log.kind,
+      timestamp: log.timestamp.toISOString(),
+      sourceName: log.sourceName,
+      traceId: log.traceId,
+      spanId: log.spanId,
+      parentSpanId: log.parentSpanId,
+      name: log.name,
+      serviceName: log.serviceName,
+      status: log.status,
+      statusMessage: log.statusMessage,
+      durationUs: log.durationUs,
+      attributes: log.attributes,
+      events: log.events.map((event) => ({
+        ...event,
+        timestamp: event.timestamp.toISOString(),
+      })),
+    };
+  }
+  if (log.kind === "spanEvent") {
+    return {
+      id: log.id,
+      kind: log.kind,
+      timestamp: log.timestamp.toISOString(),
+      sourceName: log.sourceName,
+      traceId: log.traceId,
+      spanId: log.spanId,
+      name: log.name,
+      serviceName: log.serviceName,
+      attributes: log.attributes,
+    };
+  }
   return {
     id: log.id,
+    kind: log.kind,
     timestamp: log.timestamp.toISOString(),
     level: log.level,
     source: {
@@ -76,6 +138,7 @@ export function buildLogRawData(log: LogEntry): unknown {
     message: log.message,
     traceId: log.traceId ?? null,
     spanId: log.spanId ?? null,
+    attributes: log.attributes,
   };
 }
 

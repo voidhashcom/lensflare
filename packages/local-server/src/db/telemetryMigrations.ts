@@ -122,6 +122,44 @@ const migrations: ReadonlyArray<TelemetryMigration> = [
       `);
     },
   },
+  {
+    id: "0003_create_span_event_records",
+    async apply(connection) {
+      await connection.run(`
+        CREATE TABLE IF NOT EXISTS span_event_records (
+          id TEXT PRIMARY KEY,
+          batch_id TEXT NOT NULL,
+          project_id TEXT NOT NULL,
+          project_slug TEXT NOT NULL,
+          dataset_id TEXT NOT NULL,
+          dataset_slug TEXT NOT NULL,
+          provider_kind TEXT NOT NULL,
+          ingested_at TIMESTAMP NOT NULL,
+          trace_id TEXT NOT NULL,
+          span_id TEXT NOT NULL,
+          timestamp TIMESTAMP NOT NULL,
+          name TEXT NOT NULL,
+          service_name TEXT,
+          resource_schema_url TEXT,
+          scope_name TEXT,
+          scope_version TEXT,
+          scope_schema_url TEXT,
+          attributes_json JSON,
+          dropped_attributes_count INTEGER,
+          raw_event_json JSON
+        )
+      `);
+
+      await connection.run(`
+        CREATE INDEX IF NOT EXISTS span_event_records_span_idx
+        ON span_event_records (project_id, dataset_id, trace_id, span_id, timestamp)
+      `);
+      await connection.run(`
+        CREATE INDEX IF NOT EXISTS span_event_records_batch_id_idx
+        ON span_event_records (batch_id)
+      `);
+    },
+  },
 ];
 
 export async function runTelemetryMigrations(connection: DuckDBConnection): Promise<void> {

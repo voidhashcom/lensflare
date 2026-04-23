@@ -48,7 +48,7 @@ describe("FilterQueryInput — initial render", () => {
   it("renders the placeholder and search icon when empty", () => {
     const html = render();
 
-    expect(html).toContain("Filter logs");
+    expect(html).toContain("Filter telemetry");
     // lucide icons render as SVG, which we can sniff via the lucide class.
     expect(html).toContain("lucide-search");
   });
@@ -56,7 +56,7 @@ describe("FilterQueryInput — initial render", () => {
   it("renders the spotlight trigger", () => {
     const html = render();
 
-    expect(html).toContain('aria-label="Open log filter"');
+    expect(html).toContain('aria-label="Open telemetry filter"');
     expect(html).toContain('data-slot="filter-query-input"');
     expect(html).toContain("K");
   });

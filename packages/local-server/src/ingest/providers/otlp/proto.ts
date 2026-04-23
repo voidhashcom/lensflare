@@ -160,7 +160,15 @@ message Span {
   fixed64 end_time_unix_nano = 8;
   repeated opentelemetry.proto.common.v1.KeyValue attributes = 9;
   uint32 dropped_attributes_count = 10;
+  repeated Event events = 11;
   Status status = 15;
+
+  message Event {
+    fixed64 time_unix_nano = 1;
+    string name = 2;
+    repeated opentelemetry.proto.common.v1.KeyValue attributes = 3;
+    uint32 dropped_attributes_count = 4;
+  }
 }
 
 message ScopeSpans {

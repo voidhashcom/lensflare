@@ -24,6 +24,48 @@ export interface LogEntry {
   spanId?: string;
 }
 
+export interface SpanEventSummary {
+  readonly id: string;
+  readonly timestamp: Date;
+  readonly name: string;
+  readonly attributes: Readonly<Record<string, unknown>>;
+}
+
+export type TelemetryEntry =
+  | (LogEntry & {
+      readonly kind: "log";
+      readonly attributes: Readonly<Record<string, unknown>>;
+    })
+  | {
+      readonly id: string;
+      readonly kind: "span";
+      readonly timestamp: Date;
+      readonly sourceName: string;
+      readonly sourceIcon: SourceIconKind;
+      readonly traceId: string;
+      readonly spanId: string;
+      readonly parentSpanId: string | null;
+      readonly name: string;
+      readonly serviceName: string | null;
+      readonly status: "ok" | "error" | "unset";
+      readonly statusMessage: string | null;
+      readonly durationUs: number;
+      readonly attributes: Readonly<Record<string, unknown>>;
+      readonly events: ReadonlyArray<SpanEventSummary>;
+    }
+  | {
+      readonly id: string;
+      readonly kind: "spanEvent";
+      readonly timestamp: Date;
+      readonly sourceName: string;
+      readonly sourceIcon: SourceIconKind;
+      readonly traceId: string;
+      readonly spanId: string;
+      readonly name: string;
+      readonly serviceName: string | null;
+      readonly attributes: Readonly<Record<string, unknown>>;
+    };
+
 /**
  * A single span within a distributed trace. Times are expressed in
  * microseconds relative to the trace's root start — this keeps the shape
@@ -41,6 +83,7 @@ export interface TraceSpan {
   readonly durationUs: number;
   /** Span outcome — controls the colour of the timeline bar. */
   readonly status: "ok" | "error" | "unset";
+  readonly events: ReadonlyArray<SpanEventSummary>;
 }
 
 /**

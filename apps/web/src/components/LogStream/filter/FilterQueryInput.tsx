@@ -152,7 +152,7 @@ export function FilterQueryInput({
     editorProps: {
       attributes: {
         "aria-controls": suggestionsId,
-        "aria-label": "Filter logs",
+        "aria-label": "Filter telemetry",
         class:
           "min-h-8 max-h-24 overflow-y-auto outline-none whitespace-pre-wrap break-words px-0 py-1.5 text-sm leading-6",
         id: editorId,
@@ -406,13 +406,13 @@ export function FilterQueryInput({
   const hasDraftContent = parsed.pills.length > 0 || parsed.trailingText.length > 0;
   const hasAppliedContent =
     appliedParsed.pills.length > 0 || appliedParsed.trailingText.length > 0;
-  const triggerLabel = hasAppliedContent ? appliedSource : "Filter logs";
+  const triggerLabel = hasAppliedContent ? appliedSource : "Filter telemetry";
 
   return (
     <CommandDialog onOpenChange={handleDialogOpenChange} open={isOpen}>
       <div className="relative min-w-0 flex-1">
         <button
-          aria-label="Open log filter"
+          aria-label="Open telemetry filter"
           className={cn(
             "inline-flex h-8 min-w-0 w-full cursor-pointer items-center gap-2 rounded-md border border-input bg-background/60 px-2.5 text-left text-sm text-foreground/80 shadow-xs/5 hover:bg-accent/50",
             hasAppliedContent ? "pr-9" : "pr-2.5",
@@ -472,7 +472,7 @@ export function FilterQueryInput({
                   className="pointer-events-none absolute left-0 top-1.5 text-muted-foreground/72 text-sm leading-6"
                   htmlFor={editorId}
                 >
-                  Filter logs — try level:info
+                  Filter telemetry — try kind:span status:error
                 </label>
               ) : null}
               <EditorContent

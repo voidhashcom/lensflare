@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { listDatasetLogFields, type TelemetryLogField } from "~/data/logApi";
+import { listDatasetTelemetryFields, type TelemetryLogField } from "~/data/logApi";
 
 interface FieldCatalogState {
   readonly fields: ReadonlyArray<TelemetryLogField>;
@@ -33,7 +33,7 @@ export function useFieldCatalog(
 
     setState({ fields: [], isLoading: true, error: null });
 
-    listDatasetLogFields(projectId, datasetId)
+    listDatasetTelemetryFields(projectId, datasetId)
       .then((fields) => {
         if (cancelled) return;
         setState({ fields, isLoading: false, error: null });

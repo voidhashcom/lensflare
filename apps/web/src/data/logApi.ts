@@ -1,8 +1,10 @@
 import {
   decodeTelemetryLogPage,
+  decodeTelemetryRecordPage,
   decodeTelemetryTraceContext,
   type FilterNode,
   type TelemetryLogPage,
+  type TelemetryRecordPage,
 } from "@lensflare/contracts";
 import { Effect, Stream } from "effect";
 import type { TraceContext } from "~/components/LogStream/types";
@@ -23,6 +25,8 @@ export interface TelemetryLogField {
   readonly kind: "string" | "number" | "enum";
   readonly values?: ReadonlyArray<string>;
 }
+
+export type TelemetryField = TelemetryLogField;
 
 /**
  * Past this serialized-filter length we stop putting the filter in the URL
@@ -86,6 +90,30 @@ export async function listDatasetLogs(
     }
 
     return decodeTelemetryLogPage(payload);
+  } catch (error) {
+    throw toLogApiError(error);
+  }
+}
+
+export async function listDatasetTelemetry(
+  projectId: string,
+  datasetId: string,
+  options: ListDatasetLogsOptions = {},
+): Promise<TelemetryRecordPage> {
+  try {
+    const filterJson = options.filter ? JSON.stringify(options.filter) : undefined;
+    const useGet = !filterJson || filterJson.length <= FILTER_GET_MAX_URL_LENGTH;
+
+    const response = useGet
+      ? await issueTelemetryGetRequest(projectId, datasetId, options, filterJson)
+      : await issueTelemetryPostRequest(projectId, datasetId, options);
+
+    const payload = await parseJsonSafe(response);
+    if (!response.ok) {
+      throw new Error(errorMessageFromPayload(payload, "Failed to load telemetry."));
+    }
+
+    return decodeTelemetryRecordPage(payload);
   } catch (error) {
     throw toLogApiError(error);
   }
@@ -162,6 +190,55 @@ async function issuePostRequest(
   });
 }
 
+async function issueTelemetryGetRequest(
+  projectId: string,
+  datasetId: string,
+  options: ListDatasetLogsOptions,
+  filterJson: string | undefined,
+): Promise<Response> {
+  const search = new URLSearchParams();
+  if (options.search) search.set("search", options.search);
+  if (options.limit !== undefined) search.set("limit", String(options.limit));
+  if (options.cursor) search.set("cursor", options.cursor);
+  if (options.direction) search.set("direction", options.direction);
+  if (filterJson) search.set("filter", filterJson);
+
+  const url = resolveBackendHttpUrl(
+    `/api/projects/${projectId}/datasets/${datasetId}/telemetry`,
+    search,
+  );
+
+  return fetch(url, {
+    headers: { accept: "application/json" },
+  });
+}
+
+async function issueTelemetryPostRequest(
+  projectId: string,
+  datasetId: string,
+  options: ListDatasetLogsOptions,
+): Promise<Response> {
+  const url = resolveBackendHttpUrl(
+    `/api/projects/${projectId}/datasets/${datasetId}/telemetry/query`,
+  );
+
+  const body: Record<string, unknown> = {};
+  if (options.search) body.search = options.search;
+  if (options.limit !== undefined) body.limit = options.limit;
+  if (options.cursor) body.cursor = options.cursor;
+  if (options.direction) body.direction = options.direction;
+  if (options.filter) body.filter = options.filter;
+
+  return fetch(url, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+}
+
 export async function listDatasetLogFields(
   projectId: string,
   datasetId: string,
@@ -191,6 +268,35 @@ export async function listDatasetLogFields(
   }
 }
 
+export async function listDatasetTelemetryFields(
+  projectId: string,
+  datasetId: string,
+): Promise<ReadonlyArray<TelemetryField>> {
+  try {
+    const url = resolveBackendHttpUrl(
+      `/api/projects/${projectId}/datasets/${datasetId}/telemetry/fields`,
+    );
+    const response = await fetch(url, {
+      headers: { accept: "application/json" },
+    });
+    const payload = await parseJsonSafe(response);
+    if (!response.ok) {
+      throw new Error(errorMessageFromPayload(payload, "Failed to load fields."));
+    }
+    if (
+      payload &&
+      typeof payload === "object" &&
+      "fields" in payload &&
+      Array.isArray((payload as { fields?: unknown }).fields)
+    ) {
+      return (payload as { fields: ReadonlyArray<TelemetryField> }).fields;
+    }
+    return [];
+  } catch (error) {
+    throw toLogApiError(error);
+  }
+}
+
 export async function listDatasetLogFieldValues(
   projectId: string,
   datasetId: string,
@@ -200,6 +306,38 @@ export async function listDatasetLogFieldValues(
     const search = new URLSearchParams({ field: path.join(".") });
     const url = resolveBackendHttpUrl(
       `/api/projects/${projectId}/datasets/${datasetId}/logs/values`,
+      search,
+    );
+    const response = await fetch(url, {
+      headers: { accept: "application/json" },
+    });
+    const payload = await parseJsonSafe(response);
+    if (!response.ok) {
+      throw new Error(errorMessageFromPayload(payload, "Failed to load values."));
+    }
+    if (
+      payload &&
+      typeof payload === "object" &&
+      "values" in payload &&
+      Array.isArray((payload as { values?: unknown }).values)
+    ) {
+      return (payload as { values: ReadonlyArray<string> }).values;
+    }
+    return [];
+  } catch (error) {
+    throw toLogApiError(error);
+  }
+}
+
+export async function listDatasetTelemetryFieldValues(
+  projectId: string,
+  datasetId: string,
+  path: ReadonlyArray<string>,
+): Promise<ReadonlyArray<string>> {
+  try {
+    const search = new URLSearchParams({ field: path.join(".") });
+    const url = resolveBackendHttpUrl(
+      `/api/projects/${projectId}/datasets/${datasetId}/telemetry/values`,
       search,
     );
     const response = await fetch(url, {
@@ -257,6 +395,13 @@ export async function getLogTraceContext(
       : {
           ...trace,
           startTime: new Date(trace.startTime),
+          spans: trace.spans.map((span) => ({
+            ...span,
+            events: span.events.map((event) => ({
+              ...event,
+              timestamp: new Date(event.timestamp),
+            })),
+          })),
         };
   } catch (error) {
     throw toLogApiError(error);
@@ -274,6 +419,36 @@ export function subscribeDatasetLogEntries(
     (client) =>
       client
         .SubscribeTelemetryLogEvents(
+          filter === undefined
+            ? { projectId, datasetId }
+            : { projectId, datasetId, filter },
+        )
+        .pipe(
+          Stream.runForEach((entry) =>
+            Effect.sync(() => {
+              onEntry(entry);
+            }),
+          ),
+        ),
+    {
+      onError: (error) => {
+        onError?.(toLogApiError(error));
+      },
+    },
+  );
+}
+
+export function subscribeDatasetTelemetryEntries(
+  projectId: string,
+  datasetId: string,
+  onEntry: (entry: TelemetryRecordPage["entries"][number]) => void,
+  onError?: (error: Error) => void,
+  filter?: FilterNode,
+): () => void {
+  return runRpcCallback(
+    (client) =>
+      client
+        .SubscribeTelemetryEvents(
           filter === undefined
             ? { projectId, datasetId }
             : { projectId, datasetId, filter },

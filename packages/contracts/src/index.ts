@@ -334,6 +334,79 @@ export const TelemetryTraceSpanStatusSchema = Schema.Literals(["ok", "error", "u
 
 export type TelemetryTraceSpanStatus = Schema.Schema.Type<typeof TelemetryTraceSpanStatusSchema>;
 
+export const TelemetryRecordKindSchema = Schema.Literals(["log", "span", "spanEvent"]);
+
+export type TelemetryRecordKind = Schema.Schema.Type<typeof TelemetryRecordKindSchema>;
+
+export const TelemetrySpanEventSchema = Schema.Struct({
+  id: Schema.String,
+  timestamp: Schema.String,
+  name: Schema.String,
+  attributes: Schema.Record(Schema.String, Schema.Unknown),
+});
+
+export type TelemetrySpanEvent = Schema.Schema.Type<typeof TelemetrySpanEventSchema>;
+
+export const TelemetryLogRecordSchema = Schema.Struct({
+  id: Schema.String,
+  kind: Schema.Literal("log"),
+  timestamp: Schema.String,
+  sourceName: Schema.String,
+  level: TelemetryLogLevelSchema,
+  message: Schema.String,
+  severityNumber: Schema.NullOr(Schema.Number),
+  severityText: Schema.NullOr(Schema.String),
+  serviceName: Schema.NullOr(Schema.String),
+  traceId: Schema.NullOr(Schema.String),
+  spanId: Schema.NullOr(Schema.String),
+  attributes: Schema.Record(Schema.String, Schema.Unknown),
+});
+
+export type TelemetryLogRecord = Schema.Schema.Type<typeof TelemetryLogRecordSchema>;
+
+export const TelemetrySpanRecordSchema = Schema.Struct({
+  id: Schema.String,
+  kind: Schema.Literal("span"),
+  timestamp: Schema.String,
+  sourceName: Schema.String,
+  traceId: Schema.String,
+  spanId: Schema.String,
+  parentSpanId: Schema.NullOr(Schema.String),
+  name: Schema.String,
+  serviceName: Schema.NullOr(Schema.String),
+  status: TelemetryTraceSpanStatusSchema,
+  statusMessage: Schema.NullOr(Schema.String),
+  durationUs: Schema.Number,
+  attributes: Schema.Record(Schema.String, Schema.Unknown),
+  events: Schema.Array(TelemetrySpanEventSchema),
+});
+
+export type TelemetrySpanRecord = Schema.Schema.Type<typeof TelemetrySpanRecordSchema>;
+
+export const TelemetrySpanEventRecordSchema = Schema.Struct({
+  id: Schema.String,
+  kind: Schema.Literal("spanEvent"),
+  timestamp: Schema.String,
+  sourceName: Schema.String,
+  traceId: Schema.String,
+  spanId: Schema.String,
+  name: Schema.String,
+  serviceName: Schema.NullOr(Schema.String),
+  attributes: Schema.Record(Schema.String, Schema.Unknown),
+});
+
+export type TelemetrySpanEventRecord = Schema.Schema.Type<typeof TelemetrySpanEventRecordSchema>;
+
+export const TelemetryRecordSchema = Schema.Union([
+  TelemetryLogRecordSchema,
+  TelemetrySpanRecordSchema,
+  TelemetrySpanEventRecordSchema,
+]);
+
+export type TelemetryRecord = Schema.Schema.Type<typeof TelemetryRecordSchema>;
+
+export const TelemetryRecordsSchema = Schema.Array(TelemetryRecordSchema);
+
 export const TelemetryTraceSpanSchema = Schema.Struct({
   id: Schema.String,
   parentSpanId: Schema.NullOr(Schema.String),
@@ -342,6 +415,7 @@ export const TelemetryTraceSpanSchema = Schema.Struct({
   startOffsetUs: Schema.Number,
   durationUs: Schema.Number,
   status: TelemetryTraceSpanStatusSchema,
+  events: Schema.Array(TelemetrySpanEventSchema),
 });
 
 export type TelemetryTraceSpan = Schema.Schema.Type<typeof TelemetryTraceSpanSchema>;
@@ -374,6 +448,13 @@ export const TelemetryLogPageSchema = Schema.Struct({
 
 export type TelemetryLogPage = Schema.Schema.Type<typeof TelemetryLogPageSchema>;
 
+export const TelemetryRecordPageSchema = Schema.Struct({
+  entries: TelemetryRecordsSchema,
+  pageInfo: TelemetryLogPageInfoSchema,
+});
+
+export type TelemetryRecordPage = Schema.Schema.Type<typeof TelemetryRecordPageSchema>;
+
 const decodeProjectEntitySchema = Schema.decodeUnknownSync(ProjectEntitySchema);
 const decodeProjectSchema = Schema.decodeUnknownSync(ProjectSchema);
 const decodeDatasetSchema = Schema.decodeUnknownSync(DatasetSchema);
@@ -386,6 +467,8 @@ const decodeDatasetChangeEventSchema = Schema.decodeUnknownSync(DatasetChangeEve
 const decodeTelemetryLogEntrySchema = Schema.decodeUnknownSync(TelemetryLogEntrySchema);
 const decodeTelemetryLogEntriesSchema = Schema.decodeUnknownSync(TelemetryLogEntriesSchema);
 const decodeTelemetryLogPageSchema = Schema.decodeUnknownSync(TelemetryLogPageSchema);
+const decodeTelemetryRecordSchema = Schema.decodeUnknownSync(TelemetryRecordSchema);
+const decodeTelemetryRecordPageSchema = Schema.decodeUnknownSync(TelemetryRecordPageSchema);
 const decodeNullableTelemetryTraceContextSchema = Schema.decodeUnknownSync(
   NullableTelemetryTraceContextSchema,
 );
@@ -436,6 +519,14 @@ export function decodeTelemetryLogEntries(input: unknown): Array<TelemetryLogEnt
 
 export function decodeTelemetryLogPage(input: unknown): TelemetryLogPage {
   return decodeTelemetryLogPageSchema(input);
+}
+
+export function decodeTelemetryRecord(input: unknown): TelemetryRecord {
+  return decodeTelemetryRecordSchema(input);
+}
+
+export function decodeTelemetryRecordPage(input: unknown): TelemetryRecordPage {
+  return decodeTelemetryRecordPageSchema(input);
 }
 
 export function decodeTelemetryTraceContext(input: unknown): TelemetryTraceContext | null {
@@ -578,7 +669,20 @@ class SubscribeTelemetryLogEvents extends Rpc.make("SubscribeTelemetryLogEvents"
   stream: true,
 }) {}
 
-export const TelemetryLogRpcGroup = RpcGroup.make(SubscribeTelemetryLogEvents);
+class SubscribeTelemetryEvents extends Rpc.make("SubscribeTelemetryEvents", {
+  payload: {
+    projectId: Schema.String,
+    datasetId: Schema.String,
+    filter: Schema.optional(FilterNodeSchema),
+  },
+  success: TelemetryRecordSchema,
+  stream: true,
+}) {}
+
+export const TelemetryLogRpcGroup = RpcGroup.make(
+  SubscribeTelemetryLogEvents,
+  SubscribeTelemetryEvents,
+);
 
 export function formatProjectError(error: unknown): string {
   if (error instanceof ValidationError) {

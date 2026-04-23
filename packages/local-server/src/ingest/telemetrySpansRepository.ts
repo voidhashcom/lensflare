@@ -1,6 +1,12 @@
 import { Context, Effect, Layer } from "effect";
 import { DuckDbError, TelemetryStore } from "./telemetryStore.ts";
-import type { NormalizedSpanRecord, SpanIngestWriteRequest, WrittenSpanRecord } from "./types.ts";
+import type {
+  NormalizedSpanEventRecord,
+  NormalizedSpanRecord,
+  SpanIngestWriteRequest,
+  WrittenSpanEventRecord,
+  WrittenSpanRecord,
+} from "./types.ts";
 
 function recordValues(
   batchId: string,
@@ -37,6 +43,36 @@ function recordValues(
     attributes_json: record.attributesJson,
     dropped_attributes_count: record.droppedAttributesCount,
     raw_span_json: record.rawSpanJson,
+  };
+}
+
+function eventRecordValues(
+  batchId: string,
+  id: string,
+  request: SpanIngestWriteRequest,
+  record: NormalizedSpanEventRecord,
+): Record<string, string | number | null> {
+  return {
+    id,
+    batch_id: batchId,
+    project_id: request.projectId,
+    project_slug: request.projectSlug,
+    dataset_id: request.datasetId,
+    dataset_slug: request.datasetSlug,
+    provider_kind: request.providerKind,
+    ingested_at: request.receivedAt,
+    trace_id: record.traceId,
+    span_id: record.spanId,
+    timestamp: record.timestamp,
+    name: record.name,
+    service_name: record.serviceName,
+    resource_schema_url: record.resourceSchemaUrl,
+    scope_name: record.scopeName,
+    scope_version: record.scopeVersion,
+    scope_schema_url: record.scopeSchemaUrl,
+    attributes_json: record.attributesJson,
+    dropped_attributes_count: record.droppedAttributesCount,
+    raw_event_json: record.rawEventJson,
   };
 }
 
@@ -102,6 +138,52 @@ const insertSpanRecordSql = `
   )
 `;
 
+const insertSpanEventRecordSql = `
+  INSERT INTO span_event_records (
+    id,
+    batch_id,
+    project_id,
+    project_slug,
+    dataset_id,
+    dataset_slug,
+    provider_kind,
+    ingested_at,
+    trace_id,
+    span_id,
+    timestamp,
+    name,
+    service_name,
+    resource_schema_url,
+    scope_name,
+    scope_version,
+    scope_schema_url,
+    attributes_json,
+    dropped_attributes_count,
+    raw_event_json
+  ) VALUES (
+    $id,
+    $batch_id,
+    $project_id,
+    $project_slug,
+    $dataset_id,
+    $dataset_slug,
+    $provider_kind,
+    CAST($ingested_at AS TIMESTAMP),
+    $trace_id,
+    $span_id,
+    CAST($timestamp AS TIMESTAMP),
+    $name,
+    $service_name,
+    $resource_schema_url,
+    $scope_name,
+    $scope_version,
+    $scope_schema_url,
+    CASE WHEN $attributes_json IS NULL THEN NULL ELSE CAST($attributes_json AS JSON) END,
+    $dropped_attributes_count,
+    CAST($raw_event_json AS JSON)
+  )
+`;
+
 export class TelemetrySpansRepository extends Context.Service<
   TelemetrySpansRepository,
   {
@@ -111,6 +193,7 @@ export class TelemetrySpansRepository extends Context.Service<
       {
         readonly batchId: string;
         readonly records: ReadonlyArray<WrittenSpanRecord>;
+        readonly events: ReadonlyArray<WrittenSpanEventRecord>;
       },
       DuckDbError
     >;
@@ -130,6 +213,12 @@ export class TelemetrySpansRepository extends Context.Service<
                 id: crypto.randomUUID(),
                 record,
               }));
+              const events = request.spans.flatMap((span) =>
+                span.events.map((event) => ({
+                  id: crypto.randomUUID(),
+                  record: event,
+                })),
+              );
 
               await connection.run(
                 `
@@ -184,7 +273,14 @@ export class TelemetrySpansRepository extends Context.Service<
                 await connection.run(insertSpanRecordSql, recordValues(batchId, id, request, record));
               }
 
-              return { batchId, records };
+              for (const { id, record } of events) {
+                await connection.run(
+                  insertSpanEventRecordSql,
+                  eventRecordValues(batchId, id, request, record),
+                );
+              }
+
+              return { batchId, records, events };
             },
             catch: (error) =>
               new DuckDbError({

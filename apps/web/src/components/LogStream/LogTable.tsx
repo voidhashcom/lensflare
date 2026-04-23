@@ -12,11 +12,11 @@ import { cn } from "~/lib/utils";
 
 import { getLogLevelLabel, getLogLevelText, LogLevelBadge } from "./LogLevelBadge";
 import { SourceBadge } from "./SourceBadge";
-import type { LogEntry } from "./types";
+import type { TelemetryEntry } from "./types";
 import { Button } from "../ui/button";
 
 interface LogTableProps {
-  logs: ReadonlyArray<LogEntry>;
+  logs: ReadonlyArray<TelemetryEntry>;
   hasPreviousPage?: boolean;
   isLoadingPrevious?: boolean;
   onLoadPrevious?: (() => Promise<void> | void) | undefined;
@@ -47,7 +47,7 @@ export interface LogTableHandle {
  * container narrows.
  */
 const ROW_GRID_CLASS =
-  "grid grid-cols-[14rem_14rem_7rem_minmax(0,1fr)_auto] items-center gap-4 px-4";
+  "grid grid-cols-[6rem_14rem_14rem_8rem_minmax(0,1fr)_7rem_auto] items-center gap-4 px-4";
 
 const ROW_ESTIMATED_SIZE = 40;
 
@@ -145,7 +145,7 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
   // with the rest of the table state. `extraData` forces LegendList to rerun
   // the renderer when these inputs change even though the data array itself
   // may be stable.
-  const renderRow = ({ item }: LegendListRenderItemProps<LogEntry>) => (
+  const renderRow = ({ item }: LegendListRenderItemProps<TelemetryEntry>) => (
     <LogRow
       isSelected={item.id === selectedLogId}
       log={item}
@@ -158,7 +158,7 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
       <Header />
       <LegendList
         className="min-h-0 min-w-0 flex-1"
-        data={logs as Array<LogEntry>}
+        data={logs as Array<TelemetryEntry>}
         estimatedItemSize={ROW_ESTIMATED_SIZE}
         extraData={{ onSelectLog, selectedLogId }}
         keyExtractor={extractLogKey}
@@ -195,7 +195,7 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
   );
 });
 
-function extractLogKey(item: LogEntry): string {
+function extractLogKey(item: TelemetryEntry): string {
   return item.id;
 }
 
@@ -214,7 +214,7 @@ function LoadPreviousHeader({
         ) : (
           <ChevronUpIcon className="size-3.5" />
         )}
-        {loading ? "Loading older logs" : "Load older logs"}
+        {loading ? "Loading older telemetry" : "Load older telemetry"}
       </Button>
     </div>
   );
@@ -223,7 +223,7 @@ function LoadPreviousHeader({
 function StartOfLogsHeader() {
   return (
     <div className="border-border/40 border-b py-3 text-center text-muted-foreground/50 text-xs">
-      Start of logs
+      Start of telemetry
     </div>
   );
 }
@@ -236,10 +236,12 @@ function Header() {
         ROW_GRID_CLASS,
       )}
     >
+      <div>Kind</div>
       <div>Time</div>
       <div>Source</div>
-      <div>Level</div>
-      <div>Message</div>
+      <div>Status</div>
+      <div>Name / Message</div>
+      <div>Duration</div>
       <button
         aria-label="Configure columns"
         className="inline-flex size-6 cursor-pointer items-center justify-center rounded text-muted-foreground/60 hover:bg-accent/50 hover:text-foreground"
@@ -252,7 +254,7 @@ function Header() {
 }
 
 interface LogRowProps {
-  log: LogEntry;
+  log: TelemetryEntry;
   isSelected: boolean;
   onSelect: ((logId: string) => void) | undefined;
 }
@@ -303,6 +305,9 @@ function LogRow({ log, isSelected, onSelect }: LogRowProps) {
       }}
       type="button"
     >
+      <span className="truncate text-[11px] text-muted-foreground uppercase">
+        {kindLabel(log.kind)}
+      </span>
       <time
         className="truncate text-[11px] text-muted-foreground tabular-nums"
         dateTime={log.timestamp.toISOString()}
@@ -313,22 +318,35 @@ function LogRow({ log, isSelected, onSelect }: LogRowProps) {
         <SourceBadge icon={log.sourceIcon} name={log.sourceName} />
       </div>
       <div>
-        <LogLevelBadge level={log.level} />
+        {log.kind === "log" ? (
+          <LogLevelBadge level={log.level} />
+        ) : (
+          <span className={cn("text-xs", statusClass(log.kind === "span" ? log.status : "unset"))}>
+            {log.kind === "span" ? log.status : "event"}
+          </span>
+        )}
       </div>
       <div className="flex min-w-0 items-center">
-        <span
-          className={cn(
-            "mr-1 inline-flex shrink-0 items-center gap-1.5 font-semibold",
-            getLogLevelText(log.level),
-          )}
-        >
+        {log.kind === "log" ? (
           <span
-            aria-hidden
-            className={cn("size-1.5 shrink-0 rounded-full", levelDotClass(log.level))}
-          />
-          {getLogLevelLabel(log.level)}
+            className={cn(
+              "mr-1 inline-flex shrink-0 items-center gap-1.5 font-semibold",
+              getLogLevelText(log.level),
+            )}
+          >
+            <span
+              aria-hidden
+              className={cn("size-1.5 shrink-0 rounded-full", levelDotClass(log.level))}
+            />
+            {getLogLevelLabel(log.level)}
+          </span>
+        ) : null}
+        <span className="min-w-0 flex-1 truncate text-foreground/80">
+          {telemetryTitle(log)}
         </span>
-        <span className="min-w-0 flex-1 truncate text-foreground/80">{log.message}</span>
+      </div>
+      <div className="truncate text-[11px] text-muted-foreground tabular-nums">
+        {log.kind === "span" ? formatDuration(log.durationUs) : ""}
       </div>
       <div className="w-4" />
     </button>
@@ -339,7 +357,7 @@ function WaitingFooter() {
   return (
     <div className="flex items-center justify-center gap-2 py-4 text-muted-foreground/60 text-xs">
       <span className="inline-flex size-1.5 animate-pulse rounded-full bg-muted-foreground/60" />
-      Waiting for logs…
+      Waiting for telemetry…
     </div>
   );
 }
@@ -378,7 +396,7 @@ function isNearBottomMetrics(metrics: {
 }
 
 /** Reuses the level palette for the inline dot in the message cell. */
-function levelDotClass(level: LogEntry["level"]): string {
+function levelDotClass(level: Extract<TelemetryEntry, { kind: "log" }>["level"]): string {
   switch (level) {
     case "trace":
       return "bg-zinc-400";
@@ -393,6 +411,48 @@ function levelDotClass(level: LogEntry["level"]): string {
     case "fatal":
       return "bg-fuchsia-500";
   }
+}
+
+function kindLabel(kind: TelemetryEntry["kind"]): string {
+  switch (kind) {
+    case "log":
+      return "log";
+    case "span":
+      return "span";
+    case "spanEvent":
+      return "event";
+  }
+}
+
+function telemetryTitle(entry: TelemetryEntry): string {
+  switch (entry.kind) {
+    case "log":
+      return entry.message;
+    case "span":
+    case "spanEvent":
+      return entry.name;
+  }
+}
+
+function statusClass(status: "ok" | "error" | "unset"): string {
+  switch (status) {
+    case "ok":
+      return "text-emerald-400";
+    case "error":
+      return "text-rose-400";
+    case "unset":
+      return "text-muted-foreground";
+  }
+}
+
+function formatDuration(durationUs: number): string {
+  if (durationUs >= 1_000_000) {
+    return `${(durationUs / 1_000_000).toFixed(2)}s`;
+  }
+  if (durationUs >= 1_000) {
+    return `${(durationUs / 1_000).toFixed(1)}ms`;
+  }
+  return `${Math.round(durationUs)}us`;
 }
 
 /**

@@ -1,8 +1,8 @@
 import {
   evaluateFilter,
   type FilterNode,
-  type TelemetryLogEntry,
   type TelemetryLogPageInfo,
+  type TelemetryRecord,
 } from "@lensflare/contracts";
 import {
   Activity,
@@ -15,7 +15,7 @@ import {
 } from "react";
 
 import { Sheet, SheetPopup } from "~/components/ui/sheet";
-import { listDatasetLogs, subscribeDatasetLogEntries } from "~/data/logApi";
+import { listDatasetTelemetry, subscribeDatasetTelemetryEntries } from "~/data/logApi";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
 
 import { DatasetTabsTitlebar } from "./DatasetTabsTitlebar";
@@ -25,7 +25,7 @@ import { LogDetailsPanel } from "./LogDetailsPanel";
 import { LogStreamHeader } from "./LogStreamHeader";
 import { LogTable, type LogTableHandle } from "./LogTable";
 import { TraceExplorer } from "./TraceExplorer";
-import type { LogEntry, SourceIconKind } from "./types";
+import type { SourceIconKind, TelemetryEntry } from "./types";
 
 /**
  * Below this viewport width we switch the log details panel from an inline
@@ -65,7 +65,7 @@ export function LogStreamView({
 }: LogStreamViewProps) {
   const tabsByDataset = useDatasetTabsSnapshot();
   const [filter, setFilter] = useState<FilterNode | null>(null);
-  const [logs, setLogs] = useState<ReadonlyArray<LogEntry>>([]);
+  const [logs, setLogs] = useState<ReadonlyArray<TelemetryEntry>>([]);
   const [pageInfo, setPageInfoState] = useState<TelemetryLogPageInfo | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -87,7 +87,7 @@ export function LogStreamView({
   // Derive the selected log from the current list so it stays in sync as new
   // entries stream in. If the selection disappears (e.g. pagination trims it)
   // the details view closes automatically.
-  const selectedLog = useMemo<LogEntry | null>(() => {
+  const selectedLog = useMemo<TelemetryEntry | null>(() => {
     if (selectedLogId === null) return null;
     return logs.find((log) => log.id === selectedLogId) ?? null;
   }, [logs, selectedLogId]);
@@ -110,7 +110,7 @@ export function LogStreamView({
       updatePageInfo(null);
 
       try {
-        const page = await listDatasetLogs(projectId, datasetId, {
+        const page = await listDatasetTelemetry(projectId, datasetId, {
           limit: LOG_PAGE_SIZE,
           filter: filter ?? undefined,
         });
@@ -118,7 +118,7 @@ export function LogStreamView({
           return;
         }
 
-        const entries = page.entries.map((entry) => toLogEntry(entry, datasetName, datasetIcon));
+        const entries = page.entries.map((entry) => toTelemetryEntry(entry, datasetName, datasetIcon));
         setLogs((currentLogs) => mergeUniqueLogs(entries, currentLogs));
         updatePageInfo(page.pageInfo);
         setErrorMessage(null);
@@ -127,7 +127,7 @@ export function LogStreamView({
           return;
         }
 
-        setErrorMessage(error instanceof Error ? error.message : "Failed to load logs.");
+        setErrorMessage(error instanceof Error ? error.message : "Failed to load telemetry.");
       } finally {
         if (cancelled) {
           return;
@@ -145,7 +145,7 @@ export function LogStreamView({
   }, [datasetIcon, datasetId, datasetName, filter, projectId, updatePageInfo]);
 
   useEffect(() => {
-    return subscribeDatasetLogEntries(
+    return subscribeDatasetTelemetryEntries(
       projectId,
       datasetId,
       (entry) => {
@@ -157,7 +157,7 @@ export function LogStreamView({
         }
 
         setLogs((currentLogs) =>
-          mergeUniqueLogs(currentLogs, [toLogEntry(entry, datasetName, datasetIcon)]),
+          mergeUniqueLogs(currentLogs, [toTelemetryEntry(entry, datasetName, datasetIcon)]),
         );
         setErrorMessage(null);
       },
@@ -176,13 +176,13 @@ export function LogStreamView({
 
     setIsLoadingOlder(true);
     try {
-      const page = await listDatasetLogs(projectId, datasetId, {
+      const page = await listDatasetTelemetry(projectId, datasetId, {
         cursor: currentPageInfo.startCursor,
         direction: "older",
         limit: LOG_PAGE_SIZE,
         filter: filter ?? undefined,
       });
-      const entries = page.entries.map((entry) => toLogEntry(entry, datasetName, datasetIcon));
+      const entries = page.entries.map((entry) => toTelemetryEntry(entry, datasetName, datasetIcon));
       const latestPageInfo = pageInfoRef.current ?? currentPageInfo;
 
       setLogs((currentLogs) => mergeUniqueLogs(entries, currentLogs));
@@ -194,7 +194,7 @@ export function LogStreamView({
       });
       setErrorMessage(null);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Failed to load logs.");
+      setErrorMessage(error instanceof Error ? error.message : "Failed to load telemetry.");
     } finally {
       setIsLoadingOlder(false);
     }
@@ -260,10 +260,10 @@ interface LiveTabPanelProps {
   handleLoadOlder: () => void;
   isLoading: boolean;
   isLoadingOlder: boolean;
-  logs: ReadonlyArray<LogEntry>;
+  logs: ReadonlyArray<TelemetryEntry>;
   pageInfo: TelemetryLogPageInfo | null;
   projectId: string;
-  selectedLog: LogEntry | null;
+  selectedLog: TelemetryEntry | null;
   selectedLogId: string | null;
   setFilter: (filter: FilterNode | null) => void;
   setSelectedLogId: (logId: string | null) => void;
@@ -292,7 +292,7 @@ function LiveTabPanel({
   // Keep the live tab mounted so table + details state survive tab switches,
   // but only surface the mobile sheet while this panel is active.
   const sheetCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [closingSheetLog, setClosingSheetLog] = useState<LogEntry | null>(null);
+  const [closingSheetLog, setClosingSheetLog] = useState<TelemetryEntry | null>(null);
   const [isSheetClosing, setIsSheetClosing] = useState(false);
   const showInlineDetails = selectedLog !== null && !shouldUseDetailsSheet;
   const showSheetDetails =
@@ -431,22 +431,66 @@ function TraceTabPanel({ active, datasetId, projectId, tab }: TraceTabPanelProps
   );
 }
 
-function toLogEntry(
-  entry: TelemetryLogEntry,
+function toTelemetryEntry(
+  entry: TelemetryRecord,
   datasetName: string,
   datasetIcon: SourceIconKind,
-): LogEntry {
+): TelemetryEntry {
   const parsedTimestamp = new Date(entry.timestamp);
+  const timestamp = Number.isNaN(parsedTimestamp.getTime()) ? new Date() : parsedTimestamp;
+
+  if (entry.kind === "span") {
+    return {
+      id: entry.id,
+      kind: "span",
+      timestamp,
+      sourceName: entry.sourceName || datasetName,
+      sourceIcon: inferSourceIcon(entry.sourceName, datasetIcon),
+      traceId: entry.traceId,
+      spanId: entry.spanId,
+      parentSpanId: entry.parentSpanId,
+      name: entry.name,
+      serviceName: entry.serviceName,
+      status: entry.status,
+      statusMessage: entry.statusMessage,
+      durationUs: entry.durationUs,
+      attributes: entry.attributes,
+      events: entry.events.map((event: Extract<TelemetryRecord, { kind: "span" }>["events"][number]) => {
+        const eventTimestamp = new Date(event.timestamp);
+        return {
+          ...event,
+          timestamp: Number.isNaN(eventTimestamp.getTime()) ? timestamp : eventTimestamp,
+        };
+      }),
+    };
+  }
+
+  if (entry.kind === "spanEvent") {
+    return {
+      id: entry.id,
+      kind: "spanEvent",
+      timestamp,
+      sourceName: entry.sourceName || datasetName,
+      sourceIcon: inferSourceIcon(entry.sourceName, datasetIcon),
+      traceId: entry.traceId,
+      spanId: entry.spanId,
+      name: entry.name,
+      serviceName: entry.serviceName,
+      attributes: entry.attributes,
+    };
+  }
 
   return {
     id: entry.id,
-    timestamp: Number.isNaN(parsedTimestamp.getTime()) ? new Date() : parsedTimestamp,
+    kind: "log",
+    timestamp,
     sourceName: entry.sourceName || datasetName,
     sourceIcon: inferSourceIcon(entry.sourceName, datasetIcon),
     level: entry.level,
     message: entry.message,
     ...(entry.traceId ? { traceId: entry.traceId } : {}),
     ...(entry.spanId ? { spanId: entry.spanId } : {}),
+    attributes: entry.attributes,
   };
 }
 
@@ -477,10 +521,10 @@ function inferSourceIcon(sourceName: string, fallback: SourceIconKind): SourceIc
 }
 
 function mergeUniqueLogs(
-  first: ReadonlyArray<LogEntry>,
-  second: ReadonlyArray<LogEntry>,
-): ReadonlyArray<LogEntry> {
-  const byId = new Map<string, LogEntry>();
+  first: ReadonlyArray<TelemetryEntry>,
+  second: ReadonlyArray<TelemetryEntry>,
+): ReadonlyArray<TelemetryEntry> {
+  const byId = new Map<string, TelemetryEntry>();
   for (const log of first) {
     byId.set(log.id, log);
   }
@@ -491,7 +535,7 @@ function mergeUniqueLogs(
   return [...byId.values()].sort(compareLogEntries);
 }
 
-function compareLogEntries(left: LogEntry, right: LogEntry): number {
+function compareLogEntries(left: TelemetryEntry, right: TelemetryEntry): number {
   const timestampDelta = left.timestamp.getTime() - right.timestamp.getTime();
   if (timestampDelta !== 0) {
     return timestampDelta;

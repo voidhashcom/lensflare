@@ -3,14 +3,23 @@ import {
   type FilterNode,
   type TelemetryLogEntry,
   type TelemetryLogLevel,
+  type TelemetryRecord,
+  type TelemetrySpanRecord,
 } from "@lensflare/contracts";
 import { Context, Effect, Layer, PubSub, Stream } from "effect";
-import type { IngestWriteRequest, NormalizedLogRecord, WrittenLogRecord } from "./types.ts";
+import type {
+  IngestWriteRequest,
+  NormalizedLogRecord,
+  SpanIngestWriteRequest,
+  WrittenLogRecord,
+  WrittenSpanEventRecord,
+  WrittenSpanRecord,
+} from "./types.ts";
 
-interface TelemetryLogEvent {
+interface TelemetryEvent {
   readonly projectId: string;
   readonly datasetId: string;
-  readonly entry: TelemetryLogEntry;
+  readonly entry: TelemetryRecord;
 }
 
 function toTimestamp(raw: string | null, fallback: string): string {
@@ -97,6 +106,69 @@ function toTelemetryLogEntry(request: IngestWriteRequest, written: WrittenLogRec
   };
 }
 
+function toTelemetryLogRecord(request: IngestWriteRequest, written: WrittenLogRecord): TelemetryRecord {
+  return {
+    kind: "log",
+    ...toTelemetryLogEntry(request, written),
+  };
+}
+
+function toSpanStatus(statusCode: number | null): TelemetrySpanRecord["status"] {
+  if (statusCode === 2) {
+    return "error";
+  }
+  if (statusCode === 1) {
+    return "ok";
+  }
+  return "unset";
+}
+
+function toTelemetrySpanRecord(
+  request: SpanIngestWriteRequest,
+  written: WrittenSpanRecord,
+): TelemetryRecord {
+  const record = written.record;
+  return {
+    id: written.id,
+    kind: "span",
+    timestamp: toTimestamp(record.startTime, request.receivedAt),
+    sourceName: record.serviceName ?? request.datasetSlug ?? request.providerKind,
+    traceId: record.traceId,
+    spanId: record.spanId,
+    parentSpanId: record.parentSpanId,
+    name: record.name,
+    serviceName: record.serviceName,
+    status: toSpanStatus(record.statusCode),
+    statusMessage: record.statusMessage,
+    durationUs: record.durationUs,
+    attributes: parseAttributes(record.attributesJson),
+    events: record.events.map((event) => ({
+      id: `${record.spanId}:${event.timestamp}:${event.name}`,
+      timestamp: event.timestamp,
+      name: event.name,
+      attributes: parseAttributes(event.attributesJson),
+    })),
+  };
+}
+
+function toTelemetrySpanEventRecord(
+  request: SpanIngestWriteRequest,
+  written: WrittenSpanEventRecord,
+): TelemetryRecord {
+  const record = written.record;
+  return {
+    id: written.id,
+    kind: "spanEvent",
+    timestamp: toTimestamp(record.timestamp, request.receivedAt),
+    sourceName: record.serviceName ?? request.datasetSlug ?? request.providerKind,
+    traceId: record.traceId,
+    spanId: record.spanId,
+    name: record.name,
+    serviceName: record.serviceName,
+    attributes: parseAttributes(record.attributesJson),
+  };
+}
+
 export class TelemetryLogEventService extends Context.Service<
   TelemetryLogEventService,
   {
@@ -104,17 +176,27 @@ export class TelemetryLogEventService extends Context.Service<
       request: IngestWriteRequest,
       records: ReadonlyArray<WrittenLogRecord>,
     ) => Effect.Effect<void>;
+    readonly publishSpanBatch: (
+      request: SpanIngestWriteRequest,
+      records: ReadonlyArray<WrittenSpanRecord>,
+      events: ReadonlyArray<WrittenSpanEventRecord>,
+    ) => Effect.Effect<void>;
     readonly streamDatasetLogs: (
       projectId: string,
       datasetId: string,
       filter?: FilterNode | undefined,
     ) => Stream.Stream<TelemetryLogEntry>;
+    readonly streamDatasetTelemetry: (
+      projectId: string,
+      datasetId: string,
+      filter?: FilterNode | undefined,
+    ) => Stream.Stream<TelemetryRecord>;
   }
 >()("@lensflare/local-server/TelemetryLogEventService") {
   static readonly layer = Layer.effect(
     TelemetryLogEventService,
     Effect.gen(function* () {
-      const pubsub = yield* PubSub.unbounded<TelemetryLogEvent>();
+      const pubsub = yield* PubSub.unbounded<TelemetryEvent>();
       const stream = Stream.fromPubSub(pubsub);
 
       const publishBatch = Effect.fn("TelemetryLogEventService.publishBatch")(function* (
@@ -126,8 +208,28 @@ export class TelemetryLogEventService extends Context.Service<
           (record) =>
             PubSub.publish(pubsub, {
               projectId: request.projectId,
+                datasetId: request.datasetId,
+              entry: toTelemetryLogRecord(request, record),
+            }),
+          { discard: true },
+        );
+      });
+
+      const publishSpanBatch = Effect.fn("TelemetryLogEventService.publishSpanBatch")(function* (
+        request: SpanIngestWriteRequest,
+        records: ReadonlyArray<WrittenSpanRecord>,
+        events: ReadonlyArray<WrittenSpanEventRecord>,
+      ) {
+        yield* Effect.forEach(
+          [
+            ...records.map((record) => toTelemetrySpanRecord(request, record)),
+            ...events.map((event) => toTelemetrySpanEventRecord(request, event)),
+          ],
+          (entry) =>
+            PubSub.publish(pubsub, {
+              projectId: request.projectId,
               datasetId: request.datasetId,
-              entry: toTelemetryLogEntry(request, record),
+              entry,
             }),
           { discard: true },
         );
@@ -143,13 +245,35 @@ export class TelemetryLogEventService extends Context.Service<
             (event) => event.projectId === projectId && event.datasetId === datasetId,
           ),
           Stream.map((event) => event.entry),
+          Stream.filter((entry): entry is TelemetryRecord & { readonly kind: "log" } => entry.kind === "log"),
         );
         return filter === undefined
           ? byDataset
           : byDataset.pipe(Stream.filter((entry) => evaluateFilter(filter, entry)));
       };
 
-      return TelemetryLogEventService.of({ publishBatch, streamDatasetLogs });
+      const streamDatasetTelemetry = (
+        projectId: string,
+        datasetId: string,
+        filter?: FilterNode | undefined,
+      ) => {
+        const byDataset = stream.pipe(
+          Stream.filter(
+            (event) => event.projectId === projectId && event.datasetId === datasetId,
+          ),
+          Stream.map((event) => event.entry),
+        );
+        return filter === undefined
+          ? byDataset
+          : byDataset.pipe(Stream.filter((entry) => evaluateFilter(filter, entry)));
+      };
+
+      return TelemetryLogEventService.of({
+        publishBatch,
+        publishSpanBatch,
+        streamDatasetLogs,
+        streamDatasetTelemetry,
+      });
     }),
   );
 }

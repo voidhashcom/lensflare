@@ -145,15 +145,24 @@ export class InvalidFilterError extends Schema.TaggedErrorClass<InvalidFilterErr
 interface EvaluatedEntry {
   readonly id: string;
   readonly timestamp: string;
+  readonly kind?: string;
   readonly sourceName: string;
-  readonly level: string;
-  readonly message: string;
-  readonly severityNumber: number | null;
-  readonly severityText: string | null;
+  readonly level?: string;
+  readonly message?: string;
+  readonly name?: string;
+  readonly status?: string;
+  readonly durationUs?: number;
+  readonly severityNumber?: number | null;
+  readonly severityText?: string | null;
   readonly serviceName: string | null;
   readonly traceId: string | null;
   readonly spanId: string | null;
+  readonly parentSpanId?: string | null;
   readonly attributes: Readonly<Record<string, unknown>>;
+  readonly events?: ReadonlyArray<{
+    readonly name: string;
+    readonly attributes: Readonly<Record<string, unknown>>;
+  }>;
 }
 
 /**
@@ -163,17 +172,22 @@ interface EvaluatedEntry {
 const TOP_LEVEL_FIELDS = new Set<string>([
   "id",
   "timestamp",
+  "kind",
   "level",
   "message",
+  "name",
+  "status",
+  "durationUs",
   "sourceName",
   "severityNumber",
   "severityText",
   "serviceName",
   "traceId",
   "spanId",
+  "parentSpanId",
 ]);
 
-function resolveField(entry: EvaluatedEntry, path: ReadonlyArray<string>): unknown {
+function resolveDirectField(entry: EvaluatedEntry, path: ReadonlyArray<string>): unknown {
   if (path.length === 0) {
     return undefined;
   }
@@ -198,6 +212,27 @@ function resolveField(entry: EvaluatedEntry, path: ReadonlyArray<string>): unkno
     return (entry as unknown as Record<string, unknown>)[first];
   }
 
+  return undefined;
+}
+
+function resolveField(entry: EvaluatedEntry, path: ReadonlyArray<string>): unknown {
+  const first = path[0];
+  if (first !== "relatedEvents") {
+    return resolveDirectField(entry, path);
+  }
+
+  const [, relation, ...rest] = path;
+  const events = entry.events ?? [];
+  if (relation === "name") {
+    return events.map((event) => event.name);
+  }
+  if (relation === "attributes" && rest.length > 0) {
+    return events
+      .map((event) =>
+        resolveDirectField({ ...entry, attributes: event.attributes }, ["attributes", ...rest]),
+      )
+      .filter((value) => value !== undefined);
+  }
   return undefined;
 }
 
@@ -273,13 +308,14 @@ function compareNumeric(left: unknown, right: FilterValue): number | null {
   return null;
 }
 
-function evaluateComparison(
-  entry: EvaluatedEntry,
-  field: FilterField,
+function evaluateComparisonOnValue(
+  resolved: unknown,
   op: FilterOperator,
   value: FilterValue | undefined,
 ): boolean {
-  const resolved = resolveField(entry, field.path);
+  if (Array.isArray(resolved)) {
+    return resolved.some((item) => evaluateComparisonOnValue(item, op, value));
+  }
 
   if (op === "exists") {
     return resolved !== undefined && resolved !== null;
@@ -357,6 +393,16 @@ function evaluateComparison(
   return false;
 }
 
+function evaluateComparison(
+  entry: EvaluatedEntry,
+  field: FilterField,
+  op: FilterOperator,
+  value: FilterValue | undefined,
+): boolean {
+  const resolved = resolveField(entry, field.path);
+  return evaluateComparisonOnValue(resolved, op, value);
+}
+
 function evaluateText(entry: EvaluatedEntry, query: string, mode: FilterTextMode): boolean {
   const trimmed = query.trim();
   if (trimmed.length === 0) {
@@ -371,9 +417,12 @@ function evaluateText(entry: EvaluatedEntry, query: string, mode: FilterTextMode
   }
 
   const haystacks: ReadonlyArray<string> = [
-    entry.message,
+    entry.kind ?? "",
+    entry.message ?? "",
+    entry.name ?? "",
     entry.sourceName,
-    entry.level,
+    entry.level ?? "",
+    entry.status ?? "",
     entry.severityText ?? "",
     entry.serviceName ?? "",
     entry.traceId ?? "",

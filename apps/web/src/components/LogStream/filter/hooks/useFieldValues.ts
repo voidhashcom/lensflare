@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { listDatasetLogFieldValues } from "~/data/logApi";
+import { listDatasetTelemetryFieldValues } from "~/data/logApi";
 
 interface FieldValuesState {
   readonly values: ReadonlyArray<string>;
@@ -40,7 +40,7 @@ export function useFieldValues(
     let cancelled = false;
     setState({ values: [], isLoading: true, error: null });
 
-    listDatasetLogFieldValues(projectId, datasetId, path)
+    listDatasetTelemetryFieldValues(projectId, datasetId, path)
       .then((values) => {
         if (cancelled) return;
         setState({ values, isLoading: false, error: null });

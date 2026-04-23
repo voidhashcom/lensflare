@@ -36,6 +36,7 @@ import { TelemetryLogEventService } from "./ingest/telemetryLogEventService.ts";
 import { OtlpLogsDecoder, OtlpTracesDecoder } from "./ingest/providers/otlp/decoder.ts";
 import { otlpRouteLayer } from "./ingest/providers/otlp/route.ts";
 import { TelemetryLogQueryService } from "./ingest/telemetryLogQueryService.ts";
+import { TelemetryQueryService } from "./ingest/telemetryQueryService.ts";
 import { TelemetryLogsRepository } from "./ingest/telemetryLogsRepository.ts";
 import { TelemetrySpansRepository } from "./ingest/telemetrySpansRepository.ts";
 import { TelemetryStore } from "./ingest/telemetryStore.ts";
@@ -293,6 +294,11 @@ export async function startLocalServer(
     Layer.provide(sqliteDatabaseLayer),
     Layer.provide(telemetryStoreLayer),
   );
+  const unifiedTelemetryQueryLayer = TelemetryQueryService.layer.pipe(
+    Layer.provide(DatasetsRepository.layer),
+    Layer.provide(sqliteDatabaseLayer),
+    Layer.provide(telemetryStoreLayer),
+  );
 
   // Provider plug-in surface: each provider's route layer is mergeAll-ed
   // here, the per-provider decoder services are provided once below, and
@@ -352,6 +358,7 @@ export async function startLocalServer(
     catalogServicesLayer,
     ingestServicesLayer,
     telemetryQueryLayer,
+    unifiedTelemetryQueryLayer,
     telemetryLogEventLayer,
   );
   const infrastructureLayer = Layer.merge(platformLayer, servicesLayer);

@@ -3,6 +3,8 @@ import {
   decodeLensflareEnvironmentDescriptor,
   decodeServerEvent,
   decodeServerSnapshot,
+  decodeTelemetryRecord,
+  decodeTelemetryRecordPage,
 } from "./index.ts";
 
 describe("@lensflare/contracts", () => {
@@ -64,5 +66,78 @@ describe("@lensflare/contracts", () => {
     expect(descriptor.serverInstanceId).toBe("abc123");
     expect(descriptor.mode).toBe("desktop");
     expect(descriptor.wsBaseUrl).toBe("ws://127.0.0.1:43110");
+  });
+
+  it("decodes unified telemetry records", () => {
+    expect(
+      decodeTelemetryRecord({
+        id: "log-1",
+        kind: "log",
+        timestamp: "2026-04-21T10:00:00.000Z",
+        sourceName: "api",
+        level: "error",
+        message: "failed",
+        severityNumber: 17,
+        severityText: "ERROR",
+        serviceName: "api",
+        traceId: "trace-1",
+        spanId: "span-1",
+        attributes: { env: "dev" },
+      }).kind,
+    ).toBe("log");
+
+    expect(
+      decodeTelemetryRecord({
+        id: "span-1",
+        kind: "span",
+        timestamp: "2026-04-21T10:00:00.000Z",
+        sourceName: "api",
+        traceId: "trace-1",
+        spanId: "span-1",
+        parentSpanId: null,
+        name: "GET /checkout",
+        serviceName: "api",
+        status: "error",
+        statusMessage: "timeout",
+        durationUs: 1200,
+        attributes: {},
+        events: [
+          {
+            id: "event-1",
+            timestamp: "2026-04-21T10:00:00.001Z",
+            name: "exception",
+            attributes: { "exception.type": "TimeoutError" },
+          },
+        ],
+      }).kind,
+    ).toBe("span");
+
+    expect(
+      decodeTelemetryRecord({
+        id: "event-1",
+        kind: "spanEvent",
+        timestamp: "2026-04-21T10:00:00.001Z",
+        sourceName: "api",
+        traceId: "trace-1",
+        spanId: "span-1",
+        name: "exception",
+        serviceName: "api",
+        attributes: { "exception.message": "timed out" },
+      }).kind,
+    ).toBe("spanEvent");
+  });
+
+  it("decodes unified telemetry pages", () => {
+    const page = decodeTelemetryRecordPage({
+      entries: [],
+      pageInfo: {
+        hasPreviousPage: false,
+        hasNextPage: false,
+        startCursor: null,
+        endCursor: null,
+      },
+    });
+
+    expect(page.entries).toEqual([]);
   });
 });

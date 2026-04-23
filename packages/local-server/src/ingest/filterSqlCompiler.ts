@@ -114,7 +114,11 @@ function assertAttributeSegments(segments: ReadonlyArray<string>): void {
 function attributeStringExpr(segments: ReadonlyArray<string>): string {
   // Safe because we've already asserted every segment matches
   // ATTRIBUTE_SEGMENT_PATTERN — `$`, `.`, spaces, quotes etc. are rejected.
-  return `json_extract_string(attributes_json, '$.${segments.join(".")}')`;
+  return `json_extract_string(attributes_json, '${jsonPathForSegments(segments)}')`;
+}
+
+function jsonPathForSegments(segments: ReadonlyArray<string>): string {
+  return `$${segments.map((segment) => (segment.includes(".") ? `."${segment}"` : `.${segment}`)).join("")}`;
 }
 
 function resolveField(
