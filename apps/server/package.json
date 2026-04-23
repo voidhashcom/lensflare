@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "LENSFLARE_DEV=1 tsx watch src/index.ts",
     "build": "vp pack",
     "start": "node dist/index.cjs",
     "typecheck": "tsc --noEmit",

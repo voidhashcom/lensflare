@@ -575,7 +575,7 @@ export class TelemetryLogQueryService extends Context.Service<
           ...(fragment?.params ?? {}),
         };
 
-        const rows = yield* telemetry.queryRows<Record<string, unknown>>(sql, params);
+        const rows = yield* telemetry.queryRows<Record<string, unknown>>(datasetId, sql, params);
         return toLogPage(rows, { direction, limit });
       });
 
@@ -592,6 +592,7 @@ export class TelemetryLogQueryService extends Context.Service<
         // offers free-form path entry for nested attributes). LIMITed so a
         // misbehaving producer can't balloon the response.
         const rows = yield* telemetry.queryRows<Record<string, unknown>>(
+          datasetId,
           `
           SELECT DISTINCT unnest(json_keys(attributes_json)) AS key
           FROM log_records
@@ -639,6 +640,7 @@ export class TelemetryLogQueryService extends Context.Service<
         });
 
         const rows = yield* telemetry.queryRows<Record<string, unknown>>(
+          datasetId,
           `
           SELECT DISTINCT ${expr} AS value
           FROM log_records
@@ -668,11 +670,15 @@ export class TelemetryLogQueryService extends Context.Service<
           return yield* new DatasetNotFound({ datasetId, projectId });
         }
 
-        const rows = yield* telemetry.queryRows<Record<string, unknown>>(selectTraceSpansSql, {
-          project_id: projectId,
-          dataset_id: datasetId,
-          trace_id: traceId,
-        });
+        const rows = yield* telemetry.queryRows<Record<string, unknown>>(
+          datasetId,
+          selectTraceSpansSql,
+          {
+            project_id: projectId,
+            dataset_id: datasetId,
+            trace_id: traceId,
+          },
+        );
 
         return toTraceContext(traceId, rows.map((row) => decodeTelemetrySpanRow(row)), currentSpanId);
       });

@@ -4,8 +4,8 @@
 
 **IMPORTANT:** Always consult effect-solutions before writing Effect code.
 
-1. Run `effect-solutions list` to see available guides
-2. Run `effect-solutions show <topic>...` for relevant patterns (supports multiple topics)
+1. Run `pnpm exec effect-solutions list` to see available guides
+2. Run `pnpm exec effect-solutions show <topic>...` for relevant patterns (supports multiple topics)
 3. Search `~/.local/share/effect-solutions/effect` for real implementations
 
 Topics: quick-start, project-setup, tsconfig, basics, services-and-layers, data-modeling, error-handling, config, testing, cli.

@@ -2,6 +2,7 @@ import {
   formatDatasetError,
   type CreateDatasetInput,
   type Dataset,
+  type DatasetStorageStats,
   type UpdateDatasetInput,
 } from "@lensflare/contracts";
 import { runRpc } from "./rpcConnectionManager";
@@ -54,4 +55,12 @@ export async function updateDataset(
 
 export async function deleteDataset(projectId: string, datasetId: string): Promise<void> {
   await runDatasetRpc((client) => client.DeleteDataset({ projectId, datasetId }));
+}
+
+export async function listDatasetStorageStats(): Promise<Array<DatasetStorageStats>> {
+  return [...(await runDatasetRpc((client) => client.ListDatasetStorageStats()))];
+}
+
+export async function clearDatasetData(projectId: string, datasetId: string): Promise<void> {
+  await runDatasetRpc((client) => client.ClearDatasetData({ projectId, datasetId }));
 }

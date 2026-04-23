@@ -119,7 +119,7 @@ export class TelemetryLogsRepository extends Context.Service<
       const store = yield* TelemetryStore;
 
       const writeBatch = (request: IngestWriteRequest) =>
-        store.withTransaction((connection) =>
+        store.withTransaction(request.datasetId, (connection) =>
           Effect.tryPromise({
             try: async () => {
               const batchId = crypto.randomUUID();

@@ -1,5 +1,6 @@
 import { Context, Effect, Layer } from "effect";
 import { SqlError } from "effect/unstable/sql";
+import { makeDatasetTag } from "../domain/slug.ts";
 import { DatasetsRepository } from "../repositories/datasetsRepository.ts";
 import { ProjectsRepository } from "../repositories/projectsRepository.ts";
 import { ProjectDatasetMismatch, UnknownDatasetSlug, UnknownProjectSlug } from "./errors.ts";
@@ -38,7 +39,8 @@ export class IngestTargetResolver extends Context.Service<
           return yield* new UnknownProjectSlug({ projectSlug });
         }
 
-        const dataset = yield* datasets.findBySlug(datasetSlug);
+        const datasetTag = makeDatasetTag(project.slug, datasetSlug);
+        const dataset = yield* datasets.findBySlug(datasetTag);
         if (dataset === undefined) {
           return yield* new UnknownDatasetSlug({ datasetSlug });
         }

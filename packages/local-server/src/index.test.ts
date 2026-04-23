@@ -11,10 +11,10 @@ import {
 import { Duration, Effect, Fiber, Layer, ManagedRuntime, Stream } from "effect";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, parse } from "node:path";
 import { startLocalServer } from "./index.ts";
 
 const CatalogRpcs = ProjectRpcGroup.merge(DatasetRpcGroup).merge(TelemetryLogRpcGroup);
@@ -54,7 +54,14 @@ async function queryDuckDb(
   duckdbDatabaseFile: string,
   sql: string,
 ): Promise<Array<Record<string, unknown>>> {
-  const instance = await DuckDBInstance.create(duckdbDatabaseFile);
+  const parsed = parse(duckdbDatabaseFile);
+  const datasetDirectory = join(parsed.dir, `${parsed.name}.datasets`);
+  const datasetFiles = (await readdir(datasetDirectory)).filter((file) => file.endsWith(".duckdb"));
+  if (datasetFiles.length !== 1) {
+    throw new Error(`Expected one dataset DuckDB file, found ${datasetFiles.length}.`);
+  }
+
+  const instance = await DuckDBInstance.create(join(datasetDirectory, datasetFiles[0] ?? ""));
   const connection = await instance.connect();
 
   try {
@@ -416,16 +423,17 @@ describe("startLocalServer", () => {
       duckdbDatabaseFile,
       otel: {
         enabled: true,
-        projectSlug: "lensflare-internal",
-        datasetSlug: "runtime-logs",
+        projectSlug: "lensflare",
+        datasetSlug: "dev",
       },
+      bootstrapOtelCatalog: true,
     });
 
     try {
       const response = await fetch(new URL("/api/health", server.origin));
       expect(response.ok).toBe(true);
 
-      await delay(1_200);
+      await delay(2_200);
     } finally {
       await server.stop();
     }
@@ -433,11 +441,11 @@ describe("startLocalServer", () => {
     try {
       const spanRows = await queryDuckDb(
         duckdbDatabaseFile,
-        "SELECT COUNT(*) AS count FROM span_records WHERE project_slug = 'lensflare-internal' AND dataset_slug = 'runtime-logs'",
+        "SELECT COUNT(*) AS count FROM span_records WHERE project_slug = 'lensflare' AND dataset_slug = 'lensflare-dev'",
       );
       const logRows = await queryDuckDb(
         duckdbDatabaseFile,
-        "SELECT COUNT(*) AS count FROM log_records WHERE project_slug = 'lensflare-internal' AND dataset_slug = 'runtime-logs' AND trace_id IS NOT NULL AND span_id IS NOT NULL",
+        "SELECT COUNT(*) AS count FROM log_records WHERE project_slug = 'lensflare' AND dataset_slug = 'lensflare-dev'",
       );
 
       expect(Number(spanRows[0]?.count ?? 0)).toBeGreaterThan(0);

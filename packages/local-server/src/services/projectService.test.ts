@@ -1,8 +1,10 @@
 import { describe, expect, it } from "@effect/vitest";
 import { DEFAULT_PROJECT_ICON } from "@lensflare/contracts";
 import { Effect, Layer } from "effect";
+import { dirname, join } from "node:path";
 import { withTempDirectory } from "../_internal/testSupport.ts";
 import { makeSqliteDatabaseLayer } from "../db/database.ts";
+import { TelemetryStore } from "../ingest/telemetryStore.ts";
 import { DatasetsRepository } from "../repositories/datasetsRepository.ts";
 import { ProjectsRepository } from "../repositories/projectsRepository.ts";
 import { DatasetService } from "./datasetService.ts";
@@ -19,6 +21,7 @@ const buildLayer = (sqliteDatabaseFile: string) =>
     Layer.provide(ProjectsRepository.layer),
     Layer.provide(DatasetsRepository.layer),
     Layer.provide(makeSqliteDatabaseLayer(sqliteDatabaseFile)),
+    Layer.provide(TelemetryStore.layer(join(dirname(sqliteDatabaseFile), "lensflare.duckdb"))),
   );
 
 describe("ProjectService", () => {

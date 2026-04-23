@@ -481,6 +481,7 @@ async function main(): Promise<void> {
       projectSlug: config.otelProjectSlug,
       datasetSlug: config.otelDatasetSlug,
     },
+    bootstrapOtelCatalog: config.lensflareDev,
     ...(embeddedWebDir ? { staticDir: embeddedWebDir } : {}),
     ...(devClientUrl ? { devClientUrl } : {}),
   } as const;

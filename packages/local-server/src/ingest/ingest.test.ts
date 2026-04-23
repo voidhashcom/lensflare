@@ -6,9 +6,10 @@ import { gzipSync } from "node:zlib";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { startLocalServer } from "../index.ts";
 import { makeSqliteDatabaseLayer } from "../db/database.ts";
+import { datasetDuckDbDatabaseFile, TelemetryStore } from "./telemetryStore.ts";
 import { encodeOtlpRequestForTest } from "./providers/otlp/testSupport.ts";
 import { DatasetsRepository } from "../repositories/datasetsRepository.ts";
 import { ProjectsRepository } from "../repositories/projectsRepository.ts";
@@ -53,6 +54,7 @@ const sqliteLayerFor = (sqliteDatabaseFile: string) =>
     Layer.provide(ProjectsRepository.layer),
     Layer.provide(DatasetsRepository.layer),
     Layer.provide(makeSqliteDatabaseLayer(sqliteDatabaseFile)),
+    Layer.provide(TelemetryStore.layer(join(dirname(sqliteDatabaseFile), "lensflare.duckdb"))),
   );
 
 async function seedProjectAndDataset(sqliteDatabaseFile: string) {
@@ -94,9 +96,12 @@ async function listProjectsAndDatasets(sqliteDatabaseFile: string) {
 
 async function queryDuckDb(
   duckdbDatabaseFile: string,
+  datasetId: string,
   sql: string,
 ): Promise<Array<Record<string, unknown>>> {
-  const instance = await DuckDBInstance.create(duckdbDatabaseFile);
+  const instance = await DuckDBInstance.create(
+    datasetDuckDbDatabaseFile(duckdbDatabaseFile, datasetId),
+  );
   const connection = await instance.connect();
 
   try {
@@ -181,18 +186,20 @@ describe("HTTP ingest", () => {
 
       const batches = await queryDuckDb(
         duckdbDatabaseFile,
+        dataset.id,
         "SELECT accepted_records, project_slug, dataset_slug FROM ingest_batches",
       );
       expect(batches).toEqual([
         {
           accepted_records: 1,
           project_slug: "lensflare",
-          dataset_slug: "traces",
+          dataset_slug: "lensflare-traces",
         },
       ]);
 
       const records = await queryDuckDb(
         duckdbDatabaseFile,
+        dataset.id,
         "SELECT body_text, service_name, severity_number FROM log_records",
       );
       expect(records).toEqual([
@@ -460,7 +467,9 @@ describe("HTTP ingest", () => {
                 {
                   scope: { name: "tests", version: "1.0.0" },
                   logRecords: Array.from({ length: 5 }, (_, index) => ({
-                    timeUnixNano: String(1_716_201_600_000_000_000n + BigInt(index) * 1_000_000_000n),
+                    timeUnixNano: String(
+                      1_716_201_600_000_000_000n + BigInt(index) * 1_000_000_000n,
+                    ),
                     severityNumber: 9,
                     severityText: "INFO",
                     body: { stringValue: `log-${index}` },
@@ -513,7 +522,7 @@ describe("HTTP ingest", () => {
     const duckdbDatabaseFile = join(directory, "lensflare.duckdb");
     const port = await getAvailablePort();
 
-    await seedProjectAndDataset(sqliteDatabaseFile);
+    const { dataset } = await seedProjectAndDataset(sqliteDatabaseFile);
     const server = await startLocalServer({
       mode: "server",
       host: "127.0.0.1",
@@ -568,6 +577,7 @@ describe("HTTP ingest", () => {
 
       const counts = await queryDuckDb(
         duckdbDatabaseFile,
+        dataset.id,
         "SELECT COUNT(*) AS batches, (SELECT COUNT(*) FROM log_records) AS records FROM ingest_batches",
       );
       expect(counts).toEqual([
@@ -587,7 +597,7 @@ describe("HTTP ingest", () => {
     const duckdbDatabaseFile = join(directory, "lensflare.duckdb");
     const port = await getAvailablePort();
 
-    await seedNamedProjectAndDataset(sqliteDatabaseFile, {
+    const { dataset } = await seedNamedProjectAndDataset(sqliteDatabaseFile, {
       projectName: "Lensflare",
       datasetName: "dev",
     });
@@ -680,6 +690,7 @@ describe("HTTP ingest", () => {
       // final persisted state instead of probing between the two requests.
       const finalCounts = await queryDuckDb(
         duckdbDatabaseFile,
+        dataset.id,
         "SELECT COUNT(*) AS batches, (SELECT COUNT(*) FROM log_records) AS records FROM ingest_batches",
       );
       expect(finalCounts).toEqual([
@@ -691,18 +702,19 @@ describe("HTTP ingest", () => {
 
       const records = await queryDuckDb(
         duckdbDatabaseFile,
+        dataset.id,
         "SELECT body_text, service_name, dataset_slug FROM log_records ORDER BY body_text",
       );
       expect(records).toEqual([
         {
           body_text: "hello from dev",
           service_name: "api",
-          dataset_slug: "dev",
+          dataset_slug: "lensflare-dev",
         },
         {
           body_text: "loop me back",
           service_name: "lensflare-server",
-          dataset_slug: "dev",
+          dataset_slug: "lensflare-dev",
         },
       ]);
     } finally {
@@ -716,7 +728,7 @@ describe("HTTP ingest", () => {
     const duckdbDatabaseFile = join(directory, "lensflare.duckdb");
     const port = await getAvailablePort();
 
-    await seedProjectAndDataset(sqliteDatabaseFile);
+    const { dataset } = await seedProjectAndDataset(sqliteDatabaseFile);
     const server = await startLocalServer({
       mode: "server",
       host: "127.0.0.1",
@@ -769,6 +781,7 @@ describe("HTTP ingest", () => {
 
       const counts = await queryDuckDb(
         duckdbDatabaseFile,
+        dataset.id,
         "SELECT COUNT(*) AS batches, (SELECT COUNT(*) FROM log_records) AS records FROM ingest_batches",
       );
       expect(counts).toEqual([
@@ -787,76 +800,6 @@ describe("HTTP ingest", () => {
       });
     } finally {
       console.error = originalError;
-      await Promise.all([server.stop(), rm(directory, { recursive: true, force: true })]);
-    }
-  });
-
-  it("bootstraps the internal telemetry dataset and exports startup and HTTP logs", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "lensflare-ingest-"));
-    const sqliteDatabaseFile = join(directory, "lensflare.sqlite");
-    const duckdbDatabaseFile = join(directory, "lensflare.duckdb");
-    const port = await getAvailablePort();
-
-    const server = await startLocalServer({
-      mode: "server",
-      host: "127.0.0.1",
-      port,
-      sqliteDatabaseFile,
-      duckdbDatabaseFile,
-    });
-
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 1_250));
-      const healthResponse = await fetch(`${server.origin}/api/health`);
-      expect(healthResponse.status).toBe(200);
-      await new Promise((resolve) => setTimeout(resolve, 1_250));
-
-      const { projects, datasets } = await listProjectsAndDatasets(sqliteDatabaseFile);
-      const telemetryProject = projects.find((project) => project.slug === "lensflare-internal");
-      const telemetryDataset = datasets.find((dataset) => dataset.slug === "runtime-logs");
-
-      expect(telemetryProject).toBeDefined();
-      expect(telemetryDataset).toBeDefined();
-      expect(telemetryDataset?.projectId).toBe(telemetryProject?.id);
-
-      const records = await queryDuckDb(
-        duckdbDatabaseFile,
-        `
-          SELECT body_text, service_name, dataset_slug, attributes_json
-          FROM log_records
-          WHERE dataset_slug = 'runtime-logs'
-          ORDER BY ingested_at ASC, id ASC
-        `,
-      );
-
-      expect(records).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            service_name: "lensflare-server",
-            dataset_slug: "runtime-logs",
-          }),
-        ]),
-      );
-      expect(
-        records.some((record) =>
-          String(record.body_text ?? "").includes("lensflare server listening"),
-        ),
-      ).toBe(true);
-      expect(
-        records.some((record) => {
-          if (record.body_text !== "Sent HTTP response") {
-            return false;
-          }
-
-          const attributes =
-            typeof record.attributes_json === "string"
-              ? JSON.parse(record.attributes_json)
-              : record.attributes_json;
-
-          return attributes?.["http.url"] === "/api/health" && attributes?.["http.status"] === 200;
-        }),
-      ).toBe(true);
-    } finally {
       await Promise.all([server.stop(), rm(directory, { recursive: true, force: true })]);
     }
   });

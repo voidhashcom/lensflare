@@ -12,6 +12,7 @@ import {
 import { Context, Effect, Layer, PubSub, Stream } from "effect";
 import { SqlError } from "effect/unstable/sql";
 import { makeUniqueSlug, slugify } from "../domain/slug.ts";
+import type { DuckDbError } from "../ingest/telemetryStore.ts";
 import { datasetFromRow, DatasetsRepository } from "../repositories/datasetsRepository.ts";
 import {
   type ProjectRow,
@@ -73,7 +74,7 @@ export class ProjectService extends Context.Service<
     ) => Effect.Effect<Project, ProjectNotFound | ValidationError | SqlError.SqlError>;
     readonly deleteProject: (
       projectId: string,
-    ) => Effect.Effect<void, ProjectNotFound | SqlError.SqlError>;
+    ) => Effect.Effect<void, ProjectNotFound | SqlError.SqlError | DuckDbError>;
     readonly stream: Stream.Stream<ProjectChangeEvent>;
   }
 >()("@lensflare/local-server/ProjectService") {
@@ -233,13 +234,26 @@ export class ProjectService extends Context.Service<
           updatedAt: now,
         });
 
-        const updated = yield* assembleProject({
+        const updatedProjectRow = {
           ...current,
           name: nextName,
           slug: nextSlug,
           icon: nextIcon,
           updated_at: now,
-        });
+        };
+        const updatedDatasets =
+          nextSlug === current.slug
+            ? undefined
+            : yield* datasetService.rebaseProjectDatasetTags(
+                projectId,
+                current.slug,
+                nextSlug,
+                now,
+              );
+        const updated =
+          updatedDatasets === undefined
+            ? yield* assembleProject(updatedProjectRow)
+            : projectFromRow(updatedProjectRow, updatedDatasets);
 
         yield* publish({
           action: "upsert",

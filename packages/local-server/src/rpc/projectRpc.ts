@@ -30,7 +30,9 @@ export const projectRpcLayer = ProjectRpcGroup.toLayer(
       UpdateProject: ({ projectId, input }) =>
         service.updateProject(projectId, input).pipe(Effect.catchTag("SqlError", Effect.die)),
       DeleteProject: ({ projectId }) =>
-        service.deleteProject(projectId).pipe(Effect.catchTag("SqlError", Effect.die)),
+        service
+          .deleteProject(projectId)
+          .pipe(Effect.catchTag("SqlError", Effect.die), Effect.catchTag("DuckDbError", Effect.die)),
       SubscribeProjectEvents: () => service.stream,
     });
   }),

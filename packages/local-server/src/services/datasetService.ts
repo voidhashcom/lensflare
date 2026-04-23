@@ -2,6 +2,7 @@ import {
   type CreateDatasetInput,
   type Dataset,
   type DatasetChangeEvent,
+  type DatasetStorageStats,
   DatasetNotFound,
   ProjectNotFound,
   type UpdateDatasetInput,
@@ -9,8 +10,18 @@ import {
 } from "@lensflare/contracts";
 import { Context, Effect, Layer, PubSub, Stream } from "effect";
 import { SqlError } from "effect/unstable/sql";
-import { makeUniqueSlug, slugify } from "../domain/slug.ts";
-import { datasetFromRow, DatasetsRepository } from "../repositories/datasetsRepository.ts";
+import {
+  getDatasetLocalSlug,
+  makeDatasetTag,
+  makeUniqueSlug,
+  slugify,
+} from "../domain/slug.ts";
+import { DuckDbError, TelemetryStore } from "../ingest/telemetryStore.ts";
+import {
+  type DatasetRow,
+  datasetFromRow,
+  DatasetsRepository,
+} from "../repositories/datasetsRepository.ts";
 import { ProjectsRepository } from "../repositories/projectsRepository.ts";
 import {
   normalizeOptionalName,
@@ -61,10 +72,24 @@ export class DatasetService extends Context.Service<
     readonly deleteDataset: (
       projectId: string,
       datasetId: string,
-    ) => Effect.Effect<void, DatasetNotFound | SqlError.SqlError>;
+    ) => Effect.Effect<void, DatasetNotFound | SqlError.SqlError | DuckDbError>;
+    readonly listDatasetStorageStats: () => Effect.Effect<
+      ReadonlyArray<DatasetStorageStats>,
+      SqlError.SqlError | DuckDbError
+    >;
+    readonly clearDatasetData: (
+      projectId: string,
+      datasetId: string,
+    ) => Effect.Effect<void, DatasetNotFound | SqlError.SqlError | DuckDbError>;
+    readonly rebaseProjectDatasetTags: (
+      projectId: string,
+      oldProjectSlug: string,
+      newProjectSlug: string,
+      updatedAt: string,
+    ) => Effect.Effect<ReadonlyArray<Dataset>, SqlError.SqlError>;
     readonly notifyCascadeDeletedDatasets: (
       datasetIds: ReadonlyArray<string>,
-    ) => Effect.Effect<void>;
+    ) => Effect.Effect<void, DuckDbError>;
     readonly stream: Stream.Stream<DatasetChangeEvent>;
   }
 >()("@lensflare/local-server/DatasetService") {
@@ -73,6 +98,7 @@ export class DatasetService extends Context.Service<
     Effect.gen(function* () {
       const projects = yield* ProjectsRepository;
       const datasets = yield* DatasetsRepository;
+      const telemetry = yield* TelemetryStore;
       const pubsub = yield* PubSub.unbounded<DatasetChangeEvent>();
       const stream = Stream.fromPubSub(pubsub);
 
@@ -130,20 +156,24 @@ export class DatasetService extends Context.Service<
       });
 
       const resolveDatasetSlug = Effect.fn("DatasetService.resolveDatasetSlug")(function* (
+        projectSlug: string,
         name: string,
         explicitSlug: string | undefined,
         currentDatasetId?: string,
       ) {
         const normalizedExplicit = yield* normalizeOptionalSlug("datasetSlug", explicitSlug);
         if (normalizedExplicit !== undefined) {
-          return yield* ensureDatasetSlug(normalizedExplicit, currentDatasetId);
+          return yield* ensureDatasetSlug(
+            makeDatasetTag(projectSlug, normalizedExplicit),
+            currentDatasetId,
+          );
         }
 
         const existing = yield* datasets.findAll();
         const usedSlugs = new Set(
           existing.filter((row) => row.id !== currentDatasetId).map((row) => row.slug),
         );
-        return makeUniqueSlug(slugify(name), usedSlugs);
+        return makeUniqueSlug(makeDatasetTag(projectSlug, slugify(name)), usedSlugs);
       });
 
       const createDataset = Effect.fn("DatasetService.createDataset")(function* (
@@ -152,12 +182,12 @@ export class DatasetService extends Context.Service<
       ) {
         // Validate the parent exists ourselves rather than relying on the
         // SQL FK error so we can return a typed `ProjectNotFound`.
-        yield* requireProjectRow(projectId);
+        const project = yield* requireProjectRow(projectId);
 
         const name = yield* normalizeRequiredName("datasetName", input.name);
         const now = new Date().toISOString();
         const id = crypto.randomUUID();
-        const slug = yield* resolveDatasetSlug(name, input.slug);
+        const slug = yield* resolveDatasetSlug(project.slug, name, input.slug);
 
         yield* datasets.insert({
           id,
@@ -196,7 +226,13 @@ export class DatasetService extends Context.Service<
         const nextSlug =
           input.slug === undefined
             ? current.slug
-            : yield* resolveDatasetSlug(nextName, input.slug, datasetId);
+            : yield* Effect.gen(function* () {
+                const project = yield* projects.findById(projectId);
+                if (project === undefined) {
+                  return yield* new DatasetNotFound({ datasetId, projectId });
+                }
+                return yield* resolveDatasetSlug(project.slug, nextName, input.slug, datasetId);
+              });
         const now = new Date().toISOString();
 
         yield* datasets.update(projectId, datasetId, {
@@ -227,6 +263,7 @@ export class DatasetService extends Context.Service<
         yield* requireDatasetRow(projectId, datasetId);
 
         yield* datasets.remove(projectId, datasetId);
+        yield* telemetry.clearDataset(datasetId);
 
         yield* publish({
           action: "delete",
@@ -234,8 +271,75 @@ export class DatasetService extends Context.Service<
         });
       });
 
+      const listDatasetStorageStats = Effect.fn(
+        "DatasetService.listDatasetStorageStats",
+      )(function* () {
+        const rows = yield* datasets.findAll();
+        return yield* Effect.forEach(rows, (row) => telemetry.getStorageStats(row.id), {
+          concurrency: 8,
+        });
+      });
+
+      const clearDatasetData = Effect.fn("DatasetService.clearDatasetData")(function* (
+        projectId: string,
+        datasetId: string,
+      ) {
+        yield* requireDatasetRow(projectId, datasetId);
+        yield* telemetry.clearDataset(datasetId);
+      });
+
+      const rebaseProjectDatasetTags = Effect.fn("DatasetService.rebaseProjectDatasetTags")(
+        function* (
+          projectId: string,
+          oldProjectSlug: string,
+          newProjectSlug: string,
+          updatedAt: string,
+        ) {
+          const projectDatasetRows = yield* datasets.findAll(projectId);
+          if (oldProjectSlug === newProjectSlug) {
+            return projectDatasetRows.map((row) => datasetFromRow(row));
+          }
+
+          const allRows = yield* datasets.findAll();
+          const usedSlugs = new Set(
+            allRows.filter((row) => row.project_id !== projectId).map((row) => row.slug),
+          );
+          const updatedRows: Array<DatasetRow> = [];
+
+          for (const row of projectDatasetRows) {
+            const localSlug = getDatasetLocalSlug(oldProjectSlug, row.slug);
+            const slug = makeUniqueSlug(makeDatasetTag(newProjectSlug, localSlug), usedSlugs);
+            usedSlugs.add(slug);
+
+            yield* datasets.update(projectId, row.id, {
+              name: row.name,
+              slug,
+              updatedAt,
+            });
+
+            const updatedRow = {
+              ...row,
+              slug,
+              updated_at: updatedAt,
+            };
+            updatedRows.push(updatedRow);
+
+            yield* publish({
+              action: "upsert",
+              value: datasetFromRow(updatedRow),
+            });
+          }
+
+          return updatedRows.map((row) => datasetFromRow(row));
+        },
+      );
+
       const notifyCascadeDeletedDatasets = Effect.fn("DatasetService.notifyCascadeDeletedDatasets")(
         function* (datasetIds: ReadonlyArray<string>) {
+          yield* Effect.forEach(datasetIds, (id) => telemetry.clearDataset(id), {
+            concurrency: 8,
+            discard: true,
+          });
           yield* Effect.forEach(datasetIds, (id) => publish({ action: "delete", id }), {
             discard: true,
           });
@@ -248,6 +352,9 @@ export class DatasetService extends Context.Service<
         createDataset,
         updateDataset,
         deleteDataset,
+        listDatasetStorageStats,
+        clearDatasetData,
+        rebaseProjectDatasetTags,
         notifyCascadeDeletedDatasets,
         stream,
       });

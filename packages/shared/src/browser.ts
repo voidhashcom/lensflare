@@ -13,6 +13,7 @@ export interface RuntimeConfig {
   host: string;
   serverPort: number;
   webDevPort: number;
+  lensflareDev: boolean;
   desktopDev: boolean;
   otelEnabled: boolean;
   otelProjectSlug: string;
@@ -53,13 +54,16 @@ function parseBoolean(rawValue: string | undefined, fallback: boolean): boolean 
 
 export function readRuntimeConfigFromEnv(env: Record<string, string | undefined>): RuntimeConfig {
   const host = env.LENSFLARE_HOST?.trim() || DEFAULT_HOST;
+  const desktopDev = parseBoolean(env.LENSFLARE_DESKTOP_DEV, false);
+  const lensflareDev = parseBoolean(env.LENSFLARE_DEV, false) || desktopDev;
 
   return {
     host,
     serverPort: parsePort(env.LENSFLARE_SERVER_PORT, DEFAULT_SERVER_PORT),
     webDevPort: parsePort(env.LENSFLARE_WEB_PORT, DEFAULT_WEB_DEV_PORT),
-    desktopDev: env.LENSFLARE_DESKTOP_DEV === "1",
-    otelEnabled: parseBoolean(env.LENSFLARE_OTEL_ENABLED, true),
+    lensflareDev,
+    desktopDev,
+    otelEnabled: parseBoolean(env.LENSFLARE_OTEL_ENABLED, lensflareDev),
     otelProjectSlug: env.LENSFLARE_OTEL_PROJECT_SLUG?.trim() || "lensflare",
     otelDatasetSlug: env.LENSFLARE_OTEL_DATASET_SLUG?.trim() || "dev",
   };

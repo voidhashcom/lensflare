@@ -28,6 +28,7 @@ import { mkdir } from "node:fs/promises";
 import { createServer } from "node:http";
 import { dirname } from "node:path";
 import { makeSqliteDatabaseLayer } from "./db/database.ts";
+import { makeDatasetTag } from "./domain/slug.ts";
 import { AxiomNativeDecoder } from "./ingest/providers/axiom/decoder.ts";
 import { axiomRouteLayer } from "./ingest/providers/axiom/route.ts";
 import { LogIngestService } from "./ingest/logIngestService.ts";
@@ -68,6 +69,11 @@ export interface StartLocalServerOptions {
     readonly projectSlug: string;
     readonly datasetSlug: string;
   };
+  /**
+   * Creates the configured OTLP project/dataset on startup. This is intended
+   * only for Lensflare development self-observability.
+   */
+  readonly bootstrapOtelCatalog?: boolean;
 }
 
 export interface LocalServerHandle {
@@ -79,15 +85,14 @@ export interface LocalServerHandle {
   readonly stop: () => Promise<void>;
 }
 
-const defaultOtelConfig: NonNullable<StartLocalServerOptions["otel"]> = {
-  enabled: true,
-  projectSlug: "lensflare-internal",
-  datasetSlug: "runtime-logs",
-};
-
-const defaultOtelProjectName = "Lensflare Internal";
-const defaultOtelDatasetName = "Runtime Logs";
 const otelShutdownTimeout = "250 millis";
+const defaultOtelConfig: NonNullable<StartLocalServerOptions["otel"]> = {
+  enabled: false,
+  projectSlug: "lensflare",
+  datasetSlug: "dev",
+};
+const defaultOtelProjectName = "Lensflare";
+const defaultOtelDatasetName = "Dev";
 
 function makeObservabilityLayer(
   origin: string,
@@ -151,9 +156,9 @@ function ensureTelemetryCatalogTarget(
           name: defaultOtelProjectName,
           slug: otel.projectSlug,
         }));
-
+      const datasetTag = makeDatasetTag(project.slug, otel.datasetSlug);
       const existingDataset = (yield* datasets.listDatasets()).find(
-        (dataset) => dataset.slug === otel.datasetSlug,
+        (dataset) => dataset.slug === datasetTag,
       );
 
       if (existingDataset === undefined) {
@@ -267,6 +272,7 @@ export async function startLocalServer(
     Layer.provide(ProjectsRepository.layer),
     Layer.provide(DatasetsRepository.layer),
     Layer.provide(sqliteDatabaseLayer),
+    Layer.provide(telemetryStoreLayer),
   );
   // `LogIngestService` is provider-agnostic — its only deps are the catalog
   // resolver and the telemetry repository. Decoders move down into the
@@ -349,6 +355,7 @@ export async function startLocalServer(
     telemetryLogEventLayer,
   );
   const infrastructureLayer = Layer.merge(platformLayer, servicesLayer);
+
   const observabilityLayer = makeObservabilityLayer(origin, options.mode, otel);
   const applicationLayer = Layer.merge(infrastructureLayer, observabilityLayer);
 
@@ -357,11 +364,13 @@ export async function startLocalServer(
     HttpRouter.serve(routesLayer).pipe(Layer.provide(applicationLayer)),
   );
 
-  const bootstrapRuntime = ManagedRuntime.make(catalogServicesLayer);
-  try {
-    await bootstrapRuntime.runPromise(ensureTelemetryCatalogTarget(otel));
-  } finally {
-    await bootstrapRuntime.dispose();
+  if (options.bootstrapOtelCatalog) {
+    const bootstrapRuntime = ManagedRuntime.make(catalogServicesLayer);
+    try {
+      await bootstrapRuntime.runPromise(ensureTelemetryCatalogTarget(otel));
+    } finally {
+      await bootstrapRuntime.dispose();
+    }
   }
 
   const runtime = ManagedRuntime.make(runtimeLayer, {
@@ -372,8 +381,6 @@ export async function startLocalServer(
     Effect.gen(function* () {
       const service = yield* ProjectService;
       yield* service.listProjects();
-      const telemetry = yield* TelemetryStore;
-      yield* telemetry.execute("SELECT 1");
     }),
   );
 

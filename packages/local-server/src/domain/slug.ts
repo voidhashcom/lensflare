@@ -25,3 +25,13 @@ export function makeUniqueSlug(baseSlug: string, existingSlugs: ReadonlySet<stri
 
   return `${baseSlug}-${suffix}`;
 }
+
+export function makeDatasetTag(projectSlug: string, datasetSlug: string): string {
+  const projectPrefix = `${projectSlug}-`;
+  return datasetSlug.startsWith(projectPrefix) ? datasetSlug : `${projectPrefix}${datasetSlug}`;
+}
+
+export function getDatasetLocalSlug(projectSlug: string, datasetTag: string): string {
+  const projectPrefix = `${projectSlug}-`;
+  return datasetTag.startsWith(projectPrefix) ? datasetTag.slice(projectPrefix.length) : datasetTag;
+}

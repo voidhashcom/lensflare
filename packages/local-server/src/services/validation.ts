@@ -28,7 +28,7 @@ export const normalizeRequiredName = (field: ValidationField, value: string) =>
  * through {@link normalizeRequiredName}.
  */
 export const normalizeOptionalName = (field: ValidationField, value: string | undefined) =>
-  value === undefined ? Effect.succeed(undefined) : normalizeRequiredName(field, value);
+  value === undefined ? Effect.void : normalizeRequiredName(field, value);
 
 function validateSlugCharacters(field: ValidationField, value: string) {
   const trimmed = value.trim();
@@ -59,4 +59,4 @@ export const normalizeSlug = (field: ValidationField, value: string) =>
   Effect.suspend(() => validateSlugCharacters(field, value));
 
 export const normalizeOptionalSlug = (field: ValidationField, value: string | undefined) =>
-  value === undefined ? Effect.succeed(undefined) : normalizeSlug(field, value);
+  value === undefined ? Effect.void : normalizeSlug(field, value);

@@ -19,6 +19,17 @@ describe("@lensflare/shared/browser", () => {
     expect(config.webDevPort).toBe(DEFAULT_WEB_DEV_PORT);
   });
 
+  it("enables self telemetry defaults only for Lensflare development", () => {
+    const productionConfig = readRuntimeConfigFromEnv({});
+    const devConfig = readRuntimeConfigFromEnv({ LENSFLARE_DEV: "1" });
+
+    expect(productionConfig.otelEnabled).toBe(false);
+    expect(productionConfig.otelProjectSlug).toBe("lensflare");
+    expect(productionConfig.otelDatasetSlug).toBe("dev");
+    expect(devConfig.lensflareDev).toBe(true);
+    expect(devConfig.otelEnabled).toBe(true);
+  });
+
   it("builds stable URLs", () => {
     expect(resolveServerOrigin({ host: "127.0.0.1", serverPort: 43110 })).toBe(
       "http://127.0.0.1:43110",

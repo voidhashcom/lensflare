@@ -204,6 +204,13 @@ export const DatasetSchema = Schema.Struct({
 
 export type Dataset = Schema.Schema.Type<typeof DatasetSchema>;
 
+export const DatasetStorageStatsSchema = Schema.Struct({
+  datasetId: Schema.String,
+  bytes: Schema.Number,
+});
+
+export type DatasetStorageStats = Schema.Schema.Type<typeof DatasetStorageStatsSchema>;
+
 export const ProjectSchema = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
@@ -528,6 +535,18 @@ class DeleteDataset extends Rpc.make("DeleteDataset", {
   error: DatasetNotFound,
 }) {}
 
+class ListDatasetStorageStats extends Rpc.make("ListDatasetStorageStats", {
+  success: Schema.Array(DatasetStorageStatsSchema),
+}) {}
+
+class ClearDatasetData extends Rpc.make("ClearDatasetData", {
+  payload: {
+    projectId: Schema.String,
+    datasetId: Schema.String,
+  },
+  error: DatasetNotFound,
+}) {}
+
 class SubscribeDatasetEvents extends Rpc.make("SubscribeDatasetEvents", {
   success: DatasetChangeEventSchema,
   stream: true,
@@ -539,6 +558,8 @@ export const DatasetRpcGroup = RpcGroup.make(
   CreateDataset,
   UpdateDataset,
   DeleteDataset,
+  ListDatasetStorageStats,
+  ClearDatasetData,
   SubscribeDatasetEvents,
 );
 

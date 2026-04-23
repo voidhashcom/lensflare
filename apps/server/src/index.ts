@@ -17,6 +17,7 @@ async function main(): Promise<void> {
       projectSlug: config.otelProjectSlug,
       datasetSlug: config.otelDatasetSlug,
     },
+    bootstrapOtelCatalog: config.lensflareDev,
   });
 
   const shutdown = async () => {
