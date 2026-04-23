@@ -1,6 +1,7 @@
 import { Outlet, createRootRoute } from "@tanstack/react-router";
 
 import { AppSidebar } from "~/components/AppSidebar";
+import { DatasetTabsTitlebar } from "~/components/LogStream/DatasetTabsTitlebar";
 import { RpcConnectionModal } from "~/components/RpcConnectionModal";
 import { Sidebar, SidebarInset, SidebarProvider, SidebarRail } from "~/components/ui/sidebar";
 
@@ -26,7 +27,9 @@ function RootLayout() {
       </Sidebar>
       <SidebarInset className="overflow-hidden">
         {isMacDesktop ? (
-          <div className="desktop-drag h-[var(--desktop-titlebar-height)] shrink-0 border-border/70 border-b bg-background" />
+          <div className="desktop-drag flex h-[var(--desktop-titlebar-height)] shrink-0 items-stretch border-border/70 border-b bg-background">
+            <DatasetTabsTitlebar />
+          </div>
         ) : null}
         <div className="flex min-h-0 flex-1 flex-col">
           <Outlet />
