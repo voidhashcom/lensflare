@@ -270,11 +270,36 @@ function LogRow({ log, isSelected, onSelect }: LogRowProps) {
     <button
       aria-pressed={isSelected}
       className={cn(
-        "h-10 w-full cursor-pointer border-border/40 border-b text-left font-mono text-xs text-foreground/90 outline-none transition-colors hover:bg-accent/30 focus-visible:bg-accent/40",
-        isSelected && "bg-accent/50 hover:bg-accent/50",
+        // Intentionally no `transition-*` — hover/selection should snap in
+        // and out. Row changes are frequent enough (scrolling through a live
+        // stream) that even a fade-out on exit reads as UI lag.
+        //
+        // A 2px transparent left border is always present so the layout
+        // stays identical when a row flips to the selected state; the border
+        // just gains its accent colour instead of appearing out of nowhere.
+        "h-10 w-full cursor-pointer border-b border-l-2 border-border/40 border-l-transparent text-left font-mono text-xs text-foreground/90 outline-none hover:bg-accent/25 focus-visible:bg-accent/40",
+        isSelected &&
+          "border-l-primary bg-accent/70 text-foreground hover:bg-accent/70",
         ROW_GRID_CLASS,
       )}
-      onClick={() => onSelect?.(log.id)}
+      // Select on `mousedown` for a more responsive feel — the details panel
+      // opens the instant the press lands instead of waiting for the release
+      // that `onClick` would require.
+      onMouseDown={(event) => {
+        // Only left button; middle / right clicks should not select.
+        if (event.button === 0) {
+          onSelect?.(log.id);
+        }
+      }}
+      // Keep keyboard activation working (Enter / Space on a focused button
+      // fire `click` but never `mousedown`). `event.detail === 0` identifies
+      // those keyboard-originated clicks so we don't double-fire on real
+      // mouse clicks, where `detail` is always ≥ 1.
+      onClick={(event) => {
+        if (event.detail === 0) {
+          onSelect?.(log.id);
+        }
+      }}
       type="button"
     >
       <time
