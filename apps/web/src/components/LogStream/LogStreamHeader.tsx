@@ -2,21 +2,20 @@ import { BookOpenIcon } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "~/components/ui/button";
-import {
-  Sheet,
-  SheetPopup,
-  SheetTrigger,
-} from "~/components/ui/sheet";
+import { Sheet, SheetPopup, SheetTrigger } from "~/components/ui/sheet";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 
 import { EmptyDatasetGuide } from "./EmptyDatasetGuide";
 import { QueryBuilder } from "./filter/QueryBuilder";
+import { LogPresetDropdown } from "./LogPresetDropdown";
+import type { DatasetStreamSnapshot } from "./logStreamStore";
 
 interface LogStreamHeaderProps {
   projectId: string;
   datasetId: string;
   datasetName: string;
   filterSource: string;
+  filter: DatasetStreamSnapshot["filter"];
   /**
    * Project slug used to template ingest URLs in the re-entry setup guide.
    * Optional — the parent route reads it from a TanStack DB live query that
@@ -46,6 +45,7 @@ export function LogStreamHeader({
   datasetId,
   datasetName,
   datasetSlug,
+  filter,
   filterSource,
   projectSlug,
   serverOrigin,
@@ -55,11 +55,13 @@ export function LogStreamHeader({
 
   return (
     <div className="flex items-center gap-2 border-b border-border/70 bg-background/60 px-3 py-2">
-      <QueryBuilder
-        appliedSource={filterSource}
+      <LogPresetDropdown
         datasetId={datasetId}
+        filter={filter}
+        filterSource={filterSource}
         projectId={projectId}
       />
+      <QueryBuilder appliedSource={filterSource} datasetId={datasetId} projectId={projectId} />
       {canOpenGuide ? (
         <Sheet onOpenChange={setIsGuideOpen} open={isGuideOpen}>
           <Tooltip>
@@ -69,6 +71,7 @@ export function LogStreamHeader({
                   render={
                     <Button
                       aria-label="View setup guide"
+                      className="size-8 rounded-md bg-background/60 shadow-xs/5 hover:bg-accent/50 sm:size-8"
                       size="icon-sm"
                       variant="outline"
                     >
@@ -80,10 +83,7 @@ export function LogStreamHeader({
             />
             <TooltipPopup side="bottom">Setup guide</TooltipPopup>
           </Tooltip>
-          <SheetPopup
-            className="w-[min(92vw,640px)] max-w-[640px] p-0"
-            side="right"
-          >
+          <SheetPopup className="w-[min(92vw,640px)] max-w-[640px] p-0" side="right">
             <EmptyDatasetGuide
               datasetName={datasetName}
               datasetSlug={datasetSlug}
@@ -96,12 +96,6 @@ export function LogStreamHeader({
       ) : null}
       {/*
         Reference stub for later:
-
-        <HeaderPill onClick={onPresetsClick}>
-          <LayersIcon className="size-3.5 text-muted-foreground/80" />
-          <span className="text-xs text-foreground/80">Presets</span>
-          <ChevronDownIcon className="size-3 text-muted-foreground/60" />
-        </HeaderPill>
 
         <HeaderPill onClick={onDatasetClick}>
           <SourceBadge flat icon={datasetIcon} name={datasetName} />

@@ -75,7 +75,14 @@ describe("FilterQueryInput — initial render", () => {
   it("renders the controlled applied source in the trigger", () => {
     const html = render({ appliedSource: "level:error " });
 
-    expect(html).toContain("level:error");
+    // The applied filter is rendered as three adjacent pill spans (field /
+    // operator / value) so the trigger can colour the parts independently.
+    expect(html).toContain("filter-query-pill--field");
+    expect(html).toContain("filter-query-pill--operator");
+    expect(html).toContain("filter-query-pill--value");
+    expect(html).toContain(">level<");
+    expect(html).toContain(">:<");
+    expect(html).toContain(">error<");
     expect(html).toContain('aria-label="Clear filters"');
   });
 });

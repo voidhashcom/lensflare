@@ -619,6 +619,6 @@ export function preferredTokenForOperator(
   return ":";
 }
 
-function isValuelessOperator(operator: FilterOperator): boolean {
+export function isValuelessOperator(operator: FilterOperator): boolean {
   return operator === "exists" || operator === "notExists";
 }

@@ -1,10 +1,10 @@
-import { XIcon } from "lucide-react";
+import { CircleSlashIcon, XIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Checkbox } from "~/components/ui/checkbox";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { Skeleton } from "~/components/ui/skeleton";
 import { TopTabsItem, TopTabsList, TopTabsTrigger } from "~/components/ui/top-tabs";
+import { Toggle } from "~/components/ui/toggle";
 import { IconButtonTooltip } from "~/components/ui/tooltip";
 import { getLogTraceContext } from "~/data/logApi";
 import { useHorizontalResizablePanel } from "~/hooks/useHorizontalResizablePanel";
@@ -170,13 +170,17 @@ export function LogDetailsPanel({
       ) : shouldShowTraceSlot && log.traceId ? (
         <PendingTraceOverview traceId={log.traceId} />
       ) : null}
-      <TabBar activeTab={tab} onSelect={setTab} />
+      <TabBar
+        activeTab={tab}
+        onSelect={setTab}
+        showNullValues={showNullValues}
+        onToggleShowNullValues={setShowNullValues}
+      />
 
       {tab === "properties" ? (
         <EventPropertiesTab
           log={log}
           showNullValues={showNullValues}
-          onToggleShowNullValues={setShowNullValues}
         />
       ) : (
         <RawDataTab log={log} />
@@ -298,9 +302,16 @@ function detailKindLabel(kind: TelemetryEntry["kind"]): string {
 interface TabBarProps {
   activeTab: LogDetailsTab;
   onSelect: (tab: LogDetailsTab) => void;
+  showNullValues: boolean;
+  onToggleShowNullValues: (next: boolean) => void;
 }
 
-function TabBar({ activeTab, onSelect }: TabBarProps) {
+function TabBar({
+  activeTab,
+  onSelect,
+  showNullValues,
+  onToggleShowNullValues,
+}: TabBarProps) {
   return (
     <TopTabsList aria-label="Log detail tabs">
       <TopTabsItem active={activeTab === "properties"}>
@@ -313,6 +324,20 @@ function TabBar({ activeTab, onSelect }: TabBarProps) {
           Raw Data
         </TopTabsTrigger>
       </TopTabsItem>
+      <div className="ml-auto flex items-center pr-3">
+        <IconButtonTooltip label={showNullValues ? "Hide null values" : "Show null values"}>
+          <Toggle
+            aria-label={showNullValues ? "Hide null values" : "Show null values"}
+            className="size-7 rounded-md"
+            onPressedChange={onToggleShowNullValues}
+            pressed={showNullValues}
+            size="xs"
+            variant="default"
+          >
+            <CircleSlashIcon className="size-4" />
+          </Toggle>
+        </IconButtonTooltip>
+      </div>
     </TopTabsList>
   );
 }
@@ -320,13 +345,11 @@ function TabBar({ activeTab, onSelect }: TabBarProps) {
 interface EventPropertiesTabProps {
   log: TelemetryEntry;
   showNullValues: boolean;
-  onToggleShowNullValues: (next: boolean) => void;
 }
 
 function EventPropertiesTab({
   log,
   showNullValues,
-  onToggleShowNullValues,
 }: EventPropertiesTabProps) {
   const entries = useMemo(() => buildLogDetailEntries(log), [log]);
   const visibleEntries = useMemo(
@@ -336,17 +359,6 @@ function EventPropertiesTab({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center gap-2 px-4 py-3">
-        <Checkbox
-          checked={showNullValues}
-          id="show-null-values"
-          onCheckedChange={onToggleShowNullValues}
-        />
-        <label className="cursor-pointer select-none text-sm text-foreground" htmlFor="show-null-values">
-          Show null values
-        </label>
-      </div>
-
       <ScrollArea className="min-h-0 flex-1">
         <table className="w-full border-collapse font-mono text-xs">
           <thead>

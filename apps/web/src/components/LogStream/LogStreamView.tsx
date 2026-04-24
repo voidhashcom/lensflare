@@ -283,6 +283,7 @@ function LiveTabPanel({
               datasetId={datasetId}
               datasetName={stream.metadata.datasetName}
               datasetSlug={stream.metadata.datasetSlug}
+              filter={stream.filter}
               filterSource={stream.filterSource}
               projectId={projectId}
               projectSlug={stream.metadata.projectSlug}

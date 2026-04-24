@@ -27,6 +27,7 @@ import { IconButtonTooltip } from "~/components/ui/tooltip";
 import type { TelemetryLogField } from "~/data/logApi";
 import { cn } from "~/lib/utils";
 
+import { FilterPillsDisplay } from "./FilterPillsDisplay";
 import {
   FilterSuggestionsPanel,
   type FilterSuggestion,
@@ -38,6 +39,7 @@ import {
   applyValueSuggestion,
 } from "./querySplicer";
 import {
+  isValuelessOperator,
   parseFilterInput,
   parsedToFilter,
   resolvePillField,
@@ -64,20 +66,62 @@ const FilterPillDecorations = Extension.create<FilterPillDecorationOptions>({
             const source = state.doc.textContent;
             const parsed = parseFilterInput(source, source.length);
             const fields = this.options.getFields();
-            const decorations = parsed.pills.map((pill) => {
+            const decorations: Array<Decoration> = [];
+
+            for (const pill of parsed.pills) {
               const field = resolvePillField(pill, fields);
-              const className = cn(
-                "filter-query-pill",
-                field === null && "filter-query-pill--unknown",
-                field?.kind === "enum" && "filter-query-pill--enum",
-                field?.kind === "number" && "filter-query-pill--number",
-                field?.kind === "string" && "filter-query-pill--string",
+              const unknownClass =
+                field === null ? "filter-query-pill--unknown" : "";
+              const kind = field?.kind ?? "unknown";
+              // Compute sub-part offsets inside `source`. Each part becomes its
+              // own inline decoration so the field/operator/value text can be
+              // coloured independently. Prosemirror merges adjacent inline
+              // decorations into separate spans — the CSS on `--start`/`--end`
+              // modifiers makes the three spans render as a single continuous
+              // pill visually (shared top/bottom border + background, outer
+              // border + rounded corners only on the first/last part).
+              const fieldText = pill.fieldPath.join(".");
+              const fieldEnd = pill.start + fieldText.length;
+              const operatorEnd = fieldEnd + pill.operatorToken.length;
+              const hasValue = !isValuelessOperator(pill.operator);
+
+              decorations.push(
+                Decoration.inline(pill.start + 1, fieldEnd + 1, {
+                  class: cn(
+                    "filter-query-pill",
+                    "filter-query-pill--field",
+                    "filter-query-pill--start",
+                    unknownClass,
+                  ),
+                  "data-filter-kind": kind,
+                }),
               );
-              return Decoration.inline(pill.start + 1, pill.end + 1, {
-                class: className,
-                "data-filter-kind": field?.kind ?? "unknown",
-              });
-            });
+              decorations.push(
+                Decoration.inline(fieldEnd + 1, operatorEnd + 1, {
+                  class: cn(
+                    "filter-query-pill",
+                    "filter-query-pill--operator",
+                    !hasValue && "filter-query-pill--end",
+                    unknownClass,
+                  ),
+                  "data-filter-kind": kind,
+                }),
+              );
+              if (hasValue) {
+                decorations.push(
+                  Decoration.inline(operatorEnd + 1, pill.end + 1, {
+                    class: cn(
+                      "filter-query-pill",
+                      "filter-query-pill--value",
+                      "filter-query-pill--end",
+                      unknownClass,
+                    ),
+                    "data-filter-kind": kind,
+                  }),
+                );
+              }
+            }
+
             return DecorationSet.create(state.doc, decorations);
           },
         },
@@ -395,7 +439,6 @@ export function FilterQueryInput({
   const hasDraftContent = parsed.pills.length > 0 || parsed.trailingText.length > 0;
   const hasAppliedContent =
     appliedParsed.pills.length > 0 || appliedParsed.trailingText.length > 0;
-  const triggerLabel = hasAppliedContent ? appliedSource : "Filter telemetry";
 
   return (
     <CommandDialog onOpenChange={handleDialogOpenChange} open={isOpen}>
@@ -413,14 +456,18 @@ export function FilterQueryInput({
           type="button"
         >
           <SearchIcon className="size-3.5 shrink-0 text-muted-foreground/80" />
-          <span
-            className={cn(
-              "min-w-0 flex-1 truncate",
-              !hasAppliedContent && "text-muted-foreground/72",
-            )}
-          >
-            {triggerLabel}
-          </span>
+          {hasAppliedContent ? (
+            <FilterPillsDisplay
+              className="min-w-0 flex-1"
+              fields={fields}
+              pills={appliedParsed.pills}
+              trailingText={appliedParsed.trailingText}
+            />
+          ) : (
+            <span className="min-w-0 flex-1 truncate text-muted-foreground/72">
+              Filter telemetry
+            </span>
+          )}
           {!hasAppliedContent ? (
             <KbdGroup className="shrink-0 gap-0.5 max-sm:hidden">
               <Kbd className="h-4 min-w-4 px-1 text-[10px]">⌘</Kbd>
