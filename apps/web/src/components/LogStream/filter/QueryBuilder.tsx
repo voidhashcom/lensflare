@@ -1,13 +1,13 @@
 import type { FilterNode } from "@lensflare/contracts";
 
+import { setDatasetStreamFilter } from "../logStreamStore";
 import { FilterQueryInput } from "./FilterQueryInput";
 import { useFieldCatalog } from "./hooks/useFieldCatalog";
 
 interface QueryBuilderProps {
   projectId: string;
   datasetId: string;
-  /** Fired with the new committed filter AST whenever the user applies changes. */
-  onFilterChange: (filter: FilterNode | null) => void;
+  appliedSource: string;
 }
 
 /**
@@ -26,15 +26,18 @@ interface QueryBuilderProps {
 export function QueryBuilder({
   projectId,
   datasetId,
-  onFilterChange,
+  appliedSource,
 }: QueryBuilderProps) {
   const { fields } = useFieldCatalog(projectId, datasetId);
 
   return (
     <FilterQueryInput
+      appliedSource={appliedSource}
       datasetId={datasetId}
       fields={fields}
-      onFilterChange={onFilterChange}
+      onAppliedSourceChange={(source: string, filter: FilterNode | null) => {
+        setDatasetStreamFilter({ projectId, datasetId, source, filter });
+      }}
       projectId={projectId}
     />
   );

@@ -28,4 +28,8 @@ export function createTelemetryFilterCatalogCollection(projectId: string, datase
   return collection;
 }
 
+export function preloadTelemetryFilterCatalog(projectId: string, datasetId: string): Promise<void> {
+  return createTelemetryFilterCatalogCollection(projectId, datasetId).preload();
+}
+
 const collectionsByDataset = new Map<string, any>();

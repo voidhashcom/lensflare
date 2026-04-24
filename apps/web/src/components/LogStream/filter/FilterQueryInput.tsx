@@ -89,9 +89,9 @@ interface FilterQueryInputProps {
   projectId: string;
   datasetId: string;
   fields: ReadonlyArray<TelemetryLogField>;
-  /** Fires with a committable `FilterNode` (or `null` when empty) whenever
-   *  the pills/parser state changes. */
-  onFilterChange: (filter: FilterNode | null) => void;
+  appliedSource: string;
+  /** Fires when the user commits the applied filter source. */
+  onAppliedSourceChange: (source: string, filter: FilterNode | null) => void;
 }
 
 /**
@@ -104,10 +104,10 @@ export function FilterQueryInput({
   projectId,
   datasetId,
   fields,
-  onFilterChange,
+  appliedSource,
+  onAppliedSourceChange,
 }: FilterQueryInputProps) {
-  const [appliedSource, setAppliedSource] = useState("");
-  const [draftSource, setDraftSource] = useState("");
+  const [draftSource, setDraftSource] = useState(appliedSource);
   const [cursor, setCursor] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const [highlightedSuggestionIndex, setHighlightedSuggestionIndex] = useState<number | null>(null);
@@ -134,11 +134,6 @@ export function FilterQueryInput({
     () => cursorContextToKey(parsed.cursorContext),
     [parsed.cursorContext],
   );
-  const appliedFilter = useMemo(
-    () => parsedToFilter(appliedParsed, fields),
-    [appliedParsed, fields],
-  );
-
   const editor = useEditor({
     extensions: [
       PlainTextDocument,
@@ -227,20 +222,6 @@ export function FilterQueryInput({
     setHighlightedSuggestionIndex(null);
   }, [cursorContextKey]);
 
-  // Dedup filter emissions via a stringified diff so the parent doesn't see
-  // spurious re-notifications when parser output is shape-identical but
-  // object-different (the parser allocates fresh nodes on every keystroke).
-  // The sentinel starts at `"__unset__"` (not `"null"`) so the initial emit
-  // goes through: `QueryBuilder` no longer accepts an `initialFilter`, which
-  // means the parent must rely on this emission to learn the editor's state.
-  const lastNotifiedRef = useRef<string>("__unset__");
-  useEffect(() => {
-    const key = appliedFilter === null ? "null" : JSON.stringify(appliedFilter);
-    if (lastNotifiedRef.current === key) return;
-    lastNotifiedRef.current = key;
-    onFilterChange(appliedFilter);
-  }, [appliedFilter, onFilterChange]);
-
   const syncDraftFromApplied = useCallback(
     (nextCursor = appliedSourceRef.current.length) => {
       const nextAppliedSource = appliedSourceRef.current;
@@ -256,6 +237,11 @@ export function FilterQueryInput({
     [],
   );
 
+  useEffect(() => {
+    if (isOpen) return;
+    syncDraftFromApplied();
+  }, [appliedSource, isOpen, syncDraftFromApplied]);
+
   const openEditor = useCallback(() => {
     syncDraftFromApplied();
     setIsOpen(true);
@@ -270,12 +256,14 @@ export function FilterQueryInput({
   const applyAndClose = useCallback(() => {
     const nextAppliedSource =
       editorRef.current?.getText({ blockSeparator: " " }) ?? draftSourceRef.current;
+    const nextAppliedParsed = parseFilterInput(nextAppliedSource, nextAppliedSource.length);
+    const nextAppliedFilter = parsedToFilter(nextAppliedParsed, fieldsRef.current);
     suppressNextCloseResetRef.current = true;
     setDraftSource(nextAppliedSource);
     setCursor(clampTextOffset(nextAppliedSource.length, nextAppliedSource));
-    setAppliedSource(nextAppliedSource);
+    onAppliedSourceChange(nextAppliedSource, nextAppliedFilter);
     setIsOpen(false);
-  }, []);
+  }, [onAppliedSourceChange]);
 
   const handleDialogOpenChange = useCallback((nextOpen: boolean) => {
     if (nextOpen) {
@@ -335,13 +323,13 @@ export function FilterQueryInput({
   }, [updateDraftSource]);
 
   const handleClearApplied = useCallback(() => {
-    setAppliedSource("");
+    onAppliedSourceChange("", null);
     setDraftSource("");
     setCursor(0);
     if (editor) {
       editor.commands.setContent(textToDoc(""), { emitUpdate: false });
     }
-  }, [editor]);
+  }, [editor, onAppliedSourceChange]);
 
   const handleRemovePill = useCallback(
     (index: number) => {

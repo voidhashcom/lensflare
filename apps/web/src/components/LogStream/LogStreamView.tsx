@@ -1,22 +1,7 @@
-import {
-  evaluateFilter,
-  type FilterNode,
-  type TelemetryLogPageInfo,
-  type TelemetryRecord,
-} from "@lensflare/contracts";
-import {
-  Activity,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type RefObject,
-} from "react";
+import { Activity, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 
 import { Sheet, SheetPopup } from "~/components/ui/sheet";
 import { readBackendTarget } from "~/data/backendTarget";
-import { listDatasetTelemetry, subscribeDatasetTelemetryEntries } from "~/data/logApi";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
 
 import { DatasetTabsTitlebar } from "./DatasetTabsTitlebar";
@@ -26,6 +11,11 @@ import { EmptyDatasetGuide } from "./EmptyDatasetGuide";
 import { LogDetailsPanel } from "./LogDetailsPanel";
 import { LogStreamHeader } from "./LogStreamHeader";
 import { LogTable, type LogTableHandle } from "./LogTable";
+import {
+  loadOlderDatasetTelemetry,
+  selectDatasetTelemetryEntry,
+  useDatasetStreamSnapshot,
+} from "./logStreamStore";
 import { TraceExplorer } from "./TraceExplorer";
 import type { SourceIconKind, TelemetryEntry } from "./types";
 
@@ -37,8 +27,6 @@ import type { SourceIconKind, TelemetryEntry } from "./types";
 const LOG_DETAILS_SHEET_MEDIA_QUERY = "(max-width: 1024px)";
 
 const SHEET_EXIT_ANIMATION_MS = 220;
-
-const LOG_PAGE_SIZE = 100;
 
 /**
  * Duration of the fade-out applied to the empty-dataset guide once the
@@ -68,15 +56,9 @@ interface LogStreamViewProps {
 
 /**
  * Full-height live log stream view shown when a dataset is selected.
- * Fetches the initial dataset log page from the local server, then merges
- * pushed log events from the RPC websocket stream.
- *
- * Owns the active filter AST: the QueryBuilder (rendered inside
- * `LogStreamHeader`) bubbles changes up via `onFilterChange`, the initial
- * page load + cursor pagination ship the filter to the backend, and the
- * WebSocket stream is both pre-filtered server-side (via the RPC payload)
- * and re-evaluated client-side so late subscription races cannot leak
- * non-matching entries.
+ * The live data lifecycle is owned by `logStreamStore`, not this route
+ * component, so dataset/settings navigation does not tear down loaded rows
+ * or websocket subscriptions for recently visited datasets.
  */
 export function LogStreamView({
   projectId,
@@ -87,15 +69,7 @@ export function LogStreamView({
   datasetSlug,
 }: LogStreamViewProps) {
   const tabsByDataset = useDatasetTabsSnapshot();
-  const [filter, setFilter] = useState<FilterNode | null>(null);
-  const [logs, setLogs] = useState<ReadonlyArray<TelemetryEntry>>([]);
-  const [pageInfo, setPageInfoState] = useState<TelemetryLogPageInfo | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
-  const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
   const tableRef = useRef<LogTableHandle | null>(null);
-  const pageInfoRef = useRef<TelemetryLogPageInfo | null>(null);
   const shouldUseDetailsSheet = useMediaQuery(LOG_DETAILS_SHEET_MEDIA_QUERY);
   const hasDesktopTitleTabs =
     typeof document !== "undefined" &&
@@ -106,6 +80,16 @@ export function LogStreamView({
     () => getDatasetTabState(tabsByDataset, datasetId),
     [datasetId, tabsByDataset],
   );
+  const streamMetadata = useMemo(
+    () => ({
+      datasetName,
+      datasetSlug,
+      datasetIcon,
+      projectSlug,
+    }),
+    [datasetIcon, datasetName, datasetSlug, projectSlug],
+  );
+  const stream = useDatasetStreamSnapshot(projectId, datasetId, streamMetadata);
 
   // `serverOrigin` is pinned for the lifetime of the view. Resolving it
   // on every render would read `window.location` on every paint — the
@@ -118,129 +102,13 @@ export function LogStreamView({
     return target.httpBaseUrl.replace(/\/$/, "");
   }, []);
 
-  // Derive the selected log from the current list so it stays in sync as new
-  // entries stream in. If the selection disappears (e.g. pagination trims it)
-  // the details view closes automatically.
-  const selectedLog = useMemo<TelemetryEntry | null>(() => {
-    if (selectedLogId === null) return null;
-    return logs.find((log) => log.id === selectedLogId) ?? null;
-  }, [logs, selectedLogId]);
-
   const closeDetails = useCallback(() => {
-    setSelectedLogId(null);
-  }, []);
-
-  const updatePageInfo = useCallback((next: TelemetryLogPageInfo | null) => {
-    pageInfoRef.current = next;
-    setPageInfoState(next);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadInitial = async () => {
-      setIsLoading(true);
-      setLogs([]);
-      updatePageInfo(null);
-
-      try {
-        const page = await listDatasetTelemetry(projectId, datasetId, {
-          limit: LOG_PAGE_SIZE,
-          filter: filter ?? undefined,
-        });
-        if (cancelled) {
-          return;
-        }
-
-        const entries = page.entries.map((entry) => toTelemetryEntry(entry, datasetName, datasetIcon));
-        setLogs((currentLogs) => mergeUniqueLogs(entries, currentLogs));
-        updatePageInfo(page.pageInfo);
-        setErrorMessage(null);
-      } catch (error) {
-        if (cancelled) {
-          return;
-        }
-
-        setErrorMessage(error instanceof Error ? error.message : "Failed to load telemetry.");
-      } finally {
-        if (cancelled) {
-          return;
-        }
-
-        setIsLoading(false);
-      }
-    };
-
-    void loadInitial();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [datasetIcon, datasetId, datasetName, filter, projectId, updatePageInfo]);
-
-  useEffect(() => {
-    return subscribeDatasetTelemetryEntries(
-      projectId,
-      datasetId,
-      (entry) => {
-        // Double-check the filter in the browser even though the server
-        // already pre-filters: the subscription message may have crossed in
-        // flight with a filter-change commit, and the evaluator is cheap.
-        if (filter !== null && !evaluateFilter(filter, entry)) {
-          return;
-        }
-
-        setLogs((currentLogs) =>
-          mergeUniqueLogs(currentLogs, [toTelemetryEntry(entry, datasetName, datasetIcon)]),
-        );
-        setErrorMessage(null);
-      },
-      (error) => {
-        setErrorMessage(error.message);
-      },
-      filter ?? undefined,
-    );
-  }, [datasetIcon, datasetId, datasetName, filter, projectId]);
+    selectDatasetTelemetryEntry(projectId, datasetId, null);
+  }, [datasetId, projectId]);
 
   const handleLoadOlder = useCallback(async () => {
-    const currentPageInfo = pageInfoRef.current;
-    if (!currentPageInfo?.hasPreviousPage || !currentPageInfo.startCursor || isLoadingOlder) {
-      return;
-    }
-
-    setIsLoadingOlder(true);
-    try {
-      const page = await listDatasetTelemetry(projectId, datasetId, {
-        cursor: currentPageInfo.startCursor,
-        direction: "older",
-        limit: LOG_PAGE_SIZE,
-        filter: filter ?? undefined,
-      });
-      const entries = page.entries.map((entry) => toTelemetryEntry(entry, datasetName, datasetIcon));
-      const latestPageInfo = pageInfoRef.current ?? currentPageInfo;
-
-      setLogs((currentLogs) => mergeUniqueLogs(entries, currentLogs));
-      updatePageInfo({
-        hasPreviousPage: page.pageInfo.hasPreviousPage,
-        hasNextPage: latestPageInfo.hasNextPage,
-        startCursor: page.pageInfo.startCursor ?? latestPageInfo.startCursor,
-        endCursor: latestPageInfo.endCursor ?? page.pageInfo.endCursor,
-      });
-      setErrorMessage(null);
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Failed to load telemetry.");
-    } finally {
-      setIsLoadingOlder(false);
-    }
-  }, [
-    datasetIcon,
-    datasetId,
-    datasetName,
-    filter,
-    isLoadingOlder,
-    projectId,
-    updatePageInfo,
-  ]);
+    await loadOlderDatasetTelemetry(projectId, datasetId);
+  }, [datasetId, projectId]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-background/40">
@@ -264,24 +132,12 @@ export function LogStreamView({
               active={tab.id === tabState.activeTabId}
               closeDetails={closeDetails}
               datasetId={datasetId}
-              datasetName={datasetName}
-              datasetSlug={datasetSlug}
-              errorMessage={errorMessage}
-              filter={filter}
               handleLoadOlder={handleLoadOlder}
-              isLoading={isLoading}
-              isLoadingOlder={isLoadingOlder}
               key={tab.id}
-              logs={logs}
-              pageInfo={pageInfo}
               projectId={projectId}
-              projectSlug={projectSlug}
-              selectedLog={selectedLog}
-              selectedLogId={selectedLogId}
               serverOrigin={serverOrigin}
-              setFilter={setFilter}
-              setSelectedLogId={setSelectedLogId}
               shouldUseDetailsSheet={shouldUseDetailsSheet}
+              stream={stream}
               tableRef={tableRef}
             />
           ),
@@ -295,23 +151,11 @@ interface LiveTabPanelProps {
   active: boolean;
   closeDetails: () => void;
   datasetId: string;
-  datasetName: string;
-  datasetSlug: string | undefined;
-  errorMessage: string | null;
-  filter: FilterNode | null;
   handleLoadOlder: () => void;
-  isLoading: boolean;
-  isLoadingOlder: boolean;
-  logs: ReadonlyArray<TelemetryEntry>;
-  pageInfo: TelemetryLogPageInfo | null;
   projectId: string;
-  projectSlug: string | undefined;
-  selectedLog: TelemetryEntry | null;
-  selectedLogId: string | null;
   serverOrigin: string;
-  setFilter: (filter: FilterNode | null) => void;
-  setSelectedLogId: (logId: string | null) => void;
   shouldUseDetailsSheet: boolean;
+  stream: ReturnType<typeof useDatasetStreamSnapshot>;
   tableRef: RefObject<LogTableHandle | null>;
 }
 
@@ -319,23 +163,11 @@ function LiveTabPanel({
   active,
   closeDetails,
   datasetId,
-  datasetName,
-  datasetSlug,
-  errorMessage,
-  filter,
   handleLoadOlder,
-  isLoading,
-  isLoadingOlder,
-  logs,
-  pageInfo,
   projectId,
-  projectSlug,
-  selectedLog,
-  selectedLogId,
   serverOrigin,
-  setFilter,
-  setSelectedLogId,
   shouldUseDetailsSheet,
+  stream,
   tableRef,
 }: LiveTabPanelProps) {
   // Keep the live tab mounted so table + details state survive tab switches,
@@ -343,27 +175,23 @@ function LiveTabPanel({
   const sheetCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [closingSheetLog, setClosingSheetLog] = useState<TelemetryEntry | null>(null);
   const [isSheetClosing, setIsSheetClosing] = useState(false);
-  const showInlineDetails = selectedLog !== null && !shouldUseDetailsSheet;
+  const showInlineDetails = stream.selectedLog !== null && !shouldUseDetailsSheet;
   const showSheetDetails =
-    active && selectedLog !== null && shouldUseDetailsSheet && !isSheetClosing;
-  const sheetLog = selectedLog ?? closingSheetLog;
+    active && stream.selectedLog !== null && shouldUseDetailsSheet && !isSheetClosing;
+  const sheetLog = stream.selectedLog ?? closingSheetLog;
 
   // "First event" latch. Once we've observed a single log we never
   // re-render the overlay for this mount — the user can always get back
   // to the guide via the header icon button. We also drive a short fade
   // exit via `isGuideExiting` before removing the overlay from the DOM
   // so the transition is visible rather than a hard cut.
-  const [hasEverReceivedLog, setHasEverReceivedLog] = useState(
-    () => logs.length > 0,
-  );
+  const [hasEverReceivedLog, setHasEverReceivedLog] = useState(() => stream.logs.length > 0);
   const [isGuideExiting, setIsGuideExiting] = useState(false);
-  const [showGuideOverlay, setShowGuideOverlay] = useState(
-    () => logs.length === 0,
-  );
+  const [showGuideOverlay, setShowGuideOverlay] = useState(() => stream.logs.length === 0);
   const guideExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!hasEverReceivedLog && logs.length > 0) {
+    if (!hasEverReceivedLog && stream.logs.length > 0) {
       setHasEverReceivedLog(true);
       setIsGuideExiting(true);
       if (guideExitTimerRef.current !== null) {
@@ -375,7 +203,7 @@ function LiveTabPanel({
         guideExitTimerRef.current = null;
       }, EMPTY_GUIDE_EXIT_MS);
     }
-  }, [hasEverReceivedLog, logs.length]);
+  }, [hasEverReceivedLog, stream.logs.length]);
 
   useEffect(() => {
     return () => {
@@ -394,12 +222,12 @@ function LiveTabPanel({
   const shouldShowGuide =
     showGuideOverlay &&
     !hasEverReceivedLog &&
-    logs.length === 0 &&
-    !isLoading &&
-    errorMessage === null &&
-    filter === null &&
-    projectSlug !== undefined &&
-    datasetSlug !== undefined;
+    stream.logs.length === 0 &&
+    !stream.isInitialLoading &&
+    stream.errorMessage === null &&
+    stream.filter === null &&
+    stream.metadata.projectSlug !== undefined &&
+    stream.metadata.datasetSlug !== undefined;
 
   const clearSheetCloseTimer = useCallback(() => {
     if (sheetCloseTimerRef.current === null) {
@@ -420,24 +248,24 @@ function LiveTabPanel({
   }, [clearSheetCloseTimer]);
 
   const closeSheetDetails = useCallback(() => {
-    if (selectedLog !== null) {
-      setClosingSheetLog(selectedLog);
+    if (stream.selectedLog !== null) {
+      setClosingSheetLog(stream.selectedLog);
     }
 
     setIsSheetClosing(true);
     closeDetails();
     finishSheetClose();
-  }, [closeDetails, finishSheetClose, selectedLog]);
+  }, [closeDetails, finishSheetClose, stream.selectedLog]);
 
   useEffect(() => {
-    if (selectedLog === null) {
+    if (stream.selectedLog === null) {
       return;
     }
 
     clearSheetCloseTimer();
     setClosingSheetLog(null);
     setIsSheetClosing(false);
-  }, [clearSheetCloseTimer, selectedLog]);
+  }, [clearSheetCloseTimer, stream.selectedLog]);
 
   useEffect(() => clearSheetCloseTimer, [clearSheetCloseTimer]);
 
@@ -448,38 +276,38 @@ function LiveTabPanel({
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
             <LogStreamHeader
               datasetId={datasetId}
-              datasetName={datasetName}
-              datasetSlug={datasetSlug}
-              onFilterChange={setFilter}
+              datasetName={stream.metadata.datasetName}
+              datasetSlug={stream.metadata.datasetSlug}
+              filterSource={stream.filterSource}
               projectId={projectId}
-              projectSlug={projectSlug}
+              projectSlug={stream.metadata.projectSlug}
               serverOrigin={serverOrigin}
             />
-            {errorMessage ? (
+            {stream.errorMessage ? (
               <div className="border-b border-rose-500/20 bg-rose-500/8 px-4 py-2 font-mono text-[11px] text-rose-200">
-                {errorMessage}
+                {stream.errorMessage}
               </div>
             ) : null}
             <LogTable
-              hasPreviousPage={pageInfo?.hasPreviousPage ?? false}
-              isLoadingPrevious={isLoadingOlder}
-              logs={logs}
+              hasPreviousPage={stream.pageInfo?.hasPreviousPage ?? false}
+              isLoadingPrevious={stream.isLoadingOlder}
+              logs={stream.logs}
               onLoadPrevious={handleLoadOlder}
-              onSelectLog={setSelectedLogId}
+              onSelectLog={(logId) => selectDatasetTelemetryEntry(projectId, datasetId, logId)}
               ref={tableRef}
-              selectedLogId={selectedLogId}
-              waiting={errorMessage === null || isLoading}
+              selectedLogId={stream.selectedLogId}
+              waiting={stream.errorMessage === null || stream.isInitialLoading}
             />
-            {shouldShowGuide && projectSlug && datasetSlug ? (
+            {shouldShowGuide && stream.metadata.projectSlug && stream.metadata.datasetSlug ? (
               <div
                 aria-live="polite"
                 className="pointer-events-auto absolute inset-0 z-10 flex flex-col overflow-hidden bg-background/95 backdrop-blur-sm transition-opacity duration-200 data-[state=exiting]:opacity-0"
                 data-state={isGuideExiting ? "exiting" : "idle"}
               >
                 <EmptyDatasetGuide
-                  datasetName={datasetName}
-                  datasetSlug={datasetSlug}
-                  projectSlug={projectSlug}
+                  datasetName={stream.metadata.datasetName}
+                  datasetSlug={stream.metadata.datasetSlug}
+                  projectSlug={stream.metadata.projectSlug}
                   serverOrigin={serverOrigin}
                   variant="overlay"
                 />
@@ -490,7 +318,7 @@ function LiveTabPanel({
             <div className="flex w-[min(42vw,560px)] min-w-[360px] shrink-0 flex-col">
               <LogDetailsPanel
                 datasetId={datasetId}
-                log={selectedLog}
+                log={stream.selectedLog}
                 onClose={closeDetails}
                 projectId={projectId}
                 variant="inline"
@@ -543,123 +371,9 @@ function TraceTabPanel({ active, datasetId, projectId, tab }: TraceTabPanelProps
           datasetId={datasetId}
           projectId={projectId}
           traceId={tab.traceId}
-          {...(tab.initialSpanId !== undefined
-            ? { initialSpanId: tab.initialSpanId }
-            : {})}
+          {...(tab.initialSpanId !== undefined ? { initialSpanId: tab.initialSpanId } : {})}
         />
       </div>
     </Activity>
   );
-}
-
-function toTelemetryEntry(
-  entry: TelemetryRecord,
-  datasetName: string,
-  datasetIcon: SourceIconKind,
-): TelemetryEntry {
-  const parsedTimestamp = new Date(entry.timestamp);
-  const timestamp = Number.isNaN(parsedTimestamp.getTime()) ? new Date() : parsedTimestamp;
-
-  if (entry.kind === "span") {
-    return {
-      id: entry.id,
-      kind: "span",
-      timestamp,
-      sourceName: entry.sourceName || datasetName,
-      sourceIcon: inferSourceIcon(entry.sourceName, datasetIcon),
-      traceId: entry.traceId,
-      spanId: entry.spanId,
-      parentSpanId: entry.parentSpanId,
-      name: entry.name,
-      serviceName: entry.serviceName,
-      status: entry.status,
-      statusMessage: entry.statusMessage,
-      durationUs: entry.durationUs,
-      attributes: entry.attributes,
-      events: entry.events.map((event: Extract<TelemetryRecord, { kind: "span" }>["events"][number]) => {
-        const eventTimestamp = new Date(event.timestamp);
-        return {
-          ...event,
-          timestamp: Number.isNaN(eventTimestamp.getTime()) ? timestamp : eventTimestamp,
-        };
-      }),
-    };
-  }
-
-  if (entry.kind === "spanEvent") {
-    return {
-      id: entry.id,
-      kind: "spanEvent",
-      timestamp,
-      sourceName: entry.sourceName || datasetName,
-      sourceIcon: inferSourceIcon(entry.sourceName, datasetIcon),
-      traceId: entry.traceId,
-      spanId: entry.spanId,
-      name: entry.name,
-      serviceName: entry.serviceName,
-      attributes: entry.attributes,
-    };
-  }
-
-  return {
-    id: entry.id,
-    kind: "log",
-    timestamp,
-    sourceName: entry.sourceName || datasetName,
-    sourceIcon: inferSourceIcon(entry.sourceName, datasetIcon),
-    level: entry.level,
-    message: entry.message,
-    ...(entry.traceId ? { traceId: entry.traceId } : {}),
-    ...(entry.spanId ? { spanId: entry.spanId } : {}),
-    attributes: entry.attributes,
-  };
-}
-
-function inferSourceIcon(sourceName: string, fallback: SourceIconKind): SourceIconKind {
-  const normalized = sourceName.trim().toLowerCase();
-  if (normalized.includes("typescript") || normalized.includes("lensflare")) {
-    return "ts";
-  }
-  if (normalized.includes("javascript") || normalized.endsWith("-js")) {
-    return "js";
-  }
-  if (normalized.includes("python") || normalized.endsWith("-py")) {
-    return "py";
-  }
-  if (normalized.includes("ruby") || normalized.endsWith("-rb")) {
-    return "rb";
-  }
-  if (normalized.includes("rust") || normalized.endsWith("-rs")) {
-    return "rs";
-  }
-  if (normalized.includes("golang") || normalized === "go" || normalized.endsWith("-go")) {
-    return "go";
-  }
-  if (normalized.includes("java")) {
-    return "java";
-  }
-  return fallback;
-}
-
-function mergeUniqueLogs(
-  first: ReadonlyArray<TelemetryEntry>,
-  second: ReadonlyArray<TelemetryEntry>,
-): ReadonlyArray<TelemetryEntry> {
-  const byId = new Map<string, TelemetryEntry>();
-  for (const log of first) {
-    byId.set(log.id, log);
-  }
-  for (const log of second) {
-    byId.set(log.id, log);
-  }
-
-  return [...byId.values()].sort(compareLogEntries);
-}
-
-function compareLogEntries(left: TelemetryEntry, right: TelemetryEntry): number {
-  const timestampDelta = left.timestamp.getTime() - right.timestamp.getTime();
-  if (timestampDelta !== 0) {
-    return timestampDelta;
-  }
-  return left.id.localeCompare(right.id);
 }

@@ -1,4 +1,3 @@
-import type { FilterNode } from "@lensflare/contracts";
 import { BookOpenIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -17,8 +16,7 @@ interface LogStreamHeaderProps {
   projectId: string;
   datasetId: string;
   datasetName: string;
-  /** Fired when the user commits a filter change (popover Apply or chip remove). */
-  onFilterChange: (filter: FilterNode | null) => void;
+  filterSource: string;
   /**
    * Project slug used to template ingest URLs in the re-entry setup guide.
    * Optional — the parent route reads it from a TanStack DB live query that
@@ -48,7 +46,7 @@ export function LogStreamHeader({
   datasetId,
   datasetName,
   datasetSlug,
-  onFilterChange,
+  filterSource,
   projectSlug,
   serverOrigin,
 }: LogStreamHeaderProps) {
@@ -58,8 +56,8 @@ export function LogStreamHeader({
   return (
     <div className="flex items-center gap-2 border-b border-border/70 bg-background/60 px-3 py-2">
       <QueryBuilder
+        appliedSource={filterSource}
         datasetId={datasetId}
-        onFilterChange={onFilterChange}
         projectId={projectId}
       />
       {canOpenGuide ? (

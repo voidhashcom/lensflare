@@ -39,7 +39,8 @@ function render(
     projectId: "p",
     datasetId: "d",
     fields: catalog,
-    onFilterChange: noop,
+    appliedSource: "",
+    onAppliedSourceChange: noop,
   };
   return renderToStaticMarkup(<FilterQueryInput {...defaults} {...props} />);
 }
@@ -69,5 +70,12 @@ describe("FilterQueryInput — initial render", () => {
 
   it("renders without throwing when the catalog is empty", () => {
     expect(() => render({ fields: [] })).not.toThrow();
+  });
+
+  it("renders the controlled applied source in the trigger", () => {
+    const html = render({ appliedSource: "level:error " });
+
+    expect(html).toContain("level:error");
+    expect(html).toContain('aria-label="Clear filters"');
   });
 });

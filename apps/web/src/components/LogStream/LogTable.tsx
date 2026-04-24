@@ -15,6 +15,8 @@ import { SourceBadge } from "./SourceBadge";
 import type { TelemetryEntry } from "./types";
 import { Button } from "../ui/button";
 
+const END_REACHED_TRESHOLD = 48;
+
 interface LogTableProps {
   logs: ReadonlyArray<TelemetryEntry>;
   hasPreviousPage?: boolean;
@@ -22,7 +24,7 @@ interface LogTableProps {
   onLoadPrevious?: (() => Promise<void> | void) | undefined;
   /** Callback fired when a row is clicked. Enables the caller to open the
    *  log details panel. */
-  onSelectLog?: (logId: string) => void;
+  onSelectLog?: (logId: string | null) => void;
   /** The currently selected log id; highlights the matching row. */
   selectedLogId?: string | null;
   /** Shows the "Waiting for logs…" footer. When false the table renders
@@ -125,7 +127,10 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
     } finally {
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
-          const nextElement = listRef.current?.getScrollableNode() as HTMLElement | null | undefined;
+          const nextElement = listRef.current?.getScrollableNode() as
+            | HTMLElement
+            | null
+            | undefined;
           if (nextElement && previousScrollHeight > 0) {
             nextElement.scrollTop =
               nextElement.scrollHeight - previousScrollHeight + previousScrollTop;
@@ -144,7 +149,8 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
 
   const handleJumpToEnd = () => {
     setShowJumpToEnd(false);
-    void listRef.current?.scrollToEnd({ animated: true });
+    onSelectLog?.(null);
+    void listRef.current?.scrollToEnd({ animated: false });
   };
 
   // Closure-style render keeps per-render selection/click wiring co-located
@@ -152,11 +158,7 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
   // the renderer when these inputs change even though the data array itself
   // may be stable.
   const renderRow = ({ item }: LegendListRenderItemProps<TelemetryEntry>) => (
-    <LogRow
-      isSelected={item.id === selectedLogId}
-      log={item}
-      onSelect={onSelectLog}
-    />
+    <LogRow isSelected={item.id === selectedLogId} log={item} onSelect={onSelectLog} />
   );
 
   return (
@@ -184,7 +186,8 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
           keyExtractor={extractLogKey}
           // Keep short log sets anchored to the top of the viewport; live-tail
           // following is handled separately by `maintainScrollAtEnd`.
-          maintainScrollAtEnd={true}
+          maintainScrollAtEnd={selectedLogId === null}
+          onEndReachedThreshold={END_REACHED_TRESHOLD / 2}
           ListHeaderComponent={
             hasPreviousPage ? (
               <LoadPreviousHeader loading={isLoadingPrevious} onClick={loadPreviousPage} />
@@ -306,8 +309,7 @@ function LogRow({ log, isSelected, onSelect }: LogRowProps) {
         // stays identical when a row flips to the selected state; the border
         // just gains its accent colour instead of appearing out of nowhere.
         "h-10 w-full cursor-pointer border-b border-l-2 border-border/40 border-l-transparent text-left font-mono text-xs text-foreground/90 outline-none hover:bg-accent/25 focus-visible:bg-accent/40",
-        isSelected &&
-          "border-l-primary bg-accent/70 text-foreground hover:bg-accent/70",
+        isSelected && "border-l-primary bg-accent/70 text-foreground hover:bg-accent/70",
         ROW_GRID_CLASS,
       )}
       // Select on `mousedown` for a more responsive feel — the details panel
@@ -366,9 +368,7 @@ function LogRow({ log, isSelected, onSelect }: LogRowProps) {
             {getLogLevelLabel(log.level)}
           </span>
         ) : null}
-        <span className="min-w-0 flex-1 truncate text-foreground/80">
-          {telemetryTitle(log)}
-        </span>
+        <span className="min-w-0 flex-1 truncate text-foreground/80">{telemetryTitle(log)}</span>
       </div>
       <div className="truncate text-[11px] text-muted-foreground tabular-nums">
         {log.kind === "span" ? formatDuration(log.durationUs) : ""}
@@ -417,7 +417,7 @@ function isNearBottomMetrics(metrics: {
   scrollHeight: number;
   scrollTop: number;
 }): boolean {
-  return metrics.scrollHeight - metrics.clientHeight - metrics.scrollTop < 32;
+  return metrics.scrollHeight - metrics.clientHeight - metrics.scrollTop < END_REACHED_TRESHOLD;
 }
 
 /** Reuses the level palette for the inline dot in the message cell. */
