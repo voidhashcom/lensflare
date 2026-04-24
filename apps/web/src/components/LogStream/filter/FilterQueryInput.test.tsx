@@ -85,4 +85,15 @@ describe("FilterQueryInput — initial render", () => {
     expect(html).toContain(">error<");
     expect(html).toContain('aria-label="Clear filters"');
   });
+
+  it("renders a final applied filter as a pill without requiring trailing whitespace", () => {
+    const html = render({ appliedSource: "level:error message:timeout" });
+
+    expect(html).toContain("filter-query-pill--field");
+    expect(html).toContain(">level<");
+    expect(html).toContain(">error<");
+    expect(html).toContain(">message<");
+    expect(html).toContain(">timeout<");
+    expect(html).not.toContain("text-muted-foreground italic");
+  });
 });

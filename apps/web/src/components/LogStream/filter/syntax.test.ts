@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import type { TelemetryLogField } from "~/data/logApi";
 
 import {
+  completeParsedPills,
   defaultOperatorTokenForKind,
   parsedToFilter,
   parseFilterInput,
@@ -81,6 +82,20 @@ describe("parseFilterInput — pills", () => {
     expect(result.cursorContext.valuePrefix).toBe("info");
   });
 
+  it("exposes a complete EOF pill for renderers without committing it in parser state", () => {
+    const source = "level:error serviceName:api";
+    const result = parseFilterInput(source, source.length);
+    const pills = completeParsedPills(result);
+
+    expect(result.pills).toHaveLength(1);
+    expect(result.trailingText).toBe("serviceName:api");
+    expect(pills).toHaveLength(2);
+    expect(pills[1]?.fieldPath).toEqual(["serviceName"]);
+    expect(pills[1]?.rawValue).toBe("api");
+    expect(pills[1]?.start).toBe("level:error ".length);
+    expect(pills[1]?.end).toBe(source.length);
+  });
+
   it("keeps an unfinished pill as trailing text", () => {
     const source = "level:info foo";
     const result = parseFilterInput(source, source.length);
@@ -128,6 +143,26 @@ describe("parseFilterInput — pills", () => {
     expect(result.pills[1]?.operatorToken).toBe(":notIn:");
     expect(result.pills[1]?.operator).toBe("notIn");
     expect(result.pills[1]?.rawValue).toBe("api,worker");
+  });
+
+  it("parses quoted membership values as one pill", () => {
+    const source = 'level:in:"","warn" ';
+    const result = parseFilterInput(source, source.length);
+
+    expect(result.pills).toHaveLength(1);
+    expect(result.pills[0]?.operator).toBe("in");
+    expect(result.pills[0]?.rawValue).toBe('"","warn"');
+    expect(result.pills[0]?.valueWasQuoted).toBe(true);
+  });
+
+  it("allows spaces after list separators without ending the pill", () => {
+    const source = "level:in:error, warn serviceName:api ";
+    const result = parseFilterInput(source, source.length);
+
+    expect(result.pills).toHaveLength(2);
+    expect(result.pills[0]?.operator).toBe("in");
+    expect(result.pills[0]?.rawValue).toBe("error,warn");
+    expect(result.pills[1]?.fieldPath).toEqual(["serviceName"]);
   });
 
   it("parses the textual regex operator token", () => {
@@ -365,6 +400,28 @@ describe("parsedToFilter", () => {
     });
   });
 
+  it("emits list values when source has spaces after separators", () => {
+    const result = parseFilterInput("level:in:error, warn", "level:in:error, warn".length);
+
+    expect(parsedToFilter(result, catalog)).toEqual({
+      _tag: "cmp",
+      field: { path: ["level"] },
+      op: "in",
+      value: { _tag: "list", values: ["error", "warn"] },
+    });
+  });
+
+  it("preserves explicit empty strings in quoted membership operators", () => {
+    const result = parseFilterInput('level:in:"","warn"', 'level:in:"","warn"'.length);
+
+    expect(parsedToFilter(result, catalog)).toEqual({
+      _tag: "cmp",
+      field: { path: ["level"] },
+      op: "in",
+      value: { _tag: "list", values: ["", "warn"] },
+    });
+  });
+
   it("combines committed pills with trailing free text", () => {
     const source = "level:error timeout";
     const result = parseFilterInput(source, source.length);
@@ -442,6 +499,13 @@ describe("serialisePill round-trip", () => {
     const pill = parsed.pills[0];
     if (!pill) throw new Error("missing pill");
     expect(serialisePill(pill)).toBe("level:exists:");
+  });
+
+  it("serialises quoted list values without wrapping the whole list", () => {
+    const parsed = parseFilterInput('level:in:"","warn" ', 'level:in:"","warn" '.length);
+    const pill = parsed.pills[0];
+    if (!pill) throw new Error("missing pill");
+    expect(serialisePill(pill)).toBe('level:in:"","warn"');
   });
 });
 

@@ -33,6 +33,8 @@ import {
   OPERATOR_LABELS,
   UNARY_OPERATORS,
   operatorsForField,
+  parseListLiteral,
+  serialiseListLiteral,
   type FilterRowDraft,
 } from "./filterTypes";
 
@@ -197,6 +199,19 @@ interface ListValueComboboxProps {
 function ListValueCombobox({ value, options, onChange }: ListValueComboboxProps) {
   const [inputValue, setInputValue] = useState("");
   const selectedValues = splitListInput(value);
+  const commitInputValue = () => {
+    const parsed = parseListLiteral(inputValue);
+    if (parsed.length === 0) return false;
+    const nextValues = [...selectedValues];
+    for (const item of parsed) {
+      if (!nextValues.includes(item)) {
+        nextValues.push(item);
+      }
+    }
+    onChange(serialiseListLiteral(nextValues));
+    setInputValue("");
+    return true;
+  };
 
   return (
     <Combobox
@@ -205,7 +220,7 @@ function ListValueCombobox({ value, options, onChange }: ListValueComboboxProps)
       multiple
       onInputValueChange={setInputValue}
       onValueChange={(next) => {
-        onChange(next.join(", "));
+        onChange(serialiseListLiteral(next));
         setInputValue("");
       }}
       value={selectedValues}
@@ -216,6 +231,17 @@ function ListValueCombobox({ value, options, onChange }: ListValueComboboxProps)
         ))}
         <ComboboxChipsInput
           className="min-w-20"
+          onKeyDown={(event) => {
+            if (
+              event.key === "Enter" ||
+              event.key === "," ||
+              (event.key === " " && !hasOpenQuote(inputValue))
+            ) {
+              if (commitInputValue()) {
+                event.preventDefault();
+              }
+            }
+          }}
           placeholder={selectedValues.length === 0 ? "Select values" : ""}
           size="sm"
         />
@@ -235,8 +261,20 @@ function ListValueCombobox({ value, options, onChange }: ListValueComboboxProps)
 }
 
 function splitListInput(value: string): Array<string> {
-  return value
-    .split(",")
-    .map((segment) => segment.trim())
-    .filter((segment) => segment.length > 0);
+  return [...parseListLiteral(value)];
+}
+
+function hasOpenQuote(value: string): boolean {
+  let open = false;
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index] ?? "";
+    if (char === "\\") {
+      index += 1;
+      continue;
+    }
+    if (char === '"') {
+      open = !open;
+    }
+  }
+  return open;
 }

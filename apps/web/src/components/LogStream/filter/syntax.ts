@@ -2,7 +2,7 @@ import type { FilterNode, FilterOperator } from "@lensflare/contracts";
 
 import type { TelemetryLogField } from "~/data/logApi";
 
-import { buildFilterValue } from "./filterTypes";
+import { buildFilterValue, LIST_OPERATORS as FILTER_LIST_OPERATORS } from "./filterTypes";
 
 /**
  * Tokeniser + AST adapter for the keyboard-first filter input. The input is
@@ -75,6 +75,7 @@ const OPERATOR_LEAD_CHARS = new Set<string>(
 
 const IDENT_START_RE = /[A-Za-z_]/;
 const IDENT_BODY_RE = /[A-Za-z0-9_.-]/;
+const LIST_OPERATORS = new Set<FilterOperator>(FILTER_LIST_OPERATORS);
 
 export interface ParsedPill {
   /** Field path as dot-split segments, e.g. `["attributes", "http", "status_code"]`. */
@@ -202,7 +203,9 @@ function tryReadPill(source: string, start: number): ParsedPill | null {
     };
   }
 
-  const valueRead = readValue(source, opRead.end);
+  const valueRead = LIST_OPERATORS.has(opRead.syntax.operator)
+    ? readListValue(source, opRead.end)
+    : readValue(source, opRead.end);
   if (valueRead === null) return null;
 
   // Values must have content (empty quoted `""` is accepted — explicit empty
@@ -309,6 +312,49 @@ function readBarewordValue(source: string, start: number): ValueRead {
     end += 1;
   }
   return { value: source.slice(start, end), wasQuoted: false, end };
+}
+
+function readListValue(source: string, start: number): ValueRead | null {
+  const first = source[start];
+  if (first === undefined || isWhitespace(first)) return null;
+
+  let end = start;
+  let value = "";
+  let sawQuotedSegment = false;
+
+  while (end < source.length) {
+    const char = source[end] ?? "";
+    if (isWhitespace(char)) {
+      if (endsWithComma(value)) {
+        end += 1;
+        continue;
+      }
+      break;
+    }
+
+    if (char !== '"') {
+      value += char;
+      end += 1;
+      continue;
+    }
+
+    const quoted = readQuotedValue(source, end);
+    if (quoted === null) return null;
+    value += source.slice(end, quoted.end);
+    end = quoted.end;
+    sawQuotedSegment = true;
+  }
+
+  return { value, wasQuoted: sawQuotedSegment, end };
+}
+
+function endsWithComma(value: string): boolean {
+  for (let index = value.length - 1; index >= 0; index -= 1) {
+    const char = value[index] ?? "";
+    if (isWhitespace(char)) continue;
+    return char === ",";
+  }
+  return false;
 }
 
 /**
@@ -457,6 +503,9 @@ export function serialisePill(pill: ParsedPill): string {
   if (isValuelessOperator(pill.operator)) {
     return `${field}${pill.operatorToken}`;
   }
+  if (LIST_OPERATORS.has(pill.operator)) {
+    return `${field}${pill.operatorToken}${pill.rawValue}`;
+  }
   const value = pill.valueWasQuoted || needsQuoting(pill.rawValue)
     ? `"${escapeQuoted(pill.rawValue)}"`
     : pill.rawValue;
@@ -504,12 +553,7 @@ export function parsedToFilter(
   fields: ReadonlyArray<TelemetryLogField>,
 ): FilterNode | null {
   const children: Array<FilterNode> = [];
-  const pills = [...result.pills];
-  const trailingPill = tryReadWholePill(result.trailingText);
-
-  if (trailingPill !== null) {
-    pills.push(trailingPill);
-  }
+  const pills = completeParsedPills(result);
 
   for (const pill of pills) {
     const field = resolvePillField(pill, fields);
@@ -558,6 +602,28 @@ function tryReadWholePill(source: string): ParsedPill | null {
     return null;
   }
   return pill.end === source.length ? pill : null;
+}
+
+/**
+ * Returns all complete pills represented by a parse result, including a final
+ * pill-shaped trailing segment at EOF. `parseFilterInput` intentionally keeps
+ * the active segment in `trailingText` for suggestion context; renderers and
+ * AST materialisation can use this helper when they need the complete view.
+ */
+export function completeParsedPills(result: ParseResult): ReadonlyArray<ParsedPill> {
+  const trailingPill = tryReadWholePill(result.trailingText);
+  if (trailingPill === null) {
+    return result.pills;
+  }
+
+  return [
+    ...result.pills,
+    {
+      ...trailingPill,
+      start: result.trailingStart + trailingPill.start,
+      end: result.trailingStart + trailingPill.end,
+    },
+  ];
 }
 
 function trailingTextToFilterNode(result: ParseResult): FilterNode | null {

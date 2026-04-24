@@ -120,10 +120,7 @@ export function buildFilterValue(
   }
 
   if (LIST_OPERATORS.includes(operator)) {
-    const values = trimmed
-      .split(",")
-      .map((segment) => segment.trim())
-      .filter((segment) => segment.length > 0);
+    const values = parseListLiteral(trimmed);
     if (values.length === 0) {
       return undefined;
     }
@@ -143,6 +140,95 @@ export function buildFilterValue(
   }
 
   return { _tag: "string", value: trimmed };
+}
+
+export function parseListLiteral(raw: string): ReadonlyArray<string> {
+  const values: Array<string> = [];
+  let segmentStart = 0;
+  let index = 0;
+  let inQuote = false;
+
+  while (index < raw.length) {
+    const char = raw[index] ?? "";
+    if (char === "\\") {
+      index += 2;
+      continue;
+    }
+    if (char === '"') {
+      inQuote = !inQuote;
+      index += 1;
+      continue;
+    }
+    if (char === "," && !inQuote) {
+      pushListSegment(values, raw.slice(segmentStart, index));
+      segmentStart = index + 1;
+    }
+    index += 1;
+  }
+
+  pushListSegment(values, raw.slice(segmentStart));
+  return values;
+}
+
+function pushListSegment(values: Array<string>, rawSegment: string): void {
+  const trimmed = rawSegment.trim();
+  if (trimmed.length === 0) return;
+
+  if (trimmed.startsWith('"')) {
+    const quoted = parseQuotedListSegment(trimmed);
+    if (quoted !== null) {
+      values.push(quoted);
+      return;
+    }
+  }
+
+  values.push(trimmed);
+}
+
+function parseQuotedListSegment(segment: string): string | null {
+  let value = "";
+  let index = 1;
+
+  while (index < segment.length) {
+    const char = segment[index] ?? "";
+    if (char === "\\") {
+      const next = segment[index + 1];
+      if (next === '"' || next === "\\") {
+        value += next;
+        index += 2;
+        continue;
+      }
+      value += char;
+      index += 1;
+      continue;
+    }
+    if (char === '"') {
+      return segment.slice(index + 1).trim().length === 0 ? value : null;
+    }
+    value += char;
+    index += 1;
+  }
+
+  return null;
+}
+
+export function serialiseListLiteral(values: ReadonlyArray<string>): string {
+  return values.map(serialiseListValue).join(",");
+}
+
+function serialiseListValue(value: string): string {
+  if (!needsListValueQuoting(value)) {
+    return value;
+  }
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
+function needsListValueQuoting(value: string): boolean {
+  if (value.length === 0) return true;
+  for (const char of value) {
+    if (char === "," || char === '"' || /\s/.test(char)) return true;
+  }
+  return false;
 }
 
 /**

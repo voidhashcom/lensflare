@@ -39,6 +39,7 @@ import {
   applyValueSuggestion,
 } from "./querySplicer";
 import {
+  completeParsedPills,
   isValuelessOperator,
   parseFilterInput,
   parsedToFilter,
@@ -68,7 +69,7 @@ const FilterPillDecorations = Extension.create<FilterPillDecorationOptions>({
             const fields = this.options.getFields();
             const decorations: Array<Decoration> = [];
 
-            for (const pill of parsed.pills) {
+            for (const pill of completeParsedPills(parsed)) {
               const field = resolvePillField(pill, fields);
               const unknownClass =
                 field === null ? "filter-query-pill--unknown" : "";
@@ -174,7 +175,15 @@ export function FilterQueryInput({
     () => parseFilterInput(appliedSource, appliedSource.length),
     [appliedSource],
   );
+  const appliedDisplayPills = useMemo(
+    () => completeParsedPills(appliedParsed),
+    [appliedParsed],
+  );
   const parsed = useMemo(() => parseFilterInput(draftSource, cursor), [cursor, draftSource]);
+  const draftDisplayPills = useMemo(
+    () => completeParsedPills(parsed),
+    [parsed],
+  );
   const cursorContextKey = useMemo(
     () => cursorContextToKey(parsed.cursorContext),
     [parsed.cursorContext],
@@ -378,7 +387,7 @@ export function FilterQueryInput({
 
   const handleRemovePill = useCallback(
     (index: number) => {
-      const pill = parsed.pills[index];
+      const pill = draftDisplayPills[index];
       if (!pill) return;
       let removeEnd = pill.end;
       while (
@@ -391,12 +400,12 @@ export function FilterQueryInput({
         draftSource.slice(0, pill.start) + draftSource.slice(removeEnd);
       updateDraftSource(nextSource, pill.start);
     },
-    [draftSource, parsed.pills, updateDraftSource],
+    [draftDisplayPills, draftSource, updateDraftSource],
   );
 
   const handleEditPill = useCallback(
     (index: number, mutation: PillMutation) => {
-      const pill = parsed.pills[index];
+      const pill = draftDisplayPills[index];
       if (!pill) return;
       const nextPill: ParsedPill = {
         fieldPath: mutation.fieldPath,
@@ -414,7 +423,7 @@ export function FilterQueryInput({
       const nextCursor = pill.start + serialised.length;
       updateDraftSource(nextSource, nextCursor);
     },
-    [draftSource, parsed.pills, updateDraftSource],
+    [draftDisplayPills, draftSource, updateDraftSource],
   );
 
   const handleApplySuggestion = useCallback(
@@ -438,7 +447,7 @@ export function FilterQueryInput({
 
   const hasDraftContent = parsed.pills.length > 0 || parsed.trailingText.length > 0;
   const hasAppliedContent =
-    appliedParsed.pills.length > 0 || appliedParsed.trailingText.length > 0;
+    appliedDisplayPills.length > 0 || appliedParsed.trailingText.trim().length > 0;
 
   return (
     <CommandDialog onOpenChange={handleDialogOpenChange} open={isOpen}>
@@ -460,8 +469,12 @@ export function FilterQueryInput({
             <FilterPillsDisplay
               className="min-w-0 flex-1"
               fields={fields}
-              pills={appliedParsed.pills}
-              trailingText={appliedParsed.trailingText}
+              pills={appliedDisplayPills}
+              trailingText={
+                appliedDisplayPills.length === appliedParsed.pills.length
+                  ? appliedParsed.trailingText
+                  : ""
+              }
             />
           ) : (
             <span className="min-w-0 flex-1 truncate text-muted-foreground/72">
@@ -543,7 +556,7 @@ export function FilterQueryInput({
             onEditPill={handleEditPill}
             onRemovePill={handleRemovePill}
             onSuggestionCountChange={handleSuggestionCountChange}
-            pills={parsed.pills}
+            pills={draftDisplayPills}
             projectId={projectId}
             suggestionsId={suggestionsId}
           />

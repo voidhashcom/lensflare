@@ -10,6 +10,8 @@ import {
   LIST_OPERATORS,
   operatorsForField,
   OPERATOR_LABELS,
+  parseListLiteral,
+  serialiseListLiteral,
   UNARY_OPERATORS,
 } from "./filterTypes";
 
@@ -86,6 +88,13 @@ describe("buildFilterValue", () => {
     });
   });
 
+  it("supports quoted list segments including explicit empty strings", () => {
+    expect(buildFilterValue(levelField, "in", '"", "warn", "needs space"')).toEqual({
+      _tag: "list",
+      values: ["", "warn", "needs space"],
+    });
+  });
+
   it("returns undefined when a list operator ends up empty after trimming", () => {
     expect(buildFilterValue(levelField, "in", " , , ")).toBeUndefined();
   });
@@ -95,6 +104,23 @@ describe("buildFilterValue", () => {
       _tag: "list",
       values: [200, 500],
     });
+  });
+});
+
+describe("list literal helpers", () => {
+  it("parses quoted values for picker display", () => {
+    expect(parseListLiteral('"error","ok","needs space",""')).toEqual([
+      "error",
+      "ok",
+      "needs space",
+      "",
+    ]);
+  });
+
+  it("serialises only values that need quotes", () => {
+    expect(serialiseListLiteral(["error", "ok", "needs space", "", 'has"quote'])).toBe(
+      'error,ok,"needs space","","has\\"quote"',
+    );
   });
 });
 
