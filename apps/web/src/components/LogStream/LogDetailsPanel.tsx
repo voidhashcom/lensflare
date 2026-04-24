@@ -6,6 +6,7 @@ import { ScrollArea } from "~/components/ui/scroll-area";
 import { Skeleton } from "~/components/ui/skeleton";
 import { TopTabsItem, TopTabsList, TopTabsTrigger } from "~/components/ui/top-tabs";
 import { getLogTraceContext } from "~/data/logApi";
+import { useHorizontalResizablePanel } from "~/hooks/useHorizontalResizablePanel";
 import { cn } from "~/lib/utils";
 
 import { openTraceTab } from "./datasetTabsStore";
@@ -21,6 +22,11 @@ import type { TelemetryEntry, TraceContext } from "./types";
 type LogDetailsTab = "properties" | "raw";
 
 const SHEET_EXIT_ANIMATION_MS = 220;
+const LOG_DETAILS_DEFAULT_WIDTH_PX = 520;
+const LOG_DETAILS_MAX_WIDTH_PX = 760;
+const LOG_DETAILS_MIN_REMAINING_WIDTH_PX = 520;
+const LOG_DETAILS_MIN_WIDTH_PX = 360;
+const LOG_DETAILS_WIDTH_STORAGE_KEY = "log_details_panel_width";
 
 type TraceLoadState =
   | { readonly status: "idle" }
@@ -58,6 +64,14 @@ export function LogDetailsPanel({
   const [traceLoadState, setTraceLoadState] = useState<TraceLoadState>(() =>
     log.traceId ? { status: "loading", traceId: log.traceId } : { status: "idle" },
   );
+  const { panelRef, resizeHandleProps, width } = useHorizontalResizablePanel<HTMLDivElement>({
+    defaultWidth: LOG_DETAILS_DEFAULT_WIDTH_PX,
+    edge: "left",
+    maxWidth: LOG_DETAILS_MAX_WIDTH_PX,
+    minRemainingWidth: LOG_DETAILS_MIN_REMAINING_WIDTH_PX,
+    minWidth: LOG_DETAILS_MIN_WIDTH_PX,
+    storageKey: LOG_DETAILS_WIDTH_STORAGE_KEY,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -132,10 +146,22 @@ export function LogDetailsPanel({
     <div
       className={cn(
         "flex h-full min-h-0 min-w-0 flex-col bg-background",
-        variant === "inline" && "border-l border-border/70",
+        variant === "inline" && "relative shrink-0 border-l border-border/70",
         className,
       )}
+      ref={panelRef}
+      style={variant === "inline" ? { width } : undefined}
     >
+      {variant === "inline" ? (
+        <button
+          aria-label="Resize log details panel"
+          className="-translate-x-1/2 absolute inset-y-0 left-0 z-20 w-3 cursor-col-resize touch-none after:absolute after:inset-y-0 after:left-1/2 after:w-px hover:after:bg-border focus-visible:after:bg-ring"
+          tabIndex={-1}
+          title="Drag to resize log details panel"
+          type="button"
+          {...resizeHandleProps}
+        />
+      ) : null}
       <LogDetailsHeader log={log} onClose={onClose} />
 
       {traceContext !== null ? (

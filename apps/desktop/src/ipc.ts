@@ -17,6 +17,7 @@ export const LOCAL_SERVER_STATE_CHANNEL = "lensflare:local-server-state";
  */
 export const RESTART_LOCAL_SERVER_CHANNEL = "lensflare:restart-local-server";
 
+export const SET_THEME_CHANNEL = "lensflare:set-theme";
 export const UPDATE_STATE_CHANNEL = "lensflare:update-state";
 export const UPDATE_GET_STATE_CHANNEL = "lensflare:update-get-state";
 export const UPDATE_SET_CHANNEL_CHANNEL = "lensflare:update-set-channel";
@@ -28,6 +29,7 @@ export type LensflareIpcChannel =
   | typeof GET_LOCAL_SERVER_STATE_CHANNEL
   | typeof LOCAL_SERVER_STATE_CHANNEL
   | typeof RESTART_LOCAL_SERVER_CHANNEL
+  | typeof SET_THEME_CHANNEL
   | typeof UPDATE_STATE_CHANNEL
   | typeof UPDATE_GET_STATE_CHANNEL
   | typeof UPDATE_SET_CHANNEL_CHANNEL

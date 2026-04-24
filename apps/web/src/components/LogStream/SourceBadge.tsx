@@ -9,14 +9,20 @@ import type { SourceIconKind } from "./types";
  * can scan a mixed dataset at a glance.
  */
 const ICON_STYLE: Record<SourceIconKind, { label: string; swatch: string }> = {
-  js: { label: "Js", swatch: "bg-yellow-400/20 text-yellow-200" },
-  ts: { label: "Ts", swatch: "bg-sky-500/20 text-sky-200" },
-  go: { label: "Go", swatch: "bg-cyan-500/20 text-cyan-200" },
-  py: { label: "Py", swatch: "bg-blue-500/20 text-blue-200" },
-  rb: { label: "Rb", swatch: "bg-rose-500/20 text-rose-200" },
-  rs: { label: "Rs", swatch: "bg-orange-500/20 text-orange-200" },
-  java: { label: "Jv", swatch: "bg-red-500/20 text-red-200" },
-  default: { label: "•", swatch: "bg-white/10 text-muted-foreground" },
+  js: {
+    label: "Js",
+    swatch: "bg-yellow-100 text-yellow-700 dark:bg-yellow-400/20 dark:text-yellow-200",
+  },
+  ts: { label: "Ts", swatch: "bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-200" },
+  go: { label: "Go", swatch: "bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-200" },
+  py: { label: "Py", swatch: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-200" },
+  rb: { label: "Rb", swatch: "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-200" },
+  rs: {
+    label: "Rs",
+    swatch: "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-200",
+  },
+  java: { label: "Jv", swatch: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-200" },
+  default: { label: "•", swatch: "bg-foreground/8 text-muted-foreground dark:bg-white/10" },
 };
 
 interface SourceBadgeProps {
@@ -34,7 +40,7 @@ export function SourceBadge({ name, icon = "default", flat = false, className }:
     <span
       className={cn(
         "inline-flex min-w-0 items-center gap-2",
-        flat ? "" : "rounded-md bg-white/5 pl-1 pr-2 py-0.5",
+        flat ? "" : "rounded-md bg-foreground/4 py-0.5 pl-1 pr-2 dark:bg-white/5",
         className,
       )}
     >

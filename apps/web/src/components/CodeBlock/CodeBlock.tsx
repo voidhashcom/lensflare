@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { renderTemplate } from "~/integrations/template";
 import type { Snippet, TemplateVars } from "~/integrations/types";
 import { cn } from "~/lib/utils";
-import { useMediaQuery } from "~/hooks/useMediaQuery";
+import { useTheme } from "~/hooks/useTheme";
 
 import { Button } from "../ui/button";
 import {
@@ -33,7 +33,7 @@ const COPY_FEEDBACK_MS = 1500;
  * finishes booting (and on the unlikely chance it fails to load).
  */
 export function CodeBlock({ snippet, variables, className }: CodeBlockProps) {
-  const prefersDark = useMediaQuery("(prefers-color-scheme: dark)");
+  const { resolvedTheme } = useTheme();
   const rendered = renderTemplate(snippet.code, variables);
   const [html, setHtml] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -41,7 +41,7 @@ export function CodeBlock({ snippet, variables, className }: CodeBlockProps) {
 
   useEffect(() => {
     let cancelled = false;
-    const theme = prefersDark ? SHIKI_DARK_THEME : SHIKI_LIGHT_THEME;
+    const theme = resolvedTheme === "dark" ? SHIKI_DARK_THEME : SHIKI_LIGHT_THEME;
 
     loadHighlighter()
       .then((highlighter) => {
@@ -64,7 +64,7 @@ export function CodeBlock({ snippet, variables, className }: CodeBlockProps) {
     return () => {
       cancelled = true;
     };
-  }, [rendered, snippet.lang, prefersDark]);
+  }, [rendered, snippet.lang, resolvedTheme]);
 
   useEffect(() => {
     return () => {

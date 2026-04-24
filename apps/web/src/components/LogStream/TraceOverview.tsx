@@ -118,7 +118,8 @@ function SpanRow({ span, depth, isCurrent, totalDurationUs }: SpanRowProps) {
   const widthPercent = Math.max(span.durationUs * scale, 0.8);
   const remainingPercent = Math.max(100 - startPercent - widthPercent, 0);
 
-  const barColour = span.status === "error" ? "bg-rose-500/70" : "bg-sky-400/70";
+  const barColour =
+    span.status === "error" ? "bg-rose-500/70" : "bg-sky-500/70 dark:bg-sky-400/70";
 
   return (
     <li
@@ -135,7 +136,7 @@ function SpanRow({ span, depth, isCurrent, totalDurationUs }: SpanRowProps) {
           aria-hidden
           className={cn(
             "mr-2 inline-block size-1.5 shrink-0 rounded-full",
-            span.status === "error" ? "bg-rose-400" : "bg-sky-400",
+            span.status === "error" ? "bg-rose-500 dark:bg-rose-400" : "bg-sky-500 dark:bg-sky-400",
             isCurrent && "ring-2 ring-foreground/40",
           )}
         />

@@ -50,6 +50,7 @@ function createBridge(initialState: DesktopUpdateState) {
     restartLocalServer: vi.fn(),
     onLocalServerState: vi.fn(() => () => {}),
     getLocalServerBootstrap: vi.fn(() => null),
+    setTheme: vi.fn(),
     getUpdateState: vi.fn(async () => initialState),
     setUpdateChannel: vi.fn(),
     checkForUpdate: vi.fn(),

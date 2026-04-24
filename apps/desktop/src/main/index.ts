@@ -1,10 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { Buffer } from "node:buffer";
 import { resolve } from "node:path";
-import { app, BrowserWindow, ipcMain, screen, type WebContents } from "electron";
+import { app, BrowserWindow, ipcMain, nativeTheme, screen, type WebContents } from "electron";
 import type {
   DesktopEnvironmentBootstrap,
   DesktopLocalServerState,
+  DesktopTheme,
   DesktopUpdateActionResult,
   DesktopUpdateChannel,
   DesktopUpdateCheckResult,
@@ -25,6 +26,7 @@ import {
   GET_LOCAL_SERVER_STATE_CHANNEL,
   LOCAL_SERVER_STATE_CHANNEL,
   RESTART_LOCAL_SERVER_CHANNEL,
+  SET_THEME_CHANNEL,
   UPDATE_CHECK_CHANNEL,
   UPDATE_DOWNLOAD_CHANNEL,
   UPDATE_GET_STATE_CHANNEL,
@@ -150,6 +152,13 @@ function getDesktopSettings(): DesktopSettings {
 function persistDesktopSettings(settings: DesktopSettings): void {
   desktopSettings = settings;
   writeDesktopSettings(resolveDesktopSettingsPath(), settings);
+}
+
+function normalizeDesktopTheme(input: unknown): DesktopTheme | null {
+  if (input === "light" || input === "dark" || input === "system") {
+    return input;
+  }
+  return null;
 }
 
 function emitUpdateState(): void {
@@ -718,6 +727,12 @@ async function main(): Promise<void> {
       return currentState;
     }
     return restartLocalServer();
+  });
+  ipcMain.handle(SET_THEME_CHANNEL, (_event, rawTheme: unknown) => {
+    const theme = normalizeDesktopTheme(rawTheme);
+    if (theme) {
+      nativeTheme.themeSource = theme;
+    }
   });
   ipcMain.handle(UPDATE_GET_STATE_CHANNEL, () => updateState);
   ipcMain.handle(UPDATE_SET_CHANNEL_CHANNEL, async (_event, rawChannel: unknown) => {

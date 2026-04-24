@@ -289,7 +289,7 @@ function LiveTabPanel({
               serverOrigin={serverOrigin}
             />
             {stream.errorMessage ? (
-              <div className="border-b border-rose-500/20 bg-rose-500/8 px-4 py-2 font-mono text-[11px] text-rose-200">
+              <div className="border-b border-rose-500/20 bg-rose-500/8 px-4 py-2 font-mono text-[11px] text-rose-600 dark:text-rose-200">
                 {stream.errorMessage}
               </div>
             ) : null}
@@ -320,15 +320,13 @@ function LiveTabPanel({
             ) : null}
           </div>
           {showInlineDetails ? (
-            <div className="flex w-[min(42vw,560px)] min-w-[360px] shrink-0 flex-col">
-              <LogDetailsPanel
-                datasetId={datasetId}
-                log={stream.selectedLog}
-                onClose={closeDetails}
-                projectId={projectId}
-                variant="inline"
-              />
-            </div>
+            <LogDetailsPanel
+              datasetId={datasetId}
+              log={stream.selectedLog}
+              onClose={closeDetails}
+              projectId={projectId}
+              variant="inline"
+            />
           ) : null}
           <Sheet
             onOpenChange={(open) => {

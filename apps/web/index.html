@@ -3,10 +3,42 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#fbfbfc" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#232225" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#232225" data-dynamic-theme-color="true" />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
     <link rel="icon" type="image/png" href="/favicon-32x32.png" sizes="32x32" />
     <link rel="icon" type="image/png" href="/favicon-16x16.png" sizes="16x16" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <script>
+      (() => {
+        const LIGHT_BACKGROUND = "#fbfbfc";
+        const DARK_BACKGROUND = "#232225";
+        const themeColorMeta = document.querySelector(
+          'meta[name="theme-color"][data-dynamic-theme-color="true"]',
+        );
+        try {
+          const isElectron = navigator.userAgent.includes("Electron");
+          const storedTheme = window.localStorage.getItem("lensflare:theme");
+          const theme =
+            storedTheme === "light" || storedTheme === "dark" || storedTheme === "system"
+              ? storedTheme
+              : "system";
+          const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+          const isDark = theme === "dark" || (theme === "system" && prefersDark);
+          const chromeColor = isDark ? DARK_BACKGROUND : LIGHT_BACKGROUND;
+          document.documentElement.classList.toggle("dark", isDark);
+          document.documentElement.style.backgroundColor = isElectron ? "transparent" : chromeColor;
+          themeColorMeta?.setAttribute("content", chromeColor);
+        } catch {
+          document.documentElement.classList.add("dark");
+          document.documentElement.style.backgroundColor = navigator.userAgent.includes("Electron")
+            ? "transparent"
+            : DARK_BACKGROUND;
+          themeColorMeta?.setAttribute("content", DARK_BACKGROUND);
+        }
+      })();
+    </script>
     <title>Lensflare</title>
   </head>
   <body>

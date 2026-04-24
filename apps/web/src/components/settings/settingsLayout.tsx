@@ -11,22 +11,17 @@ import { cn } from "~/lib/utils";
  */
 export function SettingsSection({
   title,
-  icon,
   headerAction,
   children,
 }: {
   title: string;
-  icon?: ReactNode;
   headerAction?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <section className="space-y-1">
       <div className="flex min-h-8 items-center justify-between gap-3 pb-3">
-        <h2 className="flex items-center gap-2 font-semibold text-foreground text-xl tracking-tight">
-          {icon}
-          {title}
-        </h2>
+        <h2 className="font-semibold text-foreground text-xl tracking-tight">{title}</h2>
         {headerAction}
       </div>
       <div>{children}</div>

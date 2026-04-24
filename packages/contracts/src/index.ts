@@ -96,6 +96,7 @@ export type DesktopUpdateStatus =
   | "error";
 
 export type DesktopUpdateChannel = "latest" | "nightly";
+export type DesktopTheme = "light" | "dark" | "system";
 
 export type DesktopRuntimeArch = "arm64" | "x64" | "other";
 
@@ -145,6 +146,7 @@ export interface DesktopBridge {
   readonly restartLocalServer: () => Promise<DesktopLocalServerState>;
   readonly onLocalServerState: (listener: (state: DesktopLocalServerState) => void) => () => void;
   readonly getLocalServerBootstrap: () => DesktopEnvironmentBootstrap | null;
+  readonly setTheme: (theme: DesktopTheme) => Promise<void>;
   readonly getUpdateState: () => Promise<DesktopUpdateState>;
   readonly setUpdateChannel: (channel: DesktopUpdateChannel) => Promise<DesktopUpdateState>;
   readonly checkForUpdate: () => Promise<DesktopUpdateCheckResult>;

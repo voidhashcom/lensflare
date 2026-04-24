@@ -9,6 +9,7 @@ import {
   GET_LOCAL_SERVER_STATE_CHANNEL,
   LOCAL_SERVER_STATE_CHANNEL,
   RESTART_LOCAL_SERVER_CHANNEL,
+  SET_THEME_CHANNEL,
   UPDATE_CHECK_CHANNEL,
   UPDATE_DOWNLOAD_CHANNEL,
   UPDATE_GET_STATE_CHANNEL,
@@ -71,6 +72,7 @@ const bridge = {
     };
   },
   getLocalServerBootstrap: (): DesktopEnvironmentBootstrap | null => latestBootstrap,
+  setTheme: (theme) => ipcRenderer.invoke(SET_THEME_CHANNEL, theme) as Promise<void>,
   getUpdateState: () => ipcRenderer.invoke(UPDATE_GET_STATE_CHANNEL),
   setUpdateChannel: (channel) => ipcRenderer.invoke(UPDATE_SET_CHANNEL_CHANNEL, channel),
   checkForUpdate: () => ipcRenderer.invoke(UPDATE_CHECK_CHANNEL),

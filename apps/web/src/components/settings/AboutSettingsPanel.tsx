@@ -1,11 +1,9 @@
-import { ExternalLinkIcon, InfoIcon } from "lucide-react";
+import { APP_NAME, APP_VERSION } from "@lensflare/shared";
+import { ExternalLinkIcon } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
-
-const APP_NAME = "Lensflare";
-const APP_VERSION = "0.1.0";
 
 /**
  * Static "About" panel. Shows the current app version and a couple of helpful
@@ -15,7 +13,7 @@ const APP_VERSION = "0.1.0";
 export function AboutSettingsPanel() {
   return (
     <SettingsPageContainer>
-      <SettingsSection icon={<InfoIcon className="size-5" />} title="About">
+      <SettingsSection title="About">
         <SettingsRow
           control={
             <code className="text-[12px] text-muted-foreground tabular-nums">v{APP_VERSION}</code>

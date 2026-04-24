@@ -162,16 +162,16 @@ export function isNullLike(value: unknown): boolean {
  */
 export function renderDetailValue(value: unknown): ReactNode {
   if (value === null || value === undefined) {
-    return <span className="text-zinc-400">null</span>;
+    return <span className="text-zinc-500 dark:text-zinc-400">null</span>;
   }
   if (typeof value === "boolean") {
-    return <span className="text-emerald-300">{String(value)}</span>;
+    return <span className="text-emerald-600 dark:text-emerald-300">{String(value)}</span>;
   }
   if (typeof value === "number") {
-    return <span className="text-cyan-300">{value}</span>;
+    return <span className="text-cyan-600 dark:text-cyan-300">{value}</span>;
   }
   if (typeof value === "bigint") {
-    return <span className="text-cyan-300">{value.toString()}</span>;
+    return <span className="text-cyan-600 dark:text-cyan-300">{value.toString()}</span>;
   }
   if (typeof value === "string") {
     return <span className="text-foreground/90">{value}</span>;
@@ -190,16 +190,16 @@ export function renderDetailValue(value: unknown): ReactNode {
  */
 function renderJsonTokens(value: unknown, depth: number): ReactNode {
   if (value === null || value === undefined) {
-    return <span className="text-zinc-400">null</span>;
+    return <span className="text-zinc-500 dark:text-zinc-400">null</span>;
   }
   if (typeof value === "boolean") {
-    return <span className="text-emerald-300">{String(value)}</span>;
+    return <span className="text-emerald-600 dark:text-emerald-300">{String(value)}</span>;
   }
   if (typeof value === "number" || typeof value === "bigint") {
-    return <span className="text-cyan-300">{value.toString()}</span>;
+    return <span className="text-cyan-600 dark:text-cyan-300">{value.toString()}</span>;
   }
   if (typeof value === "string") {
-    return <span className="text-orange-300">{JSON.stringify(value)}</span>;
+    return <span className="text-orange-600 dark:text-orange-300">{JSON.stringify(value)}</span>;
   }
 
   if (Array.isArray(value)) {
@@ -239,7 +239,7 @@ function renderJsonTokens(value: unknown, depth: number): ReactNode {
           <span key={key}>
             {"\n"}
             {inner}
-            <span className="text-sky-300">{JSON.stringify(key)}</span>
+            <span className="text-sky-700 dark:text-sky-300">{JSON.stringify(key)}</span>
             <span className="text-foreground/60">: </span>
             {renderJsonTokens(val, depth + 1)}
             {index < entries.length - 1 ? <span className="text-foreground/60">,</span> : null}

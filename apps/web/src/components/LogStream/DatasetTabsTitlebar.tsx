@@ -42,8 +42,11 @@ export function DatasetTabsTitlebar() {
   };
 
   return (
-    <TopTabsList aria-label="Dataset tabs" className="desktop-drag flex-1 items-stretch overflow-x-auto px-3">
-      <div className="flex min-w-0 items-center">
+    <TopTabsList
+      aria-label="Dataset tabs"
+      className="desktop-drag h-full flex-1 items-stretch overflow-x-auto px-3"
+    >
+      <div className="flex min-w-0 items-stretch">
         {tabState.tabs.map((tab) => (
           <DatasetTabButton
             active={tab.id === tabState.activeTabId}
@@ -83,11 +86,11 @@ function DatasetTabButton({ active, tab, onSelect, onClose }: DatasetTabButtonPr
   return (
     <TopTabsItem
       active={active}
-      className={cn("desktop-no-drag relative min-w-24 max-w-56 text-sm")}
+      className={cn("desktop-no-drag relative h-full min-w-24 max-w-56 text-sm")}
     >
       <TopTabsTrigger
         active={active}
-        className="flex flex-1 gap-2 text-left text-xs"
+        className="flex h-full flex-1 gap-2 text-left text-xs"
         leading={<DatasetTabIcon tab={tab} />}
         onClick={handleSelectClick}
         onMouseDown={handleSelectMouseDown}

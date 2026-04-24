@@ -22,7 +22,6 @@ import { DatasetDialog } from "./DatasetDialog";
 import { DeleteDialog } from "./DeleteDialog";
 import { ProjectDialog } from "./ProjectDialog";
 import { ProjectRow } from "./ProjectRow";
-import { SearchRow } from "./SearchRow";
 import { SidebarUpdatePill } from "./SidebarUpdatePill";
 import { SidebarContextMenu } from "./SidebarContextMenu";
 import { ROUTE_PARAMS_OPTIONS } from "./constants";
@@ -112,7 +111,6 @@ export function AppSidebar() {
         )}
       >
         <BrandRow isMacDesktop={isMacDesktop} />
-        {isOnSettings ? null : <SearchRow />}
       </SidebarHeader>
 
       {isOnSettings ? (

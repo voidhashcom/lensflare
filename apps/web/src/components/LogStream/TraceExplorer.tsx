@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useState, type MouseEvent, type Keyboa
 
 import { TopTabsItem, TopTabsList, TopTabsTrigger } from "~/components/ui/top-tabs";
 import { getLogTraceContext } from "~/data/logApi";
+import { useHorizontalResizablePanel } from "~/hooks/useHorizontalResizablePanel";
 import { cn } from "~/lib/utils";
 
 import type { TraceContext, TraceSpan } from "./types";
@@ -26,8 +27,12 @@ const RULER_TICK_COUNT = 9;
  */
 const SPAN_NAME_COL_PX = 280;
 
-/** Pixel width of the right-hand span details panel. */
-const DETAILS_PANEL_PX = 420;
+/** Pixel width of the right-hand span details panel before user resizing. */
+const DETAILS_PANEL_DEFAULT_WIDTH_PX = 420;
+const DETAILS_PANEL_MAX_WIDTH_PX = 720;
+const DETAILS_PANEL_MIN_REMAINING_WIDTH_PX = 520;
+const DETAILS_PANEL_MIN_WIDTH_PX = 320;
+const DETAILS_PANEL_WIDTH_STORAGE_KEY = "trace_explorer_details_panel_width";
 
 type DetailsTab = "fields" | "events" | "links";
 
@@ -71,6 +76,14 @@ export function TraceExplorer({
   );
   const [filter, setFilter] = useState("");
   const [detailsTab, setDetailsTab] = useState<DetailsTab>("fields");
+  const { panelRef, resizeHandleProps, width } = useHorizontalResizablePanel<HTMLElement>({
+    defaultWidth: DETAILS_PANEL_DEFAULT_WIDTH_PX,
+    edge: "left",
+    maxWidth: DETAILS_PANEL_MAX_WIDTH_PX,
+    minRemainingWidth: DETAILS_PANEL_MIN_REMAINING_WIDTH_PX,
+    minWidth: DETAILS_PANEL_MIN_WIDTH_PX,
+    storageKey: DETAILS_PANEL_WIDTH_STORAGE_KEY,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -191,9 +204,18 @@ export function TraceExplorer({
       </div>
       <aside
         aria-label="Span details"
-        className="flex shrink-0 flex-col border-l border-border/60"
-        style={{ width: DETAILS_PANEL_PX }}
+        className="relative flex min-w-0 shrink-0 flex-col border-l border-border/60"
+        ref={panelRef}
+        style={{ width }}
       >
+        <button
+          aria-label="Resize span details panel"
+          className="-translate-x-1/2 absolute inset-y-0 left-0 z-20 w-3 cursor-col-resize touch-none after:absolute after:inset-y-0 after:left-1/2 after:w-px hover:after:bg-border focus-visible:after:bg-ring"
+          tabIndex={-1}
+          title="Drag to resize span details panel"
+          type="button"
+          {...resizeHandleProps}
+        />
         {loadState.status === "ready" ? (
           <SpanDetailsPanel
             activeTab={detailsTab}
@@ -279,7 +301,7 @@ function ExplorerToolbar({
         </span>
         <span
           className={cn(
-            errorCount > 0 ? "text-rose-400" : "text-muted-foreground/60",
+            errorCount > 0 ? "text-rose-600 dark:text-rose-400" : "text-muted-foreground/60",
           )}
         >
           {errorCount} error{errorCount === 1 ? "" : "s"}
@@ -335,7 +357,7 @@ function TraceBody({
   }
   if (loadState.status === "error") {
     return (
-      <div className="flex flex-1 items-center justify-center px-6 text-center text-rose-400/90 text-xs">
+      <div className="flex flex-1 items-center justify-center px-6 text-center text-rose-600 text-xs dark:text-rose-400/90">
         {loadState.message}
       </div>
     );
@@ -448,8 +470,8 @@ function ExplorerSpanRow({
   const remainingPercent = Math.max(100 - startPercent - widthPercent, 0);
 
   const isError = span.status === "error";
-  const barColour = isError ? "bg-rose-500/80" : "bg-sky-400/80";
-  const dotColour = isError ? "bg-rose-400" : "bg-sky-400";
+  const barColour = isError ? "bg-rose-500/80" : "bg-sky-500/80 dark:bg-sky-400/80";
+  const dotColour = isError ? "bg-rose-500 dark:bg-rose-400" : "bg-sky-500 dark:bg-sky-400";
   const selectSpan = () => {
     onSelect(span.id);
   };
@@ -496,7 +518,7 @@ function ExplorerSpanRow({
             <span
               className={cn(
                 "min-w-0 truncate font-mono text-xs",
-                isError ? "text-rose-300" : "text-foreground/90",
+                isError ? "text-rose-600 dark:text-rose-300" : "text-foreground/90",
               )}
               title={span.name}
             >

@@ -428,9 +428,9 @@ function levelDotClass(level: Extract<TelemetryEntry, { kind: "log" }>["level"])
     case "trace":
       return "bg-zinc-400";
     case "debug":
-      return "bg-sky-400";
+      return "bg-sky-500 dark:bg-sky-400";
     case "info":
-      return "bg-emerald-400";
+      return "bg-emerald-500 dark:bg-emerald-400";
     case "warn":
       return "bg-amber-400";
     case "error":
@@ -464,9 +464,9 @@ function telemetryTitle(entry: TelemetryEntry): string {
 function statusClass(status: "ok" | "error" | "unset"): string {
   switch (status) {
     case "ok":
-      return "text-emerald-400";
+      return "text-emerald-600 dark:text-emerald-400";
     case "error":
-      return "text-rose-400";
+      return "text-rose-600 dark:text-rose-400";
     case "unset":
       return "text-muted-foreground";
   }
