@@ -33,6 +33,7 @@
     "lucide-react": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
+    "shiki": "^1.29.2",
     "tailwind-merge": "catalog:"
   },
   "devDependencies": {

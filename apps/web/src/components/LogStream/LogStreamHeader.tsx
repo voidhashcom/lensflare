@@ -1,24 +1,60 @@
 import type { FilterNode } from "@lensflare/contracts";
+import { BookOpenIcon } from "lucide-react";
+import { useState } from "react";
 
+import { Button } from "~/components/ui/button";
+import {
+  Sheet,
+  SheetPopup,
+  SheetTrigger,
+} from "~/components/ui/sheet";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
+
+import { EmptyDatasetGuide } from "./EmptyDatasetGuide";
 import { QueryBuilder } from "./filter/QueryBuilder";
 
 interface LogStreamHeaderProps {
   projectId: string;
   datasetId: string;
+  datasetName: string;
   /** Fired when the user commits a filter change (popover Apply or chip remove). */
   onFilterChange: (filter: FilterNode | null) => void;
+  /**
+   * Project slug used to template ingest URLs in the re-entry setup guide.
+   * Optional — the parent route reads it from a TanStack DB live query that
+   * may not be hydrated on first paint. While undefined we hide the button
+   * rather than render a sheet with placeholder slugs.
+   */
+  projectSlug: string | undefined;
+  /** Dataset slug used to template ingest URLs. Same caveat as `projectSlug`. */
+  datasetSlug: string | undefined;
+  /** Resolved local-server origin (no trailing slash) used in snippets. */
+  serverOrigin: string;
 }
 
 /**
- * Top action bar for the log stream. For now only the filter input is live.
- * The previous mock controls are left in a JSX comment below so they can be
- * restored once they have real behavior.
+ * Top action bar for the log stream. Hosts the live-filter `QueryBuilder`
+ * and the "View setup guide" affordance: clicking the trailing icon button
+ * opens the `EmptyDatasetGuide` in a right-side `Sheet`, so users with
+ * data already flowing can still jump back to the integration snippets.
+ *
+ * The button is hidden while `projectSlug` or `datasetSlug` are still
+ * hydrating — the guide needs both to produce usable URLs, and a flash of
+ * enabled → disabled feels worse than letting the button appear a tick
+ * later when the collections resolve.
  */
 export function LogStreamHeader({
   projectId,
   datasetId,
+  datasetName,
+  datasetSlug,
   onFilterChange,
+  projectSlug,
+  serverOrigin,
 }: LogStreamHeaderProps) {
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const canOpenGuide = projectSlug !== undefined && datasetSlug !== undefined;
+
   return (
     <div className="flex items-center gap-2 border-b border-border/70 bg-background/60 px-3 py-2">
       <QueryBuilder
@@ -26,6 +62,40 @@ export function LogStreamHeader({
         onFilterChange={onFilterChange}
         projectId={projectId}
       />
+      {canOpenGuide ? (
+        <Sheet onOpenChange={setIsGuideOpen} open={isGuideOpen}>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <SheetTrigger
+                  render={
+                    <Button
+                      aria-label="View setup guide"
+                      size="icon-sm"
+                      variant="outline"
+                    >
+                      <BookOpenIcon />
+                    </Button>
+                  }
+                />
+              }
+            />
+            <TooltipPopup side="bottom">Setup guide</TooltipPopup>
+          </Tooltip>
+          <SheetPopup
+            className="w-[min(92vw,640px)] max-w-[640px] p-0"
+            side="right"
+          >
+            <EmptyDatasetGuide
+              datasetName={datasetName}
+              datasetSlug={datasetSlug}
+              projectSlug={projectSlug}
+              serverOrigin={serverOrigin}
+              variant="sheet"
+            />
+          </SheetPopup>
+        </Sheet>
+      ) : null}
       {/*
         Reference stub for later:
 

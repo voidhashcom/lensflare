@@ -15,12 +15,14 @@ import {
 } from "react";
 
 import { Sheet, SheetPopup } from "~/components/ui/sheet";
+import { readBackendTarget } from "~/data/backendTarget";
 import { listDatasetTelemetry, subscribeDatasetTelemetryEntries } from "~/data/logApi";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
 
 import { DatasetTabsTitlebar } from "./DatasetTabsTitlebar";
 import { getDatasetTabState, type DatasetTab } from "./datasetTabs";
 import { useDatasetTabsSnapshot } from "./datasetTabsStore";
+import { EmptyDatasetGuide } from "./EmptyDatasetGuide";
 import { LogDetailsPanel } from "./LogDetailsPanel";
 import { LogStreamHeader } from "./LogStreamHeader";
 import { LogTable, type LogTableHandle } from "./LogTable";
@@ -38,11 +40,30 @@ const SHEET_EXIT_ANIMATION_MS = 220;
 
 const LOG_PAGE_SIZE = 100;
 
+/**
+ * Duration of the fade-out applied to the empty-dataset guide once the
+ * first telemetry entry lands. Matches the `duration-200` Tailwind class
+ * on the overlay wrapper (`transition-opacity`) — keep them in sync so
+ * the DOM is removed just after the visual fade completes.
+ */
+const EMPTY_GUIDE_EXIT_MS = 250;
+
 interface LogStreamViewProps {
   projectId: string;
   datasetId: string;
   datasetName: string;
   datasetIcon?: SourceIconKind;
+  /**
+   * Project slug used to template ingest URLs in the empty-dataset guide.
+   * Optional because the containing route reads it from a live TanStack
+   * DB collection that may not have hydrated yet on first paint.
+   */
+  projectSlug?: string | undefined;
+  /**
+   * Dataset slug used to template ingest URLs in the empty-dataset guide.
+   * Optional for the same reason as `projectSlug`.
+   */
+  datasetSlug?: string | undefined;
 }
 
 /**
@@ -62,6 +83,8 @@ export function LogStreamView({
   datasetId,
   datasetName,
   datasetIcon = "js",
+  projectSlug,
+  datasetSlug,
 }: LogStreamViewProps) {
   const tabsByDataset = useDatasetTabsSnapshot();
   const [filter, setFilter] = useState<FilterNode | null>(null);
@@ -83,6 +106,17 @@ export function LogStreamView({
     () => getDatasetTabState(tabsByDataset, datasetId),
     [datasetId, tabsByDataset],
   );
+
+  // `serverOrigin` is pinned for the lifetime of the view. Resolving it
+  // on every render would read `window.location` on every paint — the
+  // backend target is stable for the session so memoising is both cheaper
+  // and less surprising if someone ever adds mutation hooks to it.
+  const serverOrigin = useMemo(() => {
+    const target = readBackendTarget();
+    // Trailing slash normalisation mirrors the ingest URLs documented in
+    // the integration snippets (they never include a trailing slash).
+    return target.httpBaseUrl.replace(/\/$/, "");
+  }, []);
 
   // Derive the selected log from the current list so it stays in sync as new
   // entries stream in. If the selection disappears (e.g. pagination trims it)
@@ -230,7 +264,10 @@ export function LogStreamView({
               active={tab.id === tabState.activeTabId}
               closeDetails={closeDetails}
               datasetId={datasetId}
+              datasetName={datasetName}
+              datasetSlug={datasetSlug}
               errorMessage={errorMessage}
+              filter={filter}
               handleLoadOlder={handleLoadOlder}
               isLoading={isLoading}
               isLoadingOlder={isLoadingOlder}
@@ -238,8 +275,10 @@ export function LogStreamView({
               logs={logs}
               pageInfo={pageInfo}
               projectId={projectId}
+              projectSlug={projectSlug}
               selectedLog={selectedLog}
               selectedLogId={selectedLogId}
+              serverOrigin={serverOrigin}
               setFilter={setFilter}
               setSelectedLogId={setSelectedLogId}
               shouldUseDetailsSheet={shouldUseDetailsSheet}
@@ -256,15 +295,20 @@ interface LiveTabPanelProps {
   active: boolean;
   closeDetails: () => void;
   datasetId: string;
+  datasetName: string;
+  datasetSlug: string | undefined;
   errorMessage: string | null;
+  filter: FilterNode | null;
   handleLoadOlder: () => void;
   isLoading: boolean;
   isLoadingOlder: boolean;
   logs: ReadonlyArray<TelemetryEntry>;
   pageInfo: TelemetryLogPageInfo | null;
   projectId: string;
+  projectSlug: string | undefined;
   selectedLog: TelemetryEntry | null;
   selectedLogId: string | null;
+  serverOrigin: string;
   setFilter: (filter: FilterNode | null) => void;
   setSelectedLogId: (logId: string | null) => void;
   shouldUseDetailsSheet: boolean;
@@ -275,15 +319,20 @@ function LiveTabPanel({
   active,
   closeDetails,
   datasetId,
+  datasetName,
+  datasetSlug,
   errorMessage,
+  filter,
   handleLoadOlder,
   isLoading,
   isLoadingOlder,
   logs,
   pageInfo,
   projectId,
+  projectSlug,
   selectedLog,
   selectedLogId,
+  serverOrigin,
   setFilter,
   setSelectedLogId,
   shouldUseDetailsSheet,
@@ -298,6 +347,59 @@ function LiveTabPanel({
   const showSheetDetails =
     active && selectedLog !== null && shouldUseDetailsSheet && !isSheetClosing;
   const sheetLog = selectedLog ?? closingSheetLog;
+
+  // "First event" latch. Once we've observed a single log we never
+  // re-render the overlay for this mount — the user can always get back
+  // to the guide via the header icon button. We also drive a short fade
+  // exit via `isGuideExiting` before removing the overlay from the DOM
+  // so the transition is visible rather than a hard cut.
+  const [hasEverReceivedLog, setHasEverReceivedLog] = useState(
+    () => logs.length > 0,
+  );
+  const [isGuideExiting, setIsGuideExiting] = useState(false);
+  const [showGuideOverlay, setShowGuideOverlay] = useState(
+    () => logs.length === 0,
+  );
+  const guideExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!hasEverReceivedLog && logs.length > 0) {
+      setHasEverReceivedLog(true);
+      setIsGuideExiting(true);
+      if (guideExitTimerRef.current !== null) {
+        clearTimeout(guideExitTimerRef.current);
+      }
+      guideExitTimerRef.current = setTimeout(() => {
+        setShowGuideOverlay(false);
+        setIsGuideExiting(false);
+        guideExitTimerRef.current = null;
+      }, EMPTY_GUIDE_EXIT_MS);
+    }
+  }, [hasEverReceivedLog, logs.length]);
+
+  useEffect(() => {
+    return () => {
+      if (guideExitTimerRef.current !== null) {
+        clearTimeout(guideExitTimerRef.current);
+      }
+    };
+  }, []);
+
+  // The guide is only shown for the initial empty state: no logs, no
+  // active filter (an active filter that returns zero rows is not the
+  // same as "the dataset is empty"), no error, and the initial fetch
+  // has completed. Slugs are required — without them the snippets would
+  // render with placeholder braces and confuse the user, so we fall back
+  // to the plain waiting-for-logs table until the collections hydrate.
+  const shouldShowGuide =
+    showGuideOverlay &&
+    !hasEverReceivedLog &&
+    logs.length === 0 &&
+    !isLoading &&
+    errorMessage === null &&
+    filter === null &&
+    projectSlug !== undefined &&
+    datasetSlug !== undefined;
 
   const clearSheetCloseTimer = useCallback(() => {
     if (sheetCloseTimerRef.current === null) {
@@ -343,11 +445,15 @@ function LiveTabPanel({
     <Activity mode={active ? "visible" : "hidden"} name={`dataset-tab:${datasetId}:live`}>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <div className="flex min-h-0 flex-1">
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
             <LogStreamHeader
               datasetId={datasetId}
+              datasetName={datasetName}
+              datasetSlug={datasetSlug}
               onFilterChange={setFilter}
               projectId={projectId}
+              projectSlug={projectSlug}
+              serverOrigin={serverOrigin}
             />
             {errorMessage ? (
               <div className="border-b border-rose-500/20 bg-rose-500/8 px-4 py-2 font-mono text-[11px] text-rose-200">
@@ -364,6 +470,21 @@ function LiveTabPanel({
               selectedLogId={selectedLogId}
               waiting={errorMessage === null || isLoading}
             />
+            {shouldShowGuide && projectSlug && datasetSlug ? (
+              <div
+                aria-live="polite"
+                className="pointer-events-auto absolute inset-0 z-10 flex flex-col overflow-hidden bg-background/95 backdrop-blur-sm transition-opacity duration-200 data-[state=exiting]:opacity-0"
+                data-state={isGuideExiting ? "exiting" : "idle"}
+              >
+                <EmptyDatasetGuide
+                  datasetName={datasetName}
+                  datasetSlug={datasetSlug}
+                  projectSlug={projectSlug}
+                  serverOrigin={serverOrigin}
+                  variant="overlay"
+                />
+              </div>
+            ) : null}
           </div>
           {showInlineDetails ? (
             <div className="flex w-[min(42vw,560px)] min-w-[360px] shrink-0 flex-col">
