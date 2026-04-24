@@ -112,14 +112,6 @@ jobs:
             platform: mac
             arch: x64
             target: dmg
-          - os: ubuntu-22.04
-            platform: linux
-            arch: x64
-            target: AppImage
-          - os: windows-2022
-            platform: win
-            arch: x64
-            target: nsis
     runs-on: ${{ matrix.os }}
     env:
       GH_TOKEN: ${{ secrets.LENSFLARE_DESKTOP_UPDATE_GITHUB_TOKEN || github.token }}
@@ -137,11 +129,14 @@ jobs:
       AZURE_TRUSTED_SIGNING_ACCOUNT_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_ACCOUNT_NAME }}
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+          run_install: false
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
-      - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - run: pnpm run release:update-package-versions -- "${{ needs.prepare.outputs.version }}"
       - name: Build desktop artifact
@@ -179,11 +174,14 @@ jobs:
       UPDATE_REPOSITORY: ${{ needs.prepare.outputs.update_repository }}
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+          run_install: false
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
-      - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - uses: actions/download-artifact@v4
         with:
