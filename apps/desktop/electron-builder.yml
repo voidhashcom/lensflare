@@ -9,10 +9,13 @@ extraResources:
   - from: ../web/dist
     to: web
 mac:
+  icon: ../../assets/prod/lightflare-macos.icns
   category: public.app-category.developer-tools
 linux:
+  icon: ../../assets/prod/lightflare-linux-512.png
   target:
     - AppImage
 win:
+  icon: ../../assets/prod/lightflare-windows.ico
   target:
     - nsis

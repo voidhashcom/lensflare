@@ -60,6 +60,12 @@ let quitting = false;
 
 const AUTO_UPDATE_STARTUP_DELAY_MS = 15_000;
 const AUTO_UPDATE_POLL_INTERVAL_MS = 4 * 60 * 60 * 1000;
+const DEVELOPMENT_ICON_RELATIVE_PATH =
+  process.platform === "darwin"
+    ? "../../assets/dev/lightflare-macos-1024.png"
+    : process.platform === "win32"
+      ? "../../assets/dev/lightflare-windows.ico"
+      : "../../assets/dev/lightflare-linux-512.png";
 const desktopRuntimeInfo = resolveDesktopRuntimeInfo({
   platform: process.platform,
   processArch: process.arch,
@@ -80,6 +86,15 @@ let updateState: DesktopUpdateState = createInitialDesktopUpdateState(
   desktopRuntimeInfo,
   "latest",
 );
+
+function resolveDevelopmentIconPath(): string | undefined {
+  if (!config.desktopDev) {
+    return undefined;
+  }
+
+  const iconPath = resolve(app.getAppPath(), DEVELOPMENT_ICON_RELATIVE_PATH);
+  return existsSync(iconPath) ? iconPath : undefined;
+}
 
 function resolveEmbeddedWebDir(): string | undefined {
   const candidate = app.isPackaged
@@ -608,7 +623,7 @@ async function main(): Promise<void> {
     return restartPromise;
   }
 
-  async function createMainWindow(): Promise<void> {
+  async function createMainWindow(developmentIconPath?: string): Promise<void> {
     if (!currentHandle || currentState.status !== "ready") {
       throw new Error("Local server is unavailable.");
     }
@@ -640,6 +655,7 @@ async function main(): Promise<void> {
           }
         : {}),
       transparent: isMac,
+      ...(developmentIconPath ? { icon: developmentIconPath } : {}),
       webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,
@@ -685,7 +701,7 @@ async function main(): Promise<void> {
 
   app.on("activate", () => {
     if (mainWindow === null && currentState.status === "ready") {
-      void createMainWindow();
+      void createMainWindow(resolveDevelopmentIconPath());
     }
   });
 
@@ -778,8 +794,12 @@ async function main(): Promise<void> {
   }
 
   await app.whenReady();
+  const developmentIconPath = resolveDevelopmentIconPath();
+  if (developmentIconPath && process.platform === "darwin" && app.dock) {
+    app.dock.setIcon(developmentIconPath);
+  }
   configureAutoUpdater();
-  await createMainWindow();
+  await createMainWindow(developmentIconPath);
 }
 
 const shouldEnforceSingleInstanceLock = !config.desktopDev;

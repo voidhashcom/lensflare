@@ -1,10 +1,18 @@
 #!/usr/bin/env node
 
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { BRAND_ASSET_PATHS, type DesktopBuildIconAssets } from "./lib/brand-assets.ts";
 
 type BuildPlatform = "mac" | "linux" | "win";
 type BuildArch = "arm64" | "x64";
@@ -80,6 +88,30 @@ export function resolveDesktopUpdateChannel(version: string): "latest" | "nightl
 
 export function resolveDesktopProductName(version: string): string {
   return resolveDesktopUpdateChannel(version) === "nightly" ? "Lensflare Nightly" : "Lensflare";
+}
+
+export function resolveDesktopBuildIconAssets(version: string): DesktopBuildIconAssets {
+  if (resolveDesktopUpdateChannel(version) === "nightly") {
+    return {
+      macIconIcns: BRAND_ASSET_PATHS.nightlyMacIconIcns,
+      linuxIconPng: BRAND_ASSET_PATHS.nightlyLinuxIconPng,
+      windowsIconIco: BRAND_ASSET_PATHS.nightlyWindowsIconIco,
+      webFaviconIco: BRAND_ASSET_PATHS.nightlyWebFaviconIco,
+      webFavicon16Png: BRAND_ASSET_PATHS.nightlyWebFavicon16Png,
+      webFavicon32Png: BRAND_ASSET_PATHS.nightlyWebFavicon32Png,
+      webAppleTouchIconPng: BRAND_ASSET_PATHS.nightlyWebAppleTouchIconPng,
+    };
+  }
+
+  return {
+    macIconIcns: BRAND_ASSET_PATHS.productionMacIconIcns,
+    linuxIconPng: BRAND_ASSET_PATHS.productionLinuxIconPng,
+    windowsIconIco: BRAND_ASSET_PATHS.productionWindowsIconIco,
+    webFaviconIco: BRAND_ASSET_PATHS.productionWebFaviconIco,
+    webFavicon16Png: BRAND_ASSET_PATHS.productionWebFavicon16Png,
+    webFavicon32Png: BRAND_ASSET_PATHS.productionWebFavicon32Png,
+    webAppleTouchIconPng: BRAND_ASSET_PATHS.productionWebAppleTouchIconPng,
+  };
 }
 
 export function resolveMockUpdateServerUrl(port: number): string {
@@ -171,6 +203,7 @@ function run(
 
 function createBuildConfig(options: BuildOptions): Record<string, unknown> {
   const updateChannel = resolveDesktopUpdateChannel(options.version);
+  const iconAssets = resolveDesktopBuildIconAssets(options.version);
   const publishConfig = resolveGitHubPublishConfig(updateChannel);
   const publish = publishConfig
     ? [publishConfig]
@@ -204,6 +237,7 @@ function createBuildConfig(options: BuildOptions): Record<string, unknown> {
   if (options.platform === "mac") {
     config.mac = {
       target: options.target === "dmg" ? ["dmg", "zip"] : [options.target],
+      icon: resolve(repoRoot, iconAssets.macIconIcns),
       category: "public.app-category.developer-tools",
       ...(options.signed ? {} : { identity: null }),
     };
@@ -213,6 +247,7 @@ function createBuildConfig(options: BuildOptions): Record<string, unknown> {
     config.linux = {
       target: [options.target],
       executableName: "lensflare",
+      icon: resolve(repoRoot, iconAssets.linuxIconPng),
       category: "Development",
     };
   }
@@ -220,6 +255,7 @@ function createBuildConfig(options: BuildOptions): Record<string, unknown> {
   if (options.platform === "win") {
     config.win = {
       target: [options.target],
+      icon: resolve(repoRoot, iconAssets.windowsIconIco),
       ...(options.signed ? {} : { signAndEditExecutable: false }),
     };
   }
@@ -227,7 +263,20 @@ function createBuildConfig(options: BuildOptions): Record<string, unknown> {
   return config;
 }
 
+function applyWebIconAssets(webDistDir: string, iconAssets: DesktopBuildIconAssets): void {
+  mkdirSync(webDistDir, { recursive: true });
+  copyFileSync(resolve(repoRoot, iconAssets.webFaviconIco), join(webDistDir, "favicon.ico"));
+  copyFileSync(resolve(repoRoot, iconAssets.webFavicon16Png), join(webDistDir, "favicon-16x16.png"));
+  copyFileSync(resolve(repoRoot, iconAssets.webFavicon32Png), join(webDistDir, "favicon-32x32.png"));
+  copyFileSync(
+    resolve(repoRoot, iconAssets.webAppleTouchIconPng),
+    join(webDistDir, "apple-touch-icon.png"),
+  );
+}
+
 export function buildDesktopArtifact(options: BuildOptions): void {
+  const iconAssets = resolveDesktopBuildIconAssets(options.version);
+
   if (!options.skipBuild) {
     console.log("[desktop-artifact] Building web and desktop bundles...");
     run("pnpm", ["--dir", "apps/web", "run", "build"], { cwd: repoRoot, verbose: options.verbose });
@@ -236,6 +285,7 @@ export function buildDesktopArtifact(options: BuildOptions): void {
       verbose: options.verbose,
     });
   }
+  applyWebIconAssets(join(repoRoot, "apps/web/dist"), iconAssets);
 
   const tempDir = mkdtempSync(join(tmpdir(), "lensflare-desktop-build-"));
   const configPath = join(tempDir, "electron-builder.json");

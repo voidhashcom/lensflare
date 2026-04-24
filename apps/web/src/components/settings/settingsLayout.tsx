@@ -5,9 +5,9 @@ import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 
 /**
- * A visually grouped block of related settings. Renders a small uppercase
- * heading followed by a card-shaped container whose direct children are
- * expected to be {@link SettingsRow} entries separated by hairline borders.
+ * A visually grouped block of related settings. Renders a prominent section
+ * heading followed by a flat list of {@link SettingsRow} entries separated by
+ * hairline horizontal dividers.
  */
 export function SettingsSection({
   title,
@@ -21,18 +21,15 @@ export function SettingsSection({
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-2.5">
-      <div className="flex items-center justify-between px-1">
-        <h2 className="flex items-center gap-2 font-semibold text-[11px] text-foreground/50 uppercase tracking-[0.08em]">
-          <span aria-hidden className="inline-block h-px w-3 bg-border" />
+    <section className="space-y-1">
+      <div className="flex min-h-8 items-center justify-between gap-3 pb-3">
+        <h2 className="flex items-center gap-2 font-semibold text-foreground text-xl tracking-tight">
           {icon}
           {title}
         </h2>
         {headerAction}
       </div>
-      <div className="relative overflow-hidden rounded-2xl border bg-card text-card-foreground shadow-xs">
-        {children}
-      </div>
+      <div>{children}</div>
     </section>
   );
 }
@@ -40,7 +37,8 @@ export function SettingsSection({
 /**
  * A single row inside a {@link SettingsSection}. The row lays out a title +
  * description block on the left and an optional control on the right,
- * switching to a stacked layout on small screens.
+ * switching to a stacked layout on small screens. Rows within a section are
+ * separated by a hairline divider, with the first row having no top border.
  */
 export function SettingsRow({
   title,
@@ -60,21 +58,21 @@ export function SettingsRow({
   return (
     <div
       className={cn(
-        "border-border/60 border-t px-4 first:border-t-0 sm:px-5",
+        "border-border/60 border-t first:border-t-0",
         children ? "pt-4 pb-0" : "py-4",
       )}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex min-h-5 items-center gap-1.5">
-            <h3 className="font-semibold text-[13px] text-foreground tracking-[-0.01em]">
+            <h3 className="font-semibold text-foreground text-sm tracking-[-0.01em]">
               {title}
             </h3>
             <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center">
               {resetAction}
             </span>
           </div>
-          <p className="text-muted-foreground/80 text-xs leading-relaxed">{description}</p>
+          <p className="text-[13px] text-muted-foreground/80 leading-relaxed">{description}</p>
           {status ? <div className="pt-0.5 text-[11px] text-muted-foreground">{status}</div> : null}
         </div>
         {control ? (
@@ -119,7 +117,7 @@ export function SettingResetButton({ label, onClick }: { label: string; onClick:
 export function SettingsPageContainer({ children }: { children: ReactNode }) {
   return (
     <div className="flex-1 overflow-y-auto p-6 sm:p-8">
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">{children}</div>
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-10">{children}</div>
     </div>
   );
 }

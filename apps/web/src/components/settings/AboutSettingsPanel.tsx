@@ -15,7 +15,7 @@ const APP_VERSION = "0.1.0";
 export function AboutSettingsPanel() {
   return (
     <SettingsPageContainer>
-      <SettingsSection icon={<InfoIcon className="size-3" />} title="About">
+      <SettingsSection icon={<InfoIcon className="size-5" />} title="About">
         <SettingsRow
           control={
             <code className="text-[12px] text-muted-foreground tabular-nums">v{APP_VERSION}</code>

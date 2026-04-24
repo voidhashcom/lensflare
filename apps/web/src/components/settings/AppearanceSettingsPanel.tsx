@@ -51,7 +51,7 @@ export function AppearanceSettingsPanel() {
 
   return (
     <SettingsPageContainer>
-      <SettingsSection icon={<PaletteIcon className="size-3" />} title="Layout">
+      <SettingsSection icon={<PaletteIcon className="size-5" />} title="Layout">
         <SettingsRow
           control={
             <Select onValueChange={(value) => setDensity(value as DensityValue)} value={density}>

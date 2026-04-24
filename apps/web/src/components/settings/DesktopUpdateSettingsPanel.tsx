@@ -1,5 +1,6 @@
 import type { DesktopUpdateChannel } from "@lensflare/contracts";
 import {
+  BugIcon,
   CheckCircle2Icon,
   DownloadIcon,
   RefreshCwIcon,
@@ -239,7 +240,7 @@ export function DesktopUpdateSettingsPanel() {
   if (!bridgeAvailable && !initialized) {
     return (
       <SettingsPageContainer>
-        <SettingsSection icon={<RefreshCwIcon className="size-3" />} title="Desktop Updates">
+        <SettingsSection icon={<RefreshCwIcon className="size-5" />} title="Desktop Updates">
           <SettingsRow description="Loading desktop updater state." title="Updates" />
         </SettingsSection>
       </SettingsPageContainer>
@@ -249,7 +250,7 @@ export function DesktopUpdateSettingsPanel() {
   if (!bridgeAvailable) {
     return (
       <SettingsPageContainer>
-        <SettingsSection icon={<RefreshCwIcon className="size-3" />} title="Desktop Updates">
+        <SettingsSection icon={<RefreshCwIcon className="size-5" />} title="Desktop Updates">
           <SettingsRow
             description="Auto-update controls are available only in the packaged Lensflare desktop app."
             title="Desktop only"
@@ -261,7 +262,7 @@ export function DesktopUpdateSettingsPanel() {
 
   return (
     <SettingsPageContainer>
-      <SettingsSection icon={<RefreshCwIcon className="size-3" />} title="Desktop Updates">
+      <SettingsSection icon={<RefreshCwIcon className="size-5" />} title="Desktop Updates">
         <SettingsRow
           control={
             <code className="text-[12px] text-muted-foreground tabular-nums">
@@ -330,7 +331,7 @@ export function DesktopUpdateSettingsPanel() {
       </SettingsSection>
 
       {arm64Warning ? (
-        <SettingsSection icon={<TriangleAlertIcon className="size-3" />} title="Architecture">
+        <SettingsSection icon={<TriangleAlertIcon className="size-5" />} title="Architecture">
           <SettingsRow
             description={getArm64IntelBuildWarningDescription(state)}
             title="Intel build on Apple Silicon"
@@ -339,7 +340,7 @@ export function DesktopUpdateSettingsPanel() {
       ) : null}
 
       {error ? (
-        <SettingsSection title="Diagnostics">
+        <SettingsSection icon={<BugIcon className="size-5" />} title="Diagnostics">
           <SettingsRow description={error} title="Updater bridge error" />
         </SettingsSection>
       ) : null}

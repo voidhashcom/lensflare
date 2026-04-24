@@ -194,7 +194,7 @@ export function GeneralSettingsPanel() {
 
   return (
     <SettingsPageContainer>
-      <SettingsSection icon={<SettingsIcon className="size-3" />} title="General">
+      <SettingsSection icon={<SettingsIcon className="size-5" />} title="General">
         <SettingsRow
           control={
             <Select onValueChange={(value) => setTheme(value as ThemeValue)} value={theme}>
@@ -308,7 +308,7 @@ export function GeneralSettingsPanel() {
             <RefreshCwIcon className={storageLoading ? "size-3 animate-spin" : "size-3"} />
           </Button>
         }
-        icon={<DatabaseIcon className="size-3" />}
+        icon={<DatabaseIcon className="size-5" />}
         title="Storage"
       >
         {datasets.length === 0 ? (
@@ -319,7 +319,7 @@ export function GeneralSettingsPanel() {
         ) : (
           datasetGroups.map((group) => (
             <div className="border-border/60 border-t first:border-t-0" key={group.projectId}>
-              <div className="bg-muted/30 px-4 py-2.5 sm:px-5">
+              <div className="bg-muted/30 px-3 py-2">
                 <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                   <div className="min-w-0 font-semibold text-[11px] text-foreground/70 uppercase tracking-[0.08em]">
                     <span className="truncate">{group.project?.name ?? "Unknown project"}</span>
@@ -365,7 +365,7 @@ export function GeneralSettingsPanel() {
           ))
         )}
         {storageError ? (
-          <div className="border-border/60 border-t px-5 py-3 text-destructive text-xs">
+          <div className="border-border/60 border-t py-3 text-destructive text-xs">
             {storageError}
           </div>
         ) : null}
