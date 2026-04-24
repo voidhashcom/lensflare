@@ -1,4 +1,4 @@
-import { Activity, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 
 import { Sheet, SheetPopup } from "~/components/ui/sheet";
 import { readBackendTarget } from "~/data/backendTarget";
@@ -170,8 +170,9 @@ function LiveTabPanel({
   stream,
   tableRef,
 }: LiveTabPanelProps) {
-  // Keep the live tab mounted so table + details state survive tab switches,
-  // but only surface the mobile sheet while this panel is active.
+  // Keep the live tab mounted so table, details state, and in-flight effects
+  // survive tab switches. React Activity preserves state but tears down effects
+  // while hidden, which would replay trace-loading skeletons when returning.
   const sheetCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [closingSheetLog, setClosingSheetLog] = useState<TelemetryEntry | null>(null);
   const [isSheetClosing, setIsSheetClosing] = useState(false);
@@ -270,7 +271,11 @@ function LiveTabPanel({
   useEffect(() => clearSheetCloseTimer, [clearSheetCloseTimer]);
 
   return (
-    <Activity mode={active ? "visible" : "hidden"} name={`dataset-tab:${datasetId}:live`}>
+    <div
+      className="flex min-h-0 min-w-0 flex-1 flex-col"
+      data-dataset-tab={`${datasetId}:live`}
+      hidden={!active}
+    >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <div className="flex min-h-0 flex-1">
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
@@ -351,7 +356,7 @@ function LiveTabPanel({
           </Sheet>
         </div>
       </div>
-    </Activity>
+    </div>
   );
 }
 
@@ -364,7 +369,11 @@ interface TraceTabPanelProps {
 
 function TraceTabPanel({ active, datasetId, projectId, tab }: TraceTabPanelProps) {
   return (
-    <Activity mode={active ? "visible" : "hidden"} name={`dataset-tab:${datasetId}:${tab.id}`}>
+    <div
+      className="flex min-h-0 min-w-0 flex-1 flex-col"
+      data-dataset-tab={`${datasetId}:${tab.id}`}
+      hidden={!active}
+    >
       <div className="flex min-h-0 flex-1 flex-col">
         <TraceExplorer
           className="min-h-0 flex-1"
@@ -374,6 +383,6 @@ function TraceTabPanel({ active, datasetId, projectId, tab }: TraceTabPanelProps
           {...(tab.initialSpanId !== undefined ? { initialSpanId: tab.initialSpanId } : {})}
         />
       </div>
-    </Activity>
+    </div>
   );
 }

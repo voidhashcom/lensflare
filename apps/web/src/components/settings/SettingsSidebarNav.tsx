@@ -54,7 +54,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
                         : "gap-2.5 px-2.5 py-2 text-left text-[13px] text-muted-foreground/70 hover:text-foreground/80"
                     }
                     isActive={isActive}
-                    onClick={() => void navigate({ to: item.to, replace: true })}
+                    onMouseDown={() => void navigate({ to: item.to, replace: true })}
                     size="sm"
                   >
                     <Icon
@@ -79,7 +79,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
           <SidebarMenuItem>
             <SidebarMenuButton
               className="gap-2 px-2 py-2 text-muted-foreground text-xs hover:bg-accent hover:text-foreground"
-              onClick={() => window.history.back()}
+              onMouseDown={() => window.history.back()}
               size="sm"
             >
               <ArrowLeftIcon className="size-4" />
