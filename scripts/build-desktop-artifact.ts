@@ -35,6 +35,7 @@ interface PackageJson {
 }
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
+const bundledDependencyFileExclusions = ["!node_modules/@lensflare/**"];
 
 function readJson<T>(path: string): T {
   return JSON.parse(readFileSync(path, "utf8")) as T;
@@ -218,7 +219,12 @@ function createBuildConfig(options: BuildOptions): Record<string, unknown> {
     directories: {
       output: options.outputDir,
     },
-    files: ["dist/**", "package.json"],
+    files: [
+      "dist/**",
+      "package.json",
+      ...bundledDependencyFileExclusions,
+      ...nativeDependencyFileExclusions(options.platform, options.arch),
+    ],
     extraMetadata: {
       version: options.version,
     },
@@ -261,6 +267,47 @@ function createBuildConfig(options: BuildOptions): Record<string, unknown> {
   }
 
   return config;
+}
+
+function nativeDependencyFileExclusions(platform: BuildPlatform, arch: BuildArch): string[] {
+  const duckDbPackages = [
+    "node-bindings-darwin-arm64",
+    "node-bindings-darwin-x64",
+    "node-bindings-linux-arm64",
+    "node-bindings-linux-x64",
+    "node-bindings-win32-arm64",
+    "node-bindings-win32-x64",
+  ];
+  const msgpackrExtractPackages = [
+    "msgpackr-extract-darwin-arm64",
+    "msgpackr-extract-darwin-x64",
+    "msgpackr-extract-linux-arm",
+    "msgpackr-extract-linux-arm64",
+    "msgpackr-extract-linux-x64",
+    "msgpackr-extract-win32-x64",
+  ];
+
+  const duckDbTarget =
+    platform === "mac"
+      ? `node-bindings-darwin-${arch}`
+      : platform === "linux"
+        ? `node-bindings-linux-${arch}`
+        : `node-bindings-win32-${arch}`;
+  const msgpackrExtractTarget =
+    platform === "mac"
+      ? `msgpackr-extract-darwin-${arch}`
+      : platform === "linux"
+        ? `msgpackr-extract-linux-${arch}`
+        : `msgpackr-extract-win32-${arch}`;
+
+  return [
+    ...duckDbPackages
+      .filter((packageName) => packageName !== duckDbTarget)
+      .map((packageName) => `!node_modules/@duckdb/${packageName}/**`),
+    ...msgpackrExtractPackages
+      .filter((packageName) => packageName !== msgpackrExtractTarget)
+      .map((packageName) => `!node_modules/@msgpackr-extract/${packageName}/**`),
+  ];
 }
 
 function applyWebIconAssets(webDistDir: string, iconAssets: DesktopBuildIconAssets): void {

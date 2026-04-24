@@ -112,6 +112,10 @@ importers:
       '@duckdb/node-api':
         specifier: 'catalog:'
         version: 1.5.2-r.1
+      electron-updater:
+        specifier: ^6.8.3
+        version: 6.8.3
+    devDependencies:
       '@lensflare/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -121,10 +125,6 @@ importers:
       '@lensflare/shared':
         specifier: workspace:*
         version: link:../../packages/shared
-      electron-updater:
-        specifier: ^6.8.3
-        version: 6.8.3
-    devDependencies:
       '@types/node':
         specifier: 'catalog:'
         version: 24.12.2

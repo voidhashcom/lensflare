@@ -5,17 +5,39 @@ directories:
 files:
   - dist/**
   - package.json
+  - "!node_modules/@lensflare/**"
 extraResources:
   - from: ../web/dist
     to: web
 mac:
   icon: ../../assets/prod/lightflare-macos.icns
   category: public.app-category.developer-tools
+  files:
+    - "!node_modules/@duckdb/node-bindings-darwin-!(${arch})/**"
+    - "!node_modules/@duckdb/node-bindings-linux-*/**"
+    - "!node_modules/@duckdb/node-bindings-win32-*/**"
+    - "!node_modules/@msgpackr-extract/msgpackr-extract-darwin-!(${arch})/**"
+    - "!node_modules/@msgpackr-extract/msgpackr-extract-linux-*/**"
+    - "!node_modules/@msgpackr-extract/msgpackr-extract-win32-*/**"
 linux:
   icon: ../../assets/prod/lightflare-linux-512.png
   target:
     - AppImage
+  files:
+    - "!node_modules/@duckdb/node-bindings-darwin-*/**"
+    - "!node_modules/@duckdb/node-bindings-linux-!(${arch})/**"
+    - "!node_modules/@duckdb/node-bindings-win32-*/**"
+    - "!node_modules/@msgpackr-extract/msgpackr-extract-darwin-*/**"
+    - "!node_modules/@msgpackr-extract/msgpackr-extract-linux-!(${arch})/**"
+    - "!node_modules/@msgpackr-extract/msgpackr-extract-win32-*/**"
 win:
   icon: ../../assets/prod/lightflare-windows.ico
   target:
     - nsis
+  files:
+    - "!node_modules/@duckdb/node-bindings-darwin-*/**"
+    - "!node_modules/@duckdb/node-bindings-linux-*/**"
+    - "!node_modules/@duckdb/node-bindings-win32-!(${arch})/**"
+    - "!node_modules/@msgpackr-extract/msgpackr-extract-darwin-*/**"
+    - "!node_modules/@msgpackr-extract/msgpackr-extract-linux-*/**"
+    - "!node_modules/@msgpackr-extract/msgpackr-extract-win32-!(${arch})/**"
