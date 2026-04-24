@@ -1,188 +1,133 @@
 import { Context, Effect, Layer } from "effect";
 import { DuckDbError, TelemetryStore } from "./telemetryStore.ts";
+import {
+  mapArrayLiteral,
+  mapLiteral,
+  mergeFragments,
+  stringArrayLiteral,
+  timestampArrayLiteral,
+} from "./telemetrySql.ts";
 import type {
-  NormalizedSpanEventRecord,
   NormalizedSpanRecord,
   SpanIngestWriteRequest,
-  WrittenSpanEventRecord,
   WrittenSpanRecord,
 } from "./types.ts";
 
-function recordValues(
-  batchId: string,
-  id: string,
-  request: SpanIngestWriteRequest,
-  record: NormalizedSpanRecord,
-): Record<string, string | number | null> {
+function insertSpanRecordSql(recordId: string, record: NormalizedSpanRecord) {
+  const resourceAttributes = mapLiteral("resource_attributes", record.resourceAttributes);
+  const spanAttributes = mapLiteral("span_attributes", record.spanAttributes);
+  const eventTimestamps = timestampArrayLiteral(
+    "event_timestamp",
+    record.events.map((event) => event.timestamp),
+  );
+  const eventNames = stringArrayLiteral(
+    "event_name",
+    record.events.map((event) => event.name),
+  );
+  const eventAttributes = mapArrayLiteral(
+    "event_attributes",
+    record.events.map((event) => event.attributes),
+  );
+  const linkTraceIds = stringArrayLiteral(
+    "link_trace_id",
+    record.links.map((link) => link.traceId),
+  );
+  const linkSpanIds = stringArrayLiteral(
+    "link_span_id",
+    record.links.map((link) => link.spanId),
+  );
+  const linkTraceStates = stringArrayLiteral(
+    "link_trace_state",
+    record.links.map((link) => link.traceState),
+  );
+  const linkAttributes = mapArrayLiteral(
+    "link_attributes",
+    record.links.map((link) => link.attributes),
+  );
+
   return {
-    id,
-    batch_id: batchId,
-    project_id: request.projectId,
-    project_slug: request.projectSlug,
-    dataset_id: request.datasetId,
-    dataset_slug: request.datasetSlug,
-    provider_kind: request.providerKind,
-    ingested_at: request.receivedAt,
-    trace_id: record.traceId,
-    span_id: record.spanId,
-    parent_span_id: record.parentSpanId,
-    name: record.name,
-    kind: record.kind,
-    start_time: record.startTime,
-    end_time: record.endTime,
-    duration_us: record.durationUs,
-    status_code: record.statusCode,
-    status_message: record.statusMessage,
-    service_name: record.serviceName,
-    resource_schema_url: record.resourceSchemaUrl,
-    scope_name: record.scopeName,
-    scope_version: record.scopeVersion,
-    scope_schema_url: record.scopeSchemaUrl,
-    resource_json: record.resourceJson,
-    scope_json: record.scopeJson,
-    attributes_json: record.attributesJson,
-    dropped_attributes_count: record.droppedAttributesCount,
-    raw_span_json: record.rawSpanJson,
+    sql: `
+      INSERT INTO otel_traces (
+        LensflareRecordId,
+        BatchId,
+        Timestamp,
+        TraceId,
+        SpanId,
+        ParentSpanId,
+        TraceState,
+        SpanName,
+        SpanKind,
+        ServiceName,
+        ResourceAttributes,
+        ScopeName,
+        ScopeVersion,
+        SpanAttributes,
+        Duration,
+        StatusCode,
+        StatusMessage,
+        "Events.Timestamp",
+        "Events.Name",
+        "Events.Attributes",
+        "Links.TraceId",
+        "Links.SpanId",
+        "Links.TraceState",
+        "Links.Attributes"
+      ) VALUES (
+        $id,
+        $batch_id,
+        CAST($timestamp AS TIMESTAMP_NS),
+        $trace_id,
+        $span_id,
+        $parent_span_id,
+        $trace_state,
+        $span_name,
+        $span_kind,
+        $service_name,
+        ${resourceAttributes.sql},
+        $scope_name,
+        $scope_version,
+        ${spanAttributes.sql},
+        $duration,
+        $status_code,
+        $status_message,
+        ${eventTimestamps.sql},
+        ${eventNames.sql},
+        ${eventAttributes.sql},
+        ${linkTraceIds.sql},
+        ${linkSpanIds.sql},
+        ${linkTraceStates.sql},
+        ${linkAttributes.sql}
+      )
+    `,
+    params: {
+      id: recordId,
+      timestamp: record.timestamp,
+      trace_id: record.traceId,
+      span_id: record.spanId,
+      parent_span_id: record.parentSpanId,
+      trace_state: record.traceState,
+      span_name: record.spanName,
+      span_kind: record.spanKind,
+      service_name: record.serviceName,
+      scope_name: record.scopeName,
+      scope_version: record.scopeVersion,
+      duration: record.durationNs,
+      status_code: record.statusCode,
+      status_message: record.statusMessage,
+      ...mergeFragments(
+        resourceAttributes,
+        spanAttributes,
+        eventTimestamps,
+        eventNames,
+        eventAttributes,
+        linkTraceIds,
+        linkSpanIds,
+        linkTraceStates,
+        linkAttributes,
+      ),
+    },
   };
 }
-
-function eventRecordValues(
-  batchId: string,
-  id: string,
-  request: SpanIngestWriteRequest,
-  record: NormalizedSpanEventRecord,
-): Record<string, string | number | null> {
-  return {
-    id,
-    batch_id: batchId,
-    project_id: request.projectId,
-    project_slug: request.projectSlug,
-    dataset_id: request.datasetId,
-    dataset_slug: request.datasetSlug,
-    provider_kind: request.providerKind,
-    ingested_at: request.receivedAt,
-    trace_id: record.traceId,
-    span_id: record.spanId,
-    timestamp: record.timestamp,
-    name: record.name,
-    service_name: record.serviceName,
-    resource_schema_url: record.resourceSchemaUrl,
-    scope_name: record.scopeName,
-    scope_version: record.scopeVersion,
-    scope_schema_url: record.scopeSchemaUrl,
-    attributes_json: record.attributesJson,
-    dropped_attributes_count: record.droppedAttributesCount,
-    raw_event_json: record.rawEventJson,
-  };
-}
-
-const insertSpanRecordSql = `
-  INSERT INTO span_records (
-    id,
-    batch_id,
-    project_id,
-    project_slug,
-    dataset_id,
-    dataset_slug,
-    provider_kind,
-    ingested_at,
-    trace_id,
-    span_id,
-    parent_span_id,
-    name,
-    kind,
-    start_time,
-    end_time,
-    duration_us,
-    status_code,
-    status_message,
-    service_name,
-    resource_schema_url,
-    scope_name,
-    scope_version,
-    scope_schema_url,
-    resource_json,
-    scope_json,
-    attributes_json,
-    dropped_attributes_count,
-    raw_span_json
-  ) VALUES (
-    $id,
-    $batch_id,
-    $project_id,
-    $project_slug,
-    $dataset_id,
-    $dataset_slug,
-    $provider_kind,
-    CAST($ingested_at AS TIMESTAMP),
-    $trace_id,
-    $span_id,
-    $parent_span_id,
-    $name,
-    $kind,
-    CAST($start_time AS TIMESTAMP),
-    CASE WHEN $end_time IS NULL THEN NULL ELSE CAST($end_time AS TIMESTAMP) END,
-    $duration_us,
-    $status_code,
-    $status_message,
-    $service_name,
-    $resource_schema_url,
-    $scope_name,
-    $scope_version,
-    $scope_schema_url,
-    CASE WHEN $resource_json IS NULL THEN NULL ELSE CAST($resource_json AS JSON) END,
-    CASE WHEN $scope_json IS NULL THEN NULL ELSE CAST($scope_json AS JSON) END,
-    CASE WHEN $attributes_json IS NULL THEN NULL ELSE CAST($attributes_json AS JSON) END,
-    $dropped_attributes_count,
-    CAST($raw_span_json AS JSON)
-  )
-`;
-
-const insertSpanEventRecordSql = `
-  INSERT INTO span_event_records (
-    id,
-    batch_id,
-    project_id,
-    project_slug,
-    dataset_id,
-    dataset_slug,
-    provider_kind,
-    ingested_at,
-    trace_id,
-    span_id,
-    timestamp,
-    name,
-    service_name,
-    resource_schema_url,
-    scope_name,
-    scope_version,
-    scope_schema_url,
-    attributes_json,
-    dropped_attributes_count,
-    raw_event_json
-  ) VALUES (
-    $id,
-    $batch_id,
-    $project_id,
-    $project_slug,
-    $dataset_id,
-    $dataset_slug,
-    $provider_kind,
-    CAST($ingested_at AS TIMESTAMP),
-    $trace_id,
-    $span_id,
-    CAST($timestamp AS TIMESTAMP),
-    $name,
-    $service_name,
-    $resource_schema_url,
-    $scope_name,
-    $scope_version,
-    $scope_schema_url,
-    CASE WHEN $attributes_json IS NULL THEN NULL ELSE CAST($attributes_json AS JSON) END,
-    $dropped_attributes_count,
-    CAST($raw_event_json AS JSON)
-  )
-`;
 
 export class TelemetrySpansRepository extends Context.Service<
   TelemetrySpansRepository,
@@ -193,7 +138,6 @@ export class TelemetrySpansRepository extends Context.Service<
       {
         readonly batchId: string;
         readonly records: ReadonlyArray<WrittenSpanRecord>;
-        readonly events: ReadonlyArray<WrittenSpanEventRecord>;
       },
       DuckDbError
     >;
@@ -213,12 +157,6 @@ export class TelemetrySpansRepository extends Context.Service<
                 id: crypto.randomUUID(),
                 record,
               }));
-              const events = request.spans.flatMap((span) =>
-                span.events.map((event) => ({
-                  id: crypto.randomUUID(),
-                  record: event,
-                })),
-              );
 
               await connection.run(
                 `
@@ -248,7 +186,7 @@ export class TelemetrySpansRepository extends Context.Service<
                     $request_content_encoding,
                     $request_bytes,
                     $accepted_records,
-                    CAST($received_at AS TIMESTAMP),
+                    CAST($received_at AS TIMESTAMP_NS),
                     $client_addr
                   )
                 `,
@@ -270,17 +208,14 @@ export class TelemetrySpansRepository extends Context.Service<
               );
 
               for (const { id, record } of records) {
-                await connection.run(insertSpanRecordSql, recordValues(batchId, id, request, record));
+                const insert = insertSpanRecordSql(id, record);
+                await connection.run(insert.sql, {
+                  batch_id: batchId,
+                  ...insert.params,
+                });
               }
 
-              for (const { id, record } of events) {
-                await connection.run(
-                  insertSpanEventRecordSql,
-                  eventRecordValues(batchId, id, request, record),
-                );
-              }
-
-              return { batchId, records, events };
+              return { batchId, records };
             },
             catch: (error) =>
               new DuckDbError({

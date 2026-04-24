@@ -193,7 +193,7 @@ describe("HTTP ingest", () => {
       const records = await queryDuckDb(
         duckdbDatabaseFile,
         dataset.id,
-        "SELECT body_text, service_name, severity_number FROM log_records",
+        "SELECT Body AS body_text, ServiceName AS service_name, SeverityNumber AS severity_number FROM otel_logs",
       );
       expect(records).toEqual([
         {
@@ -446,7 +446,7 @@ describe("HTTP ingest", () => {
       const eventRecords = await queryDuckDb(
         duckdbDatabaseFile,
         dataset.id,
-        "SELECT name, trace_id, span_id FROM span_event_records",
+        `SELECT "Events.Name"[1] AS name, TraceId AS trace_id, SpanId AS span_id FROM otel_traces WHERE SpanId = '${childSpanId}'`,
       );
       expect(eventRecords).toEqual([
         {
@@ -640,7 +640,7 @@ describe("HTTP ingest", () => {
       const counts = await queryDuckDb(
         duckdbDatabaseFile,
         dataset.id,
-        "SELECT COUNT(*) AS batches, (SELECT COUNT(*) FROM log_records) AS records FROM ingest_batches",
+        "SELECT COUNT(*) AS batches, (SELECT COUNT(*) FROM otel_logs) AS records FROM ingest_batches",
       );
       expect(counts).toEqual([
         {
@@ -753,7 +753,7 @@ describe("HTTP ingest", () => {
       const finalCounts = await queryDuckDb(
         duckdbDatabaseFile,
         dataset.id,
-        "SELECT COUNT(*) AS batches, (SELECT COUNT(*) FROM log_records) AS records FROM ingest_batches",
+        "SELECT COUNT(*) AS batches, (SELECT COUNT(*) FROM otel_logs) AS records FROM ingest_batches",
       );
       expect(finalCounts).toEqual([
         {
@@ -765,18 +765,16 @@ describe("HTTP ingest", () => {
       const records = await queryDuckDb(
         duckdbDatabaseFile,
         dataset.id,
-        "SELECT body_text, service_name, dataset_slug FROM log_records ORDER BY body_text",
+        "SELECT Body AS body_text, ServiceName AS service_name FROM otel_logs ORDER BY Body",
       );
       expect(records).toEqual([
         {
           body_text: "hello from dev",
           service_name: "api",
-          dataset_slug: "lensflare-dev",
         },
         {
           body_text: "loop me back",
           service_name: "lensflare-server",
-          dataset_slug: "lensflare-dev",
         },
       ]);
     } finally {
@@ -844,7 +842,7 @@ describe("HTTP ingest", () => {
       const counts = await queryDuckDb(
         duckdbDatabaseFile,
         dataset.id,
-        "SELECT COUNT(*) AS batches, (SELECT COUNT(*) FROM log_records) AS records FROM ingest_batches",
+        "SELECT COUNT(*) AS batches, (SELECT COUNT(*) FROM otel_logs) AS records FROM ingest_batches",
       );
       expect(counts).toEqual([
         {

@@ -9,7 +9,8 @@ describe("compileFilterToSql", () => {
       const ast = Filter.cmp(["level"], "eq", Filter.stringValue("error"));
       const result = compileFilterToSql(ast);
 
-      expect(result.whereClause).toBe("(severity_text = $flt_0)");
+      expect(result.whereClause).toContain("SeverityText");
+      expect(result.whereClause).toContain("= $flt_0");
       expect(result.params).toStrictEqual({ flt_0: "error" });
       expect(result.nextIndex).toBe(1);
     });
@@ -18,7 +19,7 @@ describe("compileFilterToSql", () => {
       const ast = Filter.cmp(["traceId"], "eq", Filter.nullValue());
       const result = compileFilterToSql(ast);
 
-      expect(result.whereClause).toBe("(trace_id IS NULL)");
+      expect(result.whereClause).toBe("(NULLIF(TraceId, '') IS NULL)");
       expect(result.params).toStrictEqual({});
     });
 
@@ -26,7 +27,7 @@ describe("compileFilterToSql", () => {
       const ast = Filter.cmp(["serviceName"], "exists");
       const result = compileFilterToSql(ast);
 
-      expect(result.whereClause).toBe("(service_name IS NOT NULL)");
+      expect(result.whereClause).toBe("(NULLIF(ServiceName, '') IS NOT NULL)");
       expect(result.params).toStrictEqual({});
     });
 
@@ -34,14 +35,14 @@ describe("compileFilterToSql", () => {
       const ast = Filter.cmp(["traceId"], "notExists");
       const result = compileFilterToSql(ast);
 
-      expect(result.whereClause).toBe("(trace_id IS NULL)");
+      expect(result.whereClause).toBe("(NULLIF(TraceId, '') IS NULL)");
     });
 
     it("routes numeric comparisons through the numeric column expression", () => {
       const ast = Filter.cmp(["severityNumber"], "gte", Filter.numberValue(17));
       const result = compileFilterToSql(ast);
 
-      expect(result.whereClause).toBe("(severity_number >= $flt_0)");
+      expect(result.whereClause).toBe("(SeverityNumber >= $flt_0)");
       expect(result.params).toStrictEqual({ flt_0: 17 });
     });
 
@@ -50,9 +51,7 @@ describe("compileFilterToSql", () => {
       const result = compileFilterToSql(ast);
 
       expect(result.whereClause).toContain("LIKE $flt_0 ESCAPE '\\'");
-      expect(result.whereClause).toContain(
-        "LOWER(COALESCE(NULLIF(body_text, ''), CAST(body_json AS VARCHAR), CAST(raw_record_json AS VARCHAR)))",
-      );
+      expect(result.whereClause).toContain("LOWER(Body)");
       expect(result.params).toStrictEqual({ flt_0: "%timed out%" });
     });
 
@@ -79,7 +78,8 @@ describe("compileFilterToSql", () => {
       const ast = Filter.cmp(["level"], "in", Filter.listValue(["error", "fatal"]));
       const result = compileFilterToSql(ast);
 
-      expect(result.whereClause).toBe("(severity_text IN ($flt_0, $flt_1))");
+      expect(result.whereClause).toContain("SeverityText");
+      expect(result.whereClause).toContain("IN ($flt_0, $flt_1)");
       expect(result.params).toStrictEqual({ flt_0: "error", flt_1: "fatal" });
     });
 
@@ -87,7 +87,7 @@ describe("compileFilterToSql", () => {
       const ast = Filter.cmp(["severityNumber"], "in", Filter.listValue([17, 21]));
       const result = compileFilterToSql(ast);
 
-      expect(result.whereClause).toBe("(severity_number IN ($flt_0, $flt_1))");
+      expect(result.whereClause).toBe("(SeverityNumber IN ($flt_0, $flt_1))");
     });
 
     it("emits FALSE for an empty IN list and TRUE for empty notIn", () => {
@@ -109,9 +109,8 @@ describe("compileFilterToSql", () => {
       ]);
       const result = compileFilterToSql(ast);
 
-      expect(result.whereClause).toBe(
-        "((severity_text = $flt_0) AND (service_name = $flt_1))",
-      );
+      expect(result.whereClause).toContain("SeverityText");
+      expect(result.whereClause).toContain("NULLIF(ServiceName, '') = $flt_1");
       expect(result.nextIndex).toBe(2);
     });
 
@@ -124,7 +123,8 @@ describe("compileFilterToSql", () => {
       const ast = Filter.not(Filter.cmp(["level"], "eq", Filter.stringValue("info")));
       const result = compileFilterToSql(ast);
 
-      expect(result.whereClause).toBe("(NOT (severity_text = $flt_0))");
+      expect(result.whereClause).toContain("NOT");
+      expect(result.whereClause).toContain("SeverityText");
     });
 
     it("nests AND/OR/NOT with fresh placeholder indices", () => {
@@ -145,7 +145,7 @@ describe("compileFilterToSql", () => {
   });
 
   describe("attribute paths", () => {
-    it("extracts from attributes_json via json_extract_string", () => {
+    it("extracts from the OTEL log attribute map", () => {
       const ast = Filter.cmp(
         ["attributes", "http", "method"],
         "eq",
@@ -154,7 +154,7 @@ describe("compileFilterToSql", () => {
       const result = compileFilterToSql(ast);
 
       expect(result.whereClause).toBe(
-        "(json_extract_string(attributes_json, '$.http.method') = $flt_0)",
+        "(COALESCE(LogAttributes['http.method'], LogAttributes['method']) = $flt_0)",
       );
       expect(result.params).toStrictEqual({ flt_0: "POST" });
     });
@@ -168,7 +168,7 @@ describe("compileFilterToSql", () => {
       const result = compileFilterToSql(ast);
 
       expect(result.whereClause).toBe(
-        "(TRY_CAST(json_extract_string(attributes_json, '$.http.status_code') AS DOUBLE) >= $flt_0)",
+        "(TRY_CAST(COALESCE(LogAttributes['http.status_code'], LogAttributes['status_code']) AS DOUBLE) >= $flt_0)",
       );
     });
 
@@ -176,7 +176,7 @@ describe("compileFilterToSql", () => {
       expect(() =>
         compileFilterToSql(
           Filter.cmp(
-            ["attributes", "bad; DROP TABLE log_records;--"],
+            ["attributes", "bad; DROP TABLE otel_logs;--"],
             "eq",
             Filter.stringValue("x"),
           ),
@@ -214,8 +214,8 @@ describe("compileFilterToSql", () => {
 
       expect(result.params).toStrictEqual({ flt_0: "%timeout%" });
       expect(result.whereClause).toContain("LIKE $flt_0 ESCAPE '\\'");
-      expect(result.whereClause).toContain("attributes_json");
-      expect(result.whereClause).toContain("body_text");
+      expect(result.whereClause).toContain("LogAttributes");
+      expect(result.whereClause).toContain("Body");
     });
 
     it("empty text becomes a tautology and binds nothing", () => {
@@ -242,9 +242,8 @@ describe("compileFilterToSql", () => {
       ]);
       const result = compileFilterToSql(ast, { startIndex: 10 });
 
-      expect(result.whereClause).toBe(
-        "((severity_text = $flt_10) AND (service_name = $flt_11))",
-      );
+      expect(result.whereClause).toContain("SeverityText");
+      expect(result.whereClause).toContain("NULLIF(ServiceName, '') = $flt_11");
       expect(result.params).toStrictEqual({ flt_10: "error", flt_11: "api" });
       expect(result.nextIndex).toBe(12);
     });

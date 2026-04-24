@@ -53,46 +53,57 @@ interface ColumnExpression {
  */
 const FIELD_MAP: Record<string, ColumnExpression> = {
   id: {
-    stringExpr: "id",
-    numericExpr: "TRY_CAST(id AS DOUBLE)",
+    stringExpr: "LensflareRecordId",
+    numericExpr: "TRY_CAST(LensflareRecordId AS DOUBLE)",
   },
   timestamp: {
-    stringExpr: "CAST(COALESCE(timestamp, ingested_at) AS VARCHAR)",
-    numericExpr: "epoch(COALESCE(timestamp, ingested_at))",
+    stringExpr: "CAST(Timestamp AS VARCHAR)",
+    numericExpr: "epoch(Timestamp)",
   },
   level: {
-    stringExpr: "severity_text",
-    numericExpr: "severity_number",
+    stringExpr: `CASE
+      WHEN lower(SeverityText) = 'fatal' THEN 'fatal'
+      WHEN lower(SeverityText) = 'error' THEN 'error'
+      WHEN lower(SeverityText) IN ('warn', 'warning') THEN 'warn'
+      WHEN lower(SeverityText) = 'info' THEN 'info'
+      WHEN lower(SeverityText) = 'debug' THEN 'debug'
+      WHEN lower(SeverityText) = 'trace' THEN 'trace'
+      WHEN SeverityNumber >= 21 THEN 'fatal'
+      WHEN SeverityNumber >= 17 THEN 'error'
+      WHEN SeverityNumber >= 13 THEN 'warn'
+      WHEN SeverityNumber >= 9 THEN 'info'
+      WHEN SeverityNumber >= 5 THEN 'debug'
+      ELSE 'trace'
+    END`,
+    numericExpr: "SeverityNumber",
   },
   message: {
-    stringExpr:
-      "COALESCE(NULLIF(body_text, ''), CAST(body_json AS VARCHAR), CAST(raw_record_json AS VARCHAR))",
-    numericExpr: "TRY_CAST(NULLIF(body_text, '') AS DOUBLE)",
+    stringExpr: "Body",
+    numericExpr: "TRY_CAST(Body AS DOUBLE)",
   },
   sourceName: {
-    stringExpr: "COALESCE(service_name, dataset_slug, provider_kind)",
-    numericExpr:
-      "TRY_CAST(COALESCE(service_name, dataset_slug, provider_kind) AS DOUBLE)",
+    stringExpr: "NULLIF(ServiceName, '')",
+    numericExpr: "TRY_CAST(NULLIF(ServiceName, '') AS DOUBLE)",
   },
   severityNumber: {
-    stringExpr: "CAST(severity_number AS VARCHAR)",
-    numericExpr: "severity_number",
+    stringExpr: "CAST(SeverityNumber AS VARCHAR)",
+    numericExpr: "SeverityNumber",
   },
   severityText: {
-    stringExpr: "severity_text",
-    numericExpr: "TRY_CAST(severity_text AS DOUBLE)",
+    stringExpr: "SeverityText",
+    numericExpr: "TRY_CAST(SeverityText AS DOUBLE)",
   },
   serviceName: {
-    stringExpr: "service_name",
-    numericExpr: "TRY_CAST(service_name AS DOUBLE)",
+    stringExpr: "NULLIF(ServiceName, '')",
+    numericExpr: "TRY_CAST(NULLIF(ServiceName, '') AS DOUBLE)",
   },
   traceId: {
-    stringExpr: "trace_id",
-    numericExpr: "TRY_CAST(trace_id AS DOUBLE)",
+    stringExpr: "NULLIF(TraceId, '')",
+    numericExpr: "TRY_CAST(NULLIF(TraceId, '') AS DOUBLE)",
   },
   spanId: {
-    stringExpr: "span_id",
-    numericExpr: "TRY_CAST(span_id AS DOUBLE)",
+    stringExpr: "NULLIF(SpanId, '')",
+    numericExpr: "TRY_CAST(NULLIF(SpanId, '') AS DOUBLE)",
   },
 };
 
@@ -112,13 +123,8 @@ function assertAttributeSegments(segments: ReadonlyArray<string>): void {
 }
 
 function attributeStringExpr(segments: ReadonlyArray<string>): string {
-  // Safe because we've already asserted every segment matches
-  // ATTRIBUTE_SEGMENT_PATTERN — `$`, `.`, spaces, quotes etc. are rejected.
-  return `json_extract_string(attributes_json, '${jsonPathForSegments(segments)}')`;
-}
-
-function jsonPathForSegments(segments: ReadonlyArray<string>): string {
-  return `$${segments.map((segment) => (segment.includes(".") ? `."${segment}"` : `.${segment}`)).join("")}`;
+  const exactKey = segments.join(".");
+  return `COALESCE(LogAttributes['${exactKey}'], LogAttributes['${segments.at(-1) ?? ""}'])`;
 }
 
 function resolveField(
@@ -291,13 +297,12 @@ function compileCmp(
  * `evaluateText` so substring / regex semantics agree across the two sides.
  */
 const TEXT_HAYSTACK_STRING_EXPRS: ReadonlyArray<string> = [
-  "COALESCE(NULLIF(body_text, ''), CAST(body_json AS VARCHAR), CAST(raw_record_json AS VARCHAR))",
-  "COALESCE(service_name, dataset_slug, provider_kind)",
-  "COALESCE(severity_text, '')",
-  "COALESCE(service_name, '')",
-  "COALESCE(trace_id, '')",
-  "COALESCE(span_id, '')",
-  "CAST(attributes_json AS VARCHAR)",
+  "Body",
+  "COALESCE(NULLIF(ServiceName, ''), '')",
+  "COALESCE(SeverityText, '')",
+  "COALESCE(TraceId, '')",
+  "COALESCE(SpanId, '')",
+  "CAST(LogAttributes AS VARCHAR)",
 ];
 
 function compileText(builder: Builder, query: string, mode: "substring" | "regex"): string {

@@ -34,14 +34,14 @@ interface ListDatasetLogsOptions {
 interface TelemetryLogRow {
   readonly id: string;
   readonly timestamp: string;
-  readonly severityNumber: number | null;
-  readonly severityText: string | null;
+  readonly severityNumber: number;
+  readonly severityText: string;
   readonly sourceName: string | null;
   readonly message: string;
-  readonly serviceName: string | null;
-  readonly traceId: string | null;
-  readonly spanId: string | null;
-  readonly attributesJson: string | null;
+  readonly serviceName: string;
+  readonly traceId: string;
+  readonly spanId: string;
+  readonly attributes: Readonly<Record<string, unknown>>;
 }
 
 interface TelemetrySpanRow {
@@ -50,18 +50,9 @@ interface TelemetrySpanRow {
   readonly name: string;
   readonly serviceName: string | null;
   readonly startTime: string;
-  readonly endTime: string | null;
-  readonly durationUs: number | null;
-  readonly statusCode: number | null;
-}
-
-interface TelemetrySpanEventRow {
-  readonly id: string;
-  readonly traceId: string;
-  readonly spanId: string;
-  readonly timestamp: string;
-  readonly name: string;
-  readonly attributesJson: string | null;
+  readonly durationUs: number;
+  readonly statusCode: string;
+  readonly events: ReadonlyArray<TelemetryTraceContext["spans"][number]["events"][number]>;
 }
 
 const duckDbTimestampPattern = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/;
@@ -76,23 +67,18 @@ const duckDbTimestampPattern = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/
 const SELECT_PREFIX = `
   WITH filtered AS (
     SELECT
-      id,
-      COALESCE(timestamp, ingested_at) AS sort_timestamp,
-      severity_number,
-      severity_text,
-      COALESCE(service_name, dataset_slug, provider_kind) AS source_name,
-      COALESCE(
-        NULLIF(body_text, ''),
-        CAST(body_json AS VARCHAR),
-        CAST(raw_record_json AS VARCHAR)
-      ) AS message,
-      service_name,
-      trace_id,
-      span_id,
-      CAST(attributes_json AS VARCHAR) AS attributes_json
-    FROM log_records
-    WHERE project_id = $project_id
-      AND dataset_id = $dataset_id
+      LensflareRecordId AS id,
+      Timestamp AS sort_timestamp,
+      SeverityNumber AS severity_number,
+      SeverityText AS severity_text,
+      NULLIF(ServiceName, '') AS source_name,
+      Body AS message,
+      ServiceName AS service_name,
+      TraceId AS trace_id,
+      SpanId AS span_id,
+      LogAttributes AS attributes
+    FROM otel_logs
+    WHERE TRUE
 `;
 
 const SELECT_SUFFIX = `
@@ -107,22 +93,22 @@ const SELECT_SUFFIX = `
     service_name,
     trace_id,
     span_id,
-    attributes_json
+    attributes
   FROM filtered
   WHERE (
     $cursor_timestamp IS NULL
     OR (
       $direction = 'older'
       AND (
-        sort_timestamp < CAST($cursor_timestamp AS TIMESTAMP)
-        OR (sort_timestamp = CAST($cursor_timestamp AS TIMESTAMP) AND id < $cursor_id)
+        sort_timestamp < CAST($cursor_timestamp AS TIMESTAMP_NS)
+        OR (sort_timestamp = CAST($cursor_timestamp AS TIMESTAMP_NS) AND id < $cursor_id)
       )
     )
     OR (
       $direction = 'newer'
       AND (
-        sort_timestamp > CAST($cursor_timestamp AS TIMESTAMP)
-        OR (sort_timestamp = CAST($cursor_timestamp AS TIMESTAMP) AND id > $cursor_id)
+        sort_timestamp > CAST($cursor_timestamp AS TIMESTAMP_NS)
+        OR (sort_timestamp = CAST($cursor_timestamp AS TIMESTAMP_NS) AND id > $cursor_id)
       )
     )
   )
@@ -136,34 +122,20 @@ const SELECT_SUFFIX = `
 
 const selectTraceSpansSql = `
   SELECT
-    span_id,
-    parent_span_id,
-    name,
-    COALESCE(service_name, dataset_slug, provider_kind) AS service_name,
-    CAST(start_time AS VARCHAR) AS start_time,
-    CASE WHEN end_time IS NULL THEN NULL ELSE CAST(end_time AS VARCHAR) END AS end_time,
-    duration_us,
-    status_code
-  FROM span_records
-  WHERE project_id = $project_id
-    AND dataset_id = $dataset_id
-    AND trace_id = $trace_id
-  ORDER BY start_time ASC, span_id ASC
-`;
-
-const selectTraceSpanEventsSql = `
-  SELECT
-    id,
-    trace_id,
-    span_id,
-    CAST(timestamp AS VARCHAR) AS timestamp,
-    name,
-    CAST(attributes_json AS VARCHAR) AS attributes_json
-  FROM span_event_records
-  WHERE project_id = $project_id
-    AND dataset_id = $dataset_id
-    AND trace_id = $trace_id
-  ORDER BY timestamp ASC, id ASC
+    LensflareRecordId AS id,
+    SpanId AS span_id,
+    NULLIF(ParentSpanId, '') AS parent_span_id,
+    SpanName AS name,
+    NULLIF(ServiceName, '') AS service_name,
+    CAST(Timestamp AS VARCHAR) AS start_time,
+    CAST(floor(Duration / 1000) AS BIGINT) AS duration_us,
+    StatusCode AS status_code,
+    "Events.Timestamp" AS event_timestamps,
+    "Events.Name" AS event_names,
+    "Events.Attributes" AS event_attributes
+  FROM otel_traces
+  WHERE TraceId = $trace_id
+  ORDER BY Timestamp ASC, SpanId ASC
 `;
 
 function toTimestamp(raw: string): string {
@@ -194,14 +166,14 @@ function decodeTelemetryLogRow(row: Record<string, unknown>): TelemetryLogRow {
   return {
     id: String(row.id ?? ""),
     timestamp: String(row.timestamp ?? ""),
-    severityNumber: toNullableNumber(row.severity_number),
-    severityText: toNullableString(row.severity_text),
+    severityNumber: toNullableNumber(row.severity_number) ?? 0,
+    severityText: toNullableString(row.severity_text) ?? "",
     sourceName: toNullableString(row.source_name),
     message: String(row.message ?? ""),
-    serviceName: toNullableString(row.service_name),
-    traceId: toNullableString(row.trace_id),
-    spanId: toNullableString(row.span_id),
-    attributesJson: toNullableString(row.attributes_json),
+    serviceName: toNullableString(row.service_name) ?? "",
+    traceId: toNullableString(row.trace_id) ?? "",
+    spanId: toNullableString(row.span_id) ?? "",
+    attributes: parseMap(row.attributes),
   };
 }
 
@@ -212,25 +184,14 @@ function decodeTelemetrySpanRow(row: Record<string, unknown>): TelemetrySpanRow 
     name: String(row.name ?? ""),
     serviceName: toNullableString(row.service_name),
     startTime: String(row.start_time ?? ""),
-    endTime: toNullableString(row.end_time),
-    durationUs: toNullableNumber(row.duration_us),
-    statusCode: toNullableNumber(row.status_code),
-  };
-}
-
-function decodeTelemetrySpanEventRow(row: Record<string, unknown>): TelemetrySpanEventRow {
-  return {
-    id: String(row.id ?? ""),
-    traceId: String(row.trace_id ?? ""),
-    spanId: String(row.span_id ?? ""),
-    timestamp: String(row.timestamp ?? ""),
-    name: String(row.name ?? ""),
-    attributesJson: toNullableString(row.attributes_json),
+    durationUs: toNullableNumber(row.duration_us) ?? 0,
+    statusCode: String(row.status_code ?? "Unset"),
+    events: decodeInlineEvents(row, String(row.id ?? "")),
   };
 }
 
 function toLevel(row: TelemetryLogRow): TelemetryLogLevel {
-  const severityText = row.severityText?.trim().toLowerCase();
+  const severityText = row.severityText.trim().toLowerCase();
   if (severityText === "fatal") {
     return "fatal";
   }
@@ -250,7 +211,7 @@ function toLevel(row: TelemetryLogRow): TelemetryLogLevel {
     return "trace";
   }
 
-  const severityNumber = row.severityNumber ?? 0;
+  const severityNumber = row.severityNumber;
   if (severityNumber >= 21) {
     return "fatal";
   }
@@ -269,19 +230,37 @@ function toLevel(row: TelemetryLogRow): TelemetryLogLevel {
   return "trace";
 }
 
-function parseAttributes(raw: string | null): Readonly<Record<string, unknown>> {
-  if (!raw) {
+function parseMap(value: unknown): Readonly<Record<string, unknown>> {
+  if (!Array.isArray(value)) {
     return {};
   }
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const entry of value) {
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
+      continue;
     }
-    return {};
-  } catch {
-    return {};
+    const key = String((entry as { key?: unknown }).key ?? "");
+    if (key.length > 0) {
+      out[key] = (entry as { value?: unknown }).value ?? "";
+    }
   }
+  return out;
+}
+
+function decodeInlineEvents(
+  row: Record<string, unknown>,
+  spanRecordId: string,
+): ReadonlyArray<TelemetryTraceContext["spans"][number]["events"][number]> {
+  const timestamps = Array.isArray(row.event_timestamps) ? row.event_timestamps : [];
+  const names = Array.isArray(row.event_names) ? row.event_names : [];
+  const attributes = Array.isArray(row.event_attributes) ? row.event_attributes : [];
+
+  return names.map((name, index) => ({
+    id: `${spanRecordId}:event:${index}`,
+    timestamp: toTimestamp(String(timestamps[index] ?? "")),
+    name: String(name ?? "event"),
+    attributes: parseMap(attributes[index]),
+  }));
 }
 
 function mapRow(row: TelemetryLogRow): TelemetryLogEntry {
@@ -293,43 +272,33 @@ function mapRow(row: TelemetryLogRow): TelemetryLogEntry {
     message: row.message,
     severityNumber: row.severityNumber,
     severityText: row.severityText,
-    serviceName: row.serviceName,
-    traceId: row.traceId,
-    spanId: row.spanId,
-    attributes: parseAttributes(row.attributesJson),
+    serviceName: row.serviceName.length > 0 ? row.serviceName : null,
+    traceId: row.traceId.length > 0 ? row.traceId : null,
+    spanId: row.spanId.length > 0 ? row.spanId : null,
+    attributes: row.attributes,
   };
 }
 
-function toTraceSpanStatus(statusCode: number | null): TelemetryTraceSpanStatus {
-  if (statusCode === 2) {
+function toTraceSpanStatus(statusCode: string): TelemetryTraceSpanStatus {
+  if (statusCode === "Error") {
     return "error";
   }
-  if (statusCode === 1) {
+  if (statusCode === "Ok") {
     return "ok";
   }
   return "unset";
 }
 
 function durationUs(row: TelemetrySpanRow): number {
-  if (row.durationUs !== null && Number.isFinite(row.durationUs) && row.durationUs >= 0) {
+  if (Number.isFinite(row.durationUs) && row.durationUs >= 0) {
     return row.durationUs;
   }
-
-  if (row.endTime === null) {
-    return 0;
-  }
-
-  const startMs = new Date(toTimestamp(row.startTime)).getTime();
-  const endMs = new Date(toTimestamp(row.endTime)).getTime();
-  return Number.isFinite(startMs) && Number.isFinite(endMs) && endMs >= startMs
-    ? (endMs - startMs) * 1_000
-    : 0;
+  return 0;
 }
 
 function toTraceContext(
   traceId: string,
   rows: ReadonlyArray<TelemetrySpanRow>,
-  eventRows: ReadonlyArray<TelemetrySpanEventRow>,
   currentSpanId?: string | undefined,
 ): TelemetryTraceContext | null {
   if (rows.length === 0) {
@@ -345,18 +314,6 @@ function toTraceContext(
   }
 
   let totalDurationUs = 0;
-  const eventsBySpan = new Map<string, Array<TelemetryTraceContext["spans"][number]["events"][number]>>();
-  for (const event of eventRows) {
-    const events = eventsBySpan.get(event.spanId) ?? [];
-    events.push({
-      id: event.id,
-      timestamp: toTimestamp(event.timestamp),
-      name: event.name,
-      attributes: parseAttributes(event.attributesJson),
-    });
-    eventsBySpan.set(event.spanId, events);
-  }
-
   const spans = rows.map((row) => {
     const rowStartMs = new Date(toTimestamp(row.startTime)).getTime();
     const startOffsetUs = Number.isFinite(rowStartMs)
@@ -373,7 +330,7 @@ function toTraceContext(
       startOffsetUs,
       durationUs: spanDurationUs,
       status: toTraceSpanStatus(row.statusCode),
-      events: eventsBySpan.get(row.spanId) ?? [],
+      events: row.events,
     };
   });
   const orderedSpans = orderTraceSpansForDisplay(spans);
@@ -515,7 +472,7 @@ function toLogPage(
 /**
  * Distinct field definition surfaced to the query builder's combobox. Static
  * fields cover the wire format's top-level keys; attribute fields are harvested
- * from the `attributes_json` keyspace at query time.
+ * from the OTEL log attribute map at query time.
  */
 export interface TelemetryLogField {
   readonly path: ReadonlyArray<string>;
@@ -615,8 +572,6 @@ export class TelemetryLogQueryService extends Context.Service<
           : `${SELECT_PREFIX}${SELECT_SUFFIX}`;
 
         const params: Record<string, DuckDBValue> = {
-          project_id: projectId,
-          dataset_id: datasetId,
           cursor_timestamp: options?.cursor?.timestamp ?? null,
           cursor_id: options?.cursor?.id ?? null,
           direction,
@@ -643,14 +598,11 @@ export class TelemetryLogQueryService extends Context.Service<
         const rows = yield* telemetry.queryRows<Record<string, unknown>>(
           datasetId,
           `
-          SELECT DISTINCT unnest(json_keys(attributes_json)) AS key
-          FROM log_records
-          WHERE project_id = $project_id
-            AND dataset_id = $dataset_id
-            AND attributes_json IS NOT NULL
+          SELECT DISTINCT unnest(map_keys(LogAttributes)) AS key
+          FROM otel_logs
           LIMIT 10000
         `,
-          { project_id: projectId, dataset_id: datasetId },
+          {},
         );
 
         const attributeFields: ReadonlyArray<TelemetryLogField> = rows
@@ -692,14 +644,13 @@ export class TelemetryLogQueryService extends Context.Service<
           datasetId,
           `
           SELECT DISTINCT ${expr} AS value
-          FROM log_records
-          WHERE project_id = $project_id
-            AND dataset_id = $dataset_id
+          FROM otel_logs
+          WHERE TRUE
             AND ${expr} IS NOT NULL
           ORDER BY value
           LIMIT $limit
         `,
-          { project_id: projectId, dataset_id: datasetId, limit },
+          { limit },
         );
 
         return rows
@@ -723,17 +674,6 @@ export class TelemetryLogQueryService extends Context.Service<
           datasetId,
           selectTraceSpansSql,
           {
-            project_id: projectId,
-            dataset_id: datasetId,
-            trace_id: traceId,
-          },
-        );
-        const eventRows = yield* telemetry.queryRows<Record<string, unknown>>(
-          datasetId,
-          selectTraceSpanEventsSql,
-          {
-            project_id: projectId,
-            dataset_id: datasetId,
             trace_id: traceId,
           },
         );
@@ -741,7 +681,6 @@ export class TelemetryLogQueryService extends Context.Service<
         return toTraceContext(
           traceId,
           rows.map((row) => decodeTelemetrySpanRow(row)),
-          eventRows.map((row) => decodeTelemetrySpanEventRow(row)),
           currentSpanId,
         );
       });
@@ -786,7 +725,8 @@ function stringExprForPath(path: ReadonlyArray<string>): string {
         throw new InvalidFilterError({ reason: `unsafe attribute segment: '${segment}'` });
       }
     }
-    return `json_extract_string(attributes_json, '$.${rest.join(".")}')`;
+    const exactKey = rest.join(".");
+    return `COALESCE(LogAttributes['${exactKey}'], LogAttributes['${rest.at(-1) ?? ""}'])`;
   }
 
   if (rest.length > 0) {
@@ -796,19 +736,19 @@ function stringExprForPath(path: ReadonlyArray<string>): string {
   switch (head) {
     case "level":
     case "severityText":
-      return "severity_text";
+      return "SeverityText";
     case "message":
-      return "COALESCE(NULLIF(body_text, ''), CAST(body_json AS VARCHAR), CAST(raw_record_json AS VARCHAR))";
+      return "Body";
     case "sourceName":
-      return "COALESCE(service_name, dataset_slug, provider_kind)";
+      return "NULLIF(ServiceName, '')";
     case "severityNumber":
-      return "CAST(severity_number AS VARCHAR)";
+      return "CAST(SeverityNumber AS VARCHAR)";
     case "serviceName":
-      return "service_name";
+      return "NULLIF(ServiceName, '')";
     case "traceId":
-      return "trace_id";
+      return "NULLIF(TraceId, '')";
     case "spanId":
-      return "span_id";
+      return "NULLIF(SpanId, '')";
     default:
       throw new InvalidFilterError({ reason: `unknown filter field: '${head}'` });
   }

@@ -1,7 +1,7 @@
 import { Context, Effect, Layer } from "effect";
 import { decodeBatch } from "../../decoder/decodeBatch.ts";
 import { MalformedPayload, NormalizationFailure } from "../../errors.ts";
-import { jsonStringOrNull } from "../../normalization/json.ts";
+import { anyValueToOtelString } from "../../normalization/otelAttributes.ts";
 import { parseTimestamp } from "../../normalization/timestamps.ts";
 import type { NormalizedIngestBatch, NormalizedLogRecord } from "../../types.ts";
 
@@ -14,9 +14,8 @@ import type { NormalizedIngestBatch, NormalizedLogRecord } from "../../types.ts"
  * the same attribute bag so downstream queries don't need to know whether
  * a tag was emitted via `labels.foo` or as a top-level key.
  *
- * `data` can be either a string (logged as `bodyText`) or any JSON value
- * (logged as serialized `bodyJson`). The original event is preserved
- * verbatim in `rawRecordJson` for debugging.
+ * `data` can be either a string or any JSON value and is stored as the OTEL
+ * log `Body` string.
  */
 function normalizeEvent(event: Record<string, unknown>): NormalizedLogRecord {
   const attributes: Record<string, unknown> = {};
@@ -37,23 +36,27 @@ function normalizeEvent(event: Record<string, unknown>): NormalizedLogRecord {
   return {
     timestamp: parseTimestamp(event.time),
     observedTimestamp: null,
-    traceId: null,
-    spanId: null,
-    traceFlags: null,
-    severityNumber: null,
-    severityText: null,
-    serviceName: typeof event.service === "string" ? event.service : null,
-    resourceSchemaUrl: null,
-    scopeName: null,
-    scopeVersion: null,
-    scopeSchemaUrl: null,
-    bodyText: typeof event.data === "string" ? event.data : null,
-    bodyJson: typeof event.data === "string" ? null : jsonStringOrNull(event.data),
-    resourceJson: null,
-    scopeJson: null,
-    attributesJson: jsonStringOrNull(attributes),
-    droppedAttributesCount: null,
-    rawRecordJson: JSON.stringify(event),
+    traceId: "",
+    spanId: "",
+    traceFlags: 0,
+    severityNumber: 0,
+    severityText: "",
+    serviceName: typeof event.service === "string" ? event.service : "",
+    resourceSchemaUrl: "",
+    resourceAttributes: {},
+    scopeSchemaUrl: "",
+    scopeName: "",
+    scopeVersion: "",
+    scopeAttributes: {},
+    body:
+      typeof event.data === "string"
+        ? event.data
+        : event.data === undefined
+          ? JSON.stringify(event)
+          : anyValueToOtelString(event.data),
+    logAttributes: Object.fromEntries(
+      Object.entries(attributes).map(([key, value]) => [key, anyValueToOtelString(value)]),
+    ),
   };
 }
 

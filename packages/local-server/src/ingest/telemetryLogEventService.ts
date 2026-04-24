@@ -12,7 +12,6 @@ import type {
   NormalizedLogRecord,
   SpanIngestWriteRequest,
   WrittenLogRecord,
-  WrittenSpanEventRecord,
   WrittenSpanRecord,
 } from "./types.ts";
 
@@ -28,7 +27,7 @@ function toTimestamp(raw: string | null, fallback: string): string {
 }
 
 function toLevel(record: NormalizedLogRecord): TelemetryLogLevel {
-  const severityText = record.severityText?.trim().toLowerCase();
+  const severityText = record.severityText.trim().toLowerCase();
   if (severityText === "fatal") {
     return "fatal";
   }
@@ -48,7 +47,7 @@ function toLevel(record: NormalizedLogRecord): TelemetryLogLevel {
     return "trace";
   }
 
-  const severityNumber = record.severityNumber ?? 0;
+  const severityNumber = record.severityNumber;
   if (severityNumber >= 21) {
     return "fatal";
   }
@@ -73,19 +72,12 @@ function toLevel(record: NormalizedLogRecord): TelemetryLogLevel {
  * should keep flowing even if an upstream producer sends weird payloads — the
  * caller can still filter on non-attribute fields.
  */
-function parseAttributes(raw: string | null): Readonly<Record<string, unknown>> {
-  if (!raw) {
-    return {};
-  }
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>;
-    }
-    return {};
-  } catch {
-    return {};
-  }
+function toApiAttributes(attributes: Readonly<Record<string, string>>): Readonly<Record<string, unknown>> {
+  return attributes;
+}
+
+function nullableId(value: string): string | null {
+  return value.length === 0 ? null : value;
 }
 
 function toTelemetryLogEntry(request: IngestWriteRequest, written: WrittenLogRecord): TelemetryLogEntry {
@@ -94,15 +86,15 @@ function toTelemetryLogEntry(request: IngestWriteRequest, written: WrittenLogRec
   return {
     id: written.id,
     timestamp: toTimestamp(record.timestamp, request.receivedAt),
-    sourceName: record.serviceName ?? request.datasetSlug ?? request.providerKind,
+    sourceName: record.serviceName || request.datasetSlug || request.providerKind,
     level: toLevel(record),
-    message: record.bodyText || record.bodyJson || record.rawRecordJson,
+    message: record.body,
     severityNumber: record.severityNumber,
     severityText: record.severityText,
-    serviceName: record.serviceName,
-    traceId: record.traceId,
-    spanId: record.spanId,
-    attributes: parseAttributes(record.attributesJson),
+    serviceName: record.serviceName || null,
+    traceId: nullableId(record.traceId),
+    spanId: nullableId(record.spanId),
+    attributes: toApiAttributes(record.logAttributes),
   };
 }
 
@@ -113,14 +105,18 @@ function toTelemetryLogRecord(request: IngestWriteRequest, written: WrittenLogRe
   };
 }
 
-function toSpanStatus(statusCode: number | null): TelemetrySpanRecord["status"] {
-  if (statusCode === 2) {
+function toSpanStatus(statusCode: string): TelemetrySpanRecord["status"] {
+  if (statusCode === "Error") {
     return "error";
   }
-  if (statusCode === 1) {
+  if (statusCode === "Ok") {
     return "ok";
   }
   return "unset";
+}
+
+function durationUs(durationNs: number): number {
+  return Math.floor(durationNs / 1_000);
 }
 
 function toTelemetrySpanRecord(
@@ -131,41 +127,46 @@ function toTelemetrySpanRecord(
   return {
     id: written.id,
     kind: "span",
-    timestamp: toTimestamp(record.startTime, request.receivedAt),
-    sourceName: record.serviceName ?? request.datasetSlug ?? request.providerKind,
+    timestamp: toTimestamp(record.timestamp, request.receivedAt),
+    sourceName: record.serviceName || request.datasetSlug || request.providerKind,
     traceId: record.traceId,
     spanId: record.spanId,
-    parentSpanId: record.parentSpanId,
-    name: record.name,
-    serviceName: record.serviceName,
+    parentSpanId: record.parentSpanId.length > 0 ? record.parentSpanId : null,
+    name: record.spanName,
+    serviceName: record.serviceName || null,
     status: toSpanStatus(record.statusCode),
     statusMessage: record.statusMessage,
-    durationUs: record.durationUs,
-    attributes: parseAttributes(record.attributesJson),
-    events: record.events.map((event) => ({
-      id: `${record.spanId}:${event.timestamp}:${event.name}`,
+    durationUs: durationUs(record.durationNs),
+    attributes: toApiAttributes(record.spanAttributes),
+    events: record.events.map((event, index) => ({
+      id: `${written.id}:event:${index}`,
       timestamp: event.timestamp,
       name: event.name,
-      attributes: parseAttributes(event.attributesJson),
+      attributes: toApiAttributes(event.attributes),
     })),
   };
 }
 
 function toTelemetrySpanEventRecord(
   request: SpanIngestWriteRequest,
-  written: WrittenSpanEventRecord,
+  written: WrittenSpanRecord,
+  eventIndex: number,
 ): TelemetryRecord {
-  const record = written.record;
+  const span = written.record;
+  const record = span.events[eventIndex];
+  if (record === undefined) {
+    throw new Error("span event index out of bounds");
+  }
   return {
-    id: written.id,
+    id: `${written.id}:event:${eventIndex}`,
     kind: "spanEvent",
     timestamp: toTimestamp(record.timestamp, request.receivedAt),
-    sourceName: record.serviceName ?? request.datasetSlug ?? request.providerKind,
-    traceId: record.traceId,
-    spanId: record.spanId,
+    sourceName: span.serviceName || request.datasetSlug || request.providerKind,
+    traceId: span.traceId,
+    spanId: span.spanId,
     name: record.name,
-    serviceName: record.serviceName,
-    attributes: parseAttributes(record.attributesJson),
+    serviceName: span.serviceName || null,
+    attributes: toApiAttributes(record.attributes),
   };
 }
 
@@ -179,7 +180,6 @@ export class TelemetryLogEventService extends Context.Service<
     readonly publishSpanBatch: (
       request: SpanIngestWriteRequest,
       records: ReadonlyArray<WrittenSpanRecord>,
-      events: ReadonlyArray<WrittenSpanEventRecord>,
     ) => Effect.Effect<void>;
     readonly streamDatasetLogs: (
       projectId: string,
@@ -218,12 +218,14 @@ export class TelemetryLogEventService extends Context.Service<
       const publishSpanBatch = Effect.fn("TelemetryLogEventService.publishSpanBatch")(function* (
         request: SpanIngestWriteRequest,
         records: ReadonlyArray<WrittenSpanRecord>,
-        events: ReadonlyArray<WrittenSpanEventRecord>,
       ) {
+        const spanEvents = records.flatMap((record) =>
+          record.record.events.map((_, index) => toTelemetrySpanEventRecord(request, record, index)),
+        );
         yield* Effect.forEach(
           [
             ...records.map((record) => toTelemetrySpanRecord(request, record)),
-            ...events.map((event) => toTelemetrySpanEventRecord(request, event)),
+            ...spanEvents,
           ],
           (entry) =>
             PubSub.publish(pubsub, {

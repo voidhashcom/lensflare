@@ -86,15 +86,8 @@ function assertAttributeSegments(segments: ReadonlyArray<string>): void {
 }
 
 function attributeStringExpr(segments: ReadonlyArray<string>, column = "telemetry.attributes_json"): string {
-  return `json_extract_string(${column}, '${jsonPathForSegments(segments)}')`;
-}
-
-function jsonPathForSegments(segments: ReadonlyArray<string>): string {
-  return `$${segments.map((segment) => (segment.includes(".") ? `."${segment}"` : `.${segment}`)).join("")}`;
-}
-
-function relatedEventStringExpr(segments: ReadonlyArray<string>): string {
-  return attributeStringExpr(segments, "related.attributes_json");
+  const exactKey = segments.join(".");
+  return `COALESCE(${column}['${exactKey}'], ${column}['${segments.at(-1) ?? ""}'])`;
 }
 
 function resolveField(field: FilterField): ColumnExpression {
@@ -244,12 +237,12 @@ function compileRelatedEventCmp(
   let col: ColumnExpression;
   if (relation === "name") {
     col = {
-      stringExpr: "related.name",
-      numericExpr: "TRY_CAST(related.name AS DOUBLE)",
+      stringExpr: `related."Events.Name"[event_index.i]`,
+      numericExpr: `TRY_CAST(related."Events.Name"[event_index.i] AS DOUBLE)`,
     };
   } else if (relation === "attributes") {
     assertAttributeSegments(rest);
-    const stringExpr = relatedEventStringExpr(rest);
+    const stringExpr = attributeStringExpr(rest, `related."Events.Attributes"[event_index.i]`);
     col = { stringExpr, numericExpr: `TRY_CAST(${stringExpr} AS DOUBLE)` };
   } else {
     throw new InvalidFilterError({ reason: `unknown filter field: '${field.path.join(".")}'` });
@@ -260,11 +253,10 @@ function compileRelatedEventCmp(
     telemetry.kind = 'span'
     AND EXISTS (
       SELECT 1
-      FROM span_event_records related
-      WHERE related.project_id = telemetry.project_id
-        AND related.dataset_id = telemetry.dataset_id
-        AND related.trace_id = telemetry.trace_id
-        AND related.span_id = telemetry.span_id
+      FROM otel_traces related,
+        range(1, length(related."Events.Name") + 1) event_index(i)
+      WHERE related.TraceId = telemetry.trace_id
+        AND related.SpanId = telemetry.span_id
         AND ${predicate}
     )
   )`;

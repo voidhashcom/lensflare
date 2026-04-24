@@ -1,64 +1,59 @@
 export type IngestProviderKind = "otlp_http_logs" | "otlp_http_traces" | "axiom_native";
 
+export type OtelSpanStatusCode = "Unset" | "Ok" | "Error";
+
+export type OtelAttributes = Readonly<Record<string, string>>;
+
 export interface NormalizedLogRecord {
   readonly timestamp: string | null;
   readonly observedTimestamp: string | null;
-  readonly traceId: string | null;
-  readonly spanId: string | null;
-  readonly traceFlags: string | null;
-  readonly severityNumber: number | null;
-  readonly severityText: string | null;
-  readonly serviceName: string | null;
-  readonly resourceSchemaUrl: string | null;
-  readonly scopeName: string | null;
-  readonly scopeVersion: string | null;
-  readonly scopeSchemaUrl: string | null;
-  readonly bodyText: string | null;
-  readonly bodyJson: string | null;
-  readonly resourceJson: string | null;
-  readonly scopeJson: string | null;
-  readonly attributesJson: string | null;
-  readonly droppedAttributesCount: number | null;
-  readonly rawRecordJson: string;
+  readonly traceId: string;
+  readonly spanId: string;
+  readonly traceFlags: number;
+  readonly severityNumber: number;
+  readonly severityText: string;
+  readonly serviceName: string;
+  readonly body: string;
+  readonly resourceSchemaUrl: string;
+  readonly resourceAttributes: OtelAttributes;
+  readonly scopeSchemaUrl: string;
+  readonly scopeName: string;
+  readonly scopeVersion: string;
+  readonly scopeAttributes: OtelAttributes;
+  readonly logAttributes: OtelAttributes;
 }
 
 export interface NormalizedSpanRecord {
   readonly traceId: string;
   readonly spanId: string;
-  readonly parentSpanId: string | null;
-  readonly name: string;
-  readonly kind: string | null;
-  readonly startTime: string;
-  readonly endTime: string | null;
-  readonly durationUs: number;
-  readonly statusCode: number | null;
-  readonly statusMessage: string | null;
-  readonly serviceName: string | null;
-  readonly resourceSchemaUrl: string | null;
-  readonly scopeName: string | null;
-  readonly scopeVersion: string | null;
-  readonly scopeSchemaUrl: string | null;
-  readonly resourceJson: string | null;
-  readonly scopeJson: string | null;
-  readonly attributesJson: string | null;
-  readonly droppedAttributesCount: number | null;
-  readonly rawSpanJson: string;
+  readonly parentSpanId: string;
+  readonly traceState: string;
+  readonly timestamp: string;
+  readonly spanName: string;
+  readonly spanKind: string;
+  readonly serviceName: string;
+  readonly resourceAttributes: OtelAttributes;
+  readonly scopeName: string;
+  readonly scopeVersion: string;
+  readonly spanAttributes: OtelAttributes;
+  readonly durationNs: number;
+  readonly statusCode: OtelSpanStatusCode;
+  readonly statusMessage: string;
   readonly events: ReadonlyArray<NormalizedSpanEventRecord>;
+  readonly links: ReadonlyArray<NormalizedSpanLinkRecord>;
 }
 
 export interface NormalizedSpanEventRecord {
-  readonly traceId: string;
-  readonly spanId: string;
   readonly timestamp: string;
   readonly name: string;
-  readonly serviceName: string | null;
-  readonly resourceSchemaUrl: string | null;
-  readonly scopeName: string | null;
-  readonly scopeVersion: string | null;
-  readonly scopeSchemaUrl: string | null;
-  readonly attributesJson: string | null;
-  readonly droppedAttributesCount: number | null;
-  readonly rawEventJson: string;
+  readonly attributes: OtelAttributes;
+}
+
+export interface NormalizedSpanLinkRecord {
+  readonly traceId: string;
+  readonly spanId: string;
+  readonly traceState: string;
+  readonly attributes: OtelAttributes;
 }
 
 export interface NormalizedLogIngestBatch {
@@ -117,9 +112,4 @@ export interface WrittenLogRecord {
 export interface WrittenSpanRecord {
   readonly id: string;
   readonly record: NormalizedSpanRecord;
-}
-
-export interface WrittenSpanEventRecord {
-  readonly id: string;
-  readonly record: NormalizedSpanEventRecord;
 }

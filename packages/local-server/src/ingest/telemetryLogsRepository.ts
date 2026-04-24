@@ -1,103 +1,75 @@
 import { Context, Effect, Layer } from "effect";
 import { DuckDbError, TelemetryStore } from "./telemetryStore.ts";
+import { mapLiteral, mergeFragments } from "./telemetrySql.ts";
 import type { IngestWriteRequest, NormalizedLogRecord, WrittenLogRecord } from "./types.ts";
 
-function recordValues(
-  batchId: string,
-  id: string,
-  request: IngestWriteRequest,
-  record: NormalizedLogRecord,
-): Record<string, string | number | null> {
-  return {
-    id,
-    batch_id: batchId,
-    project_id: request.projectId,
-    project_slug: request.projectSlug,
-    dataset_id: request.datasetId,
-    dataset_slug: request.datasetSlug,
-    provider_kind: request.providerKind,
-    ingested_at: request.receivedAt,
-    timestamp: record.timestamp,
-    observed_timestamp: record.observedTimestamp,
-    trace_id: record.traceId,
-    span_id: record.spanId,
-    trace_flags: record.traceFlags,
-    severity_number: record.severityNumber,
-    severity_text: record.severityText,
-    service_name: record.serviceName,
-    resource_schema_url: record.resourceSchemaUrl,
-    scope_name: record.scopeName,
-    scope_version: record.scopeVersion,
-    scope_schema_url: record.scopeSchemaUrl,
-    body_text: record.bodyText,
-    body_json: record.bodyJson,
-    resource_json: record.resourceJson,
-    scope_json: record.scopeJson,
-    attributes_json: record.attributesJson,
-    dropped_attributes_count: record.droppedAttributesCount,
-    raw_record_json: record.rawRecordJson,
-  };
+function effectiveTimestamp(record: NormalizedLogRecord, receivedAt: string): string {
+  return record.timestamp ?? record.observedTimestamp ?? receivedAt;
 }
 
-const insertLogRecordSql = `
-  INSERT INTO log_records (
-    id,
-    batch_id,
-    project_id,
-    project_slug,
-    dataset_id,
-    dataset_slug,
-    provider_kind,
-    ingested_at,
-    timestamp,
-    observed_timestamp,
-    trace_id,
-    span_id,
-    trace_flags,
-    severity_number,
-    severity_text,
-    service_name,
-    resource_schema_url,
-    scope_name,
-    scope_version,
-    scope_schema_url,
-    body_text,
-    body_json,
-    resource_json,
-    scope_json,
-    attributes_json,
-    dropped_attributes_count,
-    raw_record_json
-  ) VALUES (
-    $id,
-    $batch_id,
-    $project_id,
-    $project_slug,
-    $dataset_id,
-    $dataset_slug,
-    $provider_kind,
-    CAST($ingested_at AS TIMESTAMP),
-    CASE WHEN $timestamp IS NULL THEN NULL ELSE CAST($timestamp AS TIMESTAMP) END,
-    CASE WHEN $observed_timestamp IS NULL THEN NULL ELSE CAST($observed_timestamp AS TIMESTAMP) END,
-    $trace_id,
-    $span_id,
-    $trace_flags,
-    $severity_number,
-    $severity_text,
-    $service_name,
-    $resource_schema_url,
-    $scope_name,
-    $scope_version,
-    $scope_schema_url,
-    $body_text,
-    CASE WHEN $body_json IS NULL THEN NULL ELSE CAST($body_json AS JSON) END,
-    CASE WHEN $resource_json IS NULL THEN NULL ELSE CAST($resource_json AS JSON) END,
-    CASE WHEN $scope_json IS NULL THEN NULL ELSE CAST($scope_json AS JSON) END,
-    CASE WHEN $attributes_json IS NULL THEN NULL ELSE CAST($attributes_json AS JSON) END,
-    $dropped_attributes_count,
-    CAST($raw_record_json AS JSON)
-  )
-`;
+function insertLogRecordSql(recordId: string, record: NormalizedLogRecord, receivedAt: string) {
+  const resourceAttributes = mapLiteral("resource_attributes", record.resourceAttributes);
+  const scopeAttributes = mapLiteral("scope_attributes", record.scopeAttributes);
+  const logAttributes = mapLiteral("log_attributes", record.logAttributes);
+
+  return {
+    sql: `
+      INSERT INTO otel_logs (
+        LensflareRecordId,
+        BatchId,
+        Timestamp,
+        TraceId,
+        SpanId,
+        TraceFlags,
+        SeverityText,
+        SeverityNumber,
+        ServiceName,
+        Body,
+        ResourceSchemaUrl,
+        ResourceAttributes,
+        ScopeSchemaUrl,
+        ScopeName,
+        ScopeVersion,
+        ScopeAttributes,
+        LogAttributes
+      ) VALUES (
+        $id,
+        $batch_id,
+        CAST($timestamp AS TIMESTAMP_NS),
+        $trace_id,
+        $span_id,
+        $trace_flags,
+        $severity_text,
+        $severity_number,
+        $service_name,
+        $body,
+        $resource_schema_url,
+        ${resourceAttributes.sql},
+        $scope_schema_url,
+        $scope_name,
+        $scope_version,
+        ${scopeAttributes.sql},
+        ${logAttributes.sql}
+      )
+    `,
+    params: {
+      id: recordId,
+      timestamp: effectiveTimestamp(record, receivedAt),
+      trace_id: record.traceId,
+      span_id: record.spanId,
+      trace_flags: record.traceFlags,
+      severity_text: record.severityText,
+      severity_number: record.severityNumber,
+      service_name: record.serviceName,
+      body: record.body,
+      resource_schema_url: record.resourceSchemaUrl,
+      scope_schema_url: record.scopeSchemaUrl,
+      scope_name: record.scopeName,
+      scope_version: record.scopeVersion,
+      ...mergeFragments(resourceAttributes, scopeAttributes, logAttributes),
+    },
+  };
+}
 
 export class TelemetryLogsRepository extends Context.Service<
   TelemetryLogsRepository,
@@ -156,7 +128,7 @@ export class TelemetryLogsRepository extends Context.Service<
                     $request_content_encoding,
                     $request_bytes,
                     $accepted_records,
-                    CAST($received_at AS TIMESTAMP),
+                    CAST($received_at AS TIMESTAMP_NS),
                     $client_addr
                   )
                 `,
@@ -178,7 +150,11 @@ export class TelemetryLogsRepository extends Context.Service<
               );
 
               for (const { id, record } of records) {
-                await connection.run(insertLogRecordSql, recordValues(batchId, id, request, record));
+                const insert = insertLogRecordSql(id, record, request.receivedAt);
+                await connection.run(insert.sql, {
+                  batch_id: batchId,
+                  ...insert.params,
+                });
               }
 
               return { batchId, records };

@@ -1,11 +1,13 @@
 import { Schema } from "effect";
-import { jsonStringOrNull } from "../../normalization/json.ts";
+import { anyValueToOtelString, otelAttributeMap } from "../../normalization/otelAttributes.ts";
 import { parseTimestamp } from "../../normalization/timestamps.ts";
 import type {
   NormalizedIngestBatch,
   NormalizedLogRecord,
   NormalizedSpanEventRecord,
+  NormalizedSpanLinkRecord,
   NormalizedSpanRecord,
+  OtelSpanStatusCode,
 } from "../../types.ts";
 import { exportLogsServiceRequestType, exportTraceServiceRequestType } from "./proto.ts";
 
@@ -48,12 +50,8 @@ function bytesToHex(value: unknown): string | null {
   return null;
 }
 
-function attributeStringOrNull(
-  attributes: Readonly<Record<string, unknown>>,
-  key: string,
-): string | null {
-  const value = attributes[key];
-  return typeof value === "string" && value.length > 0 ? value : null;
+function attributeString(attributes: Readonly<Record<string, string>>, key: string): string {
+  return attributes[key] ?? "";
 }
 
 function anyValueToJson(value: unknown): unknown {
@@ -110,14 +108,6 @@ function stringOrNull(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-function scalarStringOrNull(value: unknown): string | null {
-  return typeof value === "string"
-    ? value
-    : typeof value === "number" && Number.isFinite(value)
-      ? String(value)
-      : null;
-}
-
 function numberOrNull(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value)
     ? value
@@ -126,19 +116,13 @@ function numberOrNull(value: unknown): number | null {
       : null;
 }
 
-function normalizeBody(value: unknown): { bodyText: string | null; bodyJson: string | null } {
+function normalizeBody(value: unknown): string {
   const body = anyValueToJson(value);
   if (typeof body === "string") {
-    return {
-      bodyText: body,
-      bodyJson: null,
-    };
+    return body;
   }
 
-  return {
-    bodyText: null,
-    bodyJson: jsonStringOrNull(body),
-  };
+  return anyValueToOtelString(body);
 }
 
 /**
@@ -200,55 +184,68 @@ function enumStringOrNumber(value: unknown): string | number | null {
   return typeof value === "string" || typeof value === "number" ? value : null;
 }
 
-function normalizeSpanKind(value: unknown): string | null {
+function normalizeSpanKind(value: unknown): string {
   const raw = enumStringOrNumber(value);
   if (raw === null) {
-    return null;
+    return "Unspecified";
   }
 
   if (typeof raw === "number") {
     switch (raw) {
       case 1:
-        return "internal";
+        return "Internal";
       case 2:
-        return "server";
+        return "Server";
       case 3:
-        return "client";
+        return "Client";
       case 4:
-        return "producer";
+        return "Producer";
       case 5:
-        return "consumer";
+        return "Consumer";
       default:
-        return "unspecified";
+        return "Unspecified";
     }
   }
 
-  return raw.replace(/^SPAN_KIND_/, "").toLowerCase();
+  switch (raw.replace(/^SPAN_KIND_/, "").toLowerCase()) {
+    case "internal":
+      return "Internal";
+    case "server":
+      return "Server";
+    case "client":
+      return "Client";
+    case "producer":
+      return "Producer";
+    case "consumer":
+      return "Consumer";
+    default:
+      return "Unspecified";
+  }
 }
 
-function normalizeStatusCode(value: unknown): number | null {
+function normalizeStatusCode(value: unknown): OtelSpanStatusCode {
   const raw = enumStringOrNumber(value);
   if (raw === null) {
-    return null;
+    return "Unset";
   }
   if (typeof raw === "number") {
-    return raw;
+    return raw === 1 ? "Ok" : raw === 2 ? "Error" : "Unset";
   }
   switch (raw) {
     case "STATUS_CODE_OK":
     case "Ok":
     case "OK":
-      return 1;
+      return "Ok";
     case "STATUS_CODE_ERROR":
     case "Error":
     case "ERROR":
-      return 2;
+      return "Error";
     case "STATUS_CODE_UNSET":
     case "Unset":
     case "UNSET":
-      return 0;
+      return "Unset";
     default:
-      return null;
+      return "Unset";
   }
 }
 
@@ -257,11 +254,6 @@ function normalizeSpanEvents(
   args: {
     readonly traceId: string;
     readonly spanId: string;
-    readonly serviceName: string | null;
-    readonly resourceSchemaUrl: string | null;
-    readonly scopeName: string | null;
-    readonly scopeVersion: string | null;
-    readonly scopeSchemaUrl: string | null;
   },
 ): ReadonlyArray<NormalizedSpanEventRecord> {
   const events: Array<NormalizedSpanEventRecord> = [];
@@ -272,25 +264,32 @@ function normalizeSpanEvents(
       continue;
     }
 
-    const attributes = keyValueArrayToObject(getRecordValue(event, "attributes"));
     events.push({
-      traceId: args.traceId,
-      spanId: args.spanId,
       timestamp,
       name,
-      serviceName: args.serviceName,
-      resourceSchemaUrl: args.resourceSchemaUrl,
-      scopeName: args.scopeName,
-      scopeVersion: args.scopeVersion,
-      scopeSchemaUrl: args.scopeSchemaUrl,
-      attributesJson: jsonStringOrNull(attributes),
-      droppedAttributesCount: integerOrNull(
-        getRecordValue(event, "droppedAttributesCount", "dropped_attributes_count"),
-      ),
-      rawEventJson: JSON.stringify(event),
+      attributes: otelAttributeMap(getRecordValue(event, "attributes")),
     });
   }
   return events;
+}
+
+function normalizeSpanLinks(span: Record<string, unknown>): ReadonlyArray<NormalizedSpanLinkRecord> {
+  const links: Array<NormalizedSpanLinkRecord> = [];
+  for (const link of toObjectArray(getRecordValue(span, "links"))) {
+    const traceId = optionalHex(getRecordValue(link, "traceId", "trace_id"));
+    const spanId = optionalHex(getRecordValue(link, "spanId", "span_id"));
+    if (!traceId || !spanId) {
+      continue;
+    }
+
+    links.push({
+      traceId,
+      spanId,
+      traceState: stringOrNull(getRecordValue(link, "traceState", "trace_state")) ?? "",
+      attributes: otelAttributeMap(getRecordValue(link, "attributes")),
+    });
+  }
+  return links;
 }
 
 function nanoStringToBigInt(value: unknown): bigint | null {
@@ -307,18 +306,18 @@ function nanoStringToBigInt(value: unknown): bigint | null {
   return null;
 }
 
-function durationUsFromNanos(start: unknown, end: unknown): number | null {
+function durationNsFromNanos(start: unknown, end: unknown): number | null {
   const startNanos = nanoStringToBigInt(start);
   const endNanos = nanoStringToBigInt(end);
   if (startNanos === null || endNanos === null || endNanos < startNanos) {
     return null;
   }
 
-  const duration = Number((endNanos - startNanos) / 1_000n);
+  const duration = Number(endNanos - startNanos);
   return Number.isFinite(duration) ? duration : null;
 }
 
-function durationUsFromIso(startTime: string, endTime: string | null): number {
+function durationNsFromIso(startTime: string, endTime: string | null): number {
   if (endTime === null) {
     return 0;
   }
@@ -326,7 +325,7 @@ function durationUsFromIso(startTime: string, endTime: string | null): number {
   const startMs = new Date(startTime).getTime();
   const endMs = new Date(endTime).getTime();
   return Number.isFinite(startMs) && Number.isFinite(endMs) && endMs >= startMs
-    ? (endMs - startMs) * 1_000
+    ? (endMs - startMs) * 1_000_000
     : 0;
 }
 
@@ -336,7 +335,7 @@ function durationUsFromIso(startTime: string, endTime: string | null): number {
  * `NormalizedLogRecord` shape every storage path expects.
  *
  * Resource- and scope-level attributes are stamped onto each record so a
- * single `log_records` row carries enough context to be queried in isolation.
+ * single `otel_logs` row carries enough context to be queried in isolation.
  * Field name lookups try both `camelCase` (JSON) and `snake_case` (protobuf
  * → JSON) so the function works against either wire format without branching.
  */
@@ -346,31 +345,27 @@ export function normalizeOtlpDocument(document: Record<string, unknown>): Normal
 
   for (const resourceLog of resourceLogs) {
     const resource = toObjectRecord(getRecordValue(resourceLog, "resource"));
-    const resourceAttributes = keyValueArrayToObject(getRecordValue(resource ?? {}, "attributes"));
-    const resourceJson = jsonStringOrNull(resourceAttributes);
-    const serviceNameValue = resourceAttributes["service.name"];
-    const serviceName = typeof serviceNameValue === "string" ? serviceNameValue : null;
-    const resourceSchemaUrl = stringOrNull(getRecordValue(resourceLog, "schemaUrl", "schema_url"));
+    const resourceAttributes = otelAttributeMap(getRecordValue(resource ?? {}, "attributes"));
+    const serviceName = attributeString(resourceAttributes, "service.name");
+    const resourceSchemaUrl = stringOrNull(getRecordValue(resourceLog, "schemaUrl", "schema_url")) ?? "";
 
     const scopeLogs = toObjectArray(getRecordValue(resourceLog, "scopeLogs", "scope_logs"));
     for (const scopeLog of scopeLogs) {
       const scope = toObjectRecord(getRecordValue(scopeLog, "scope"));
-      const scopeAttributes = keyValueArrayToObject(getRecordValue(scope ?? {}, "attributes"));
-      const scopeJson = jsonStringOrNull(scopeAttributes);
-      const scopeName = stringOrNull(getRecordValue(scope ?? {}, "name"));
-      const scopeVersion = stringOrNull(getRecordValue(scope ?? {}, "version"));
-      const scopeSchemaUrl = stringOrNull(getRecordValue(scopeLog, "schemaUrl", "schema_url"));
+      const scopeAttributes = otelAttributeMap(getRecordValue(scope ?? {}, "attributes"));
+      const scopeName = stringOrNull(getRecordValue(scope ?? {}, "name")) ?? "";
+      const scopeVersion = stringOrNull(getRecordValue(scope ?? {}, "version")) ?? "";
+      const scopeSchemaUrl = stringOrNull(getRecordValue(scopeLog, "schemaUrl", "schema_url")) ?? "";
 
       const logRecords = toObjectArray(getRecordValue(scopeLog, "logRecords", "log_records"));
       for (const logRecord of logRecords) {
-        const attributes = keyValueArrayToObject(getRecordValue(logRecord, "attributes"));
-        const { bodyText, bodyJson } = normalizeBody(getRecordValue(logRecord, "body"));
+        const logAttributes = otelAttributeMap(getRecordValue(logRecord, "attributes"));
         const traceId =
           bytesToHex(getRecordValue(logRecord, "traceId", "trace_id")) ??
-          attributeStringOrNull(attributes, "traceId");
+          attributeString(logAttributes, "traceId");
         const spanId =
           bytesToHex(getRecordValue(logRecord, "spanId", "span_id")) ??
-          attributeStringOrNull(attributes, "spanId");
+          attributeString(logAttributes, "spanId");
 
         records.push({
           timestamp: parseTimestamp(getRecordValue(logRecord, "timeUnixNano", "time_unix_nano")),
@@ -379,25 +374,20 @@ export function normalizeOtlpDocument(document: Record<string, unknown>): Normal
           ),
           traceId,
           spanId,
-          traceFlags: scalarStringOrNull(getRecordValue(logRecord, "flags")),
+          traceFlags: integerOrNull(getRecordValue(logRecord, "flags")) ?? 0,
           severityNumber: numberOrNull(
             getRecordValue(logRecord, "severityNumber", "severity_number"),
-          ),
-          severityText: stringOrNull(getRecordValue(logRecord, "severityText", "severity_text")),
+          ) ?? 0,
+          severityText: stringOrNull(getRecordValue(logRecord, "severityText", "severity_text")) ?? "",
           serviceName,
           resourceSchemaUrl,
+          resourceAttributes,
+          scopeSchemaUrl,
           scopeName,
           scopeVersion,
-          scopeSchemaUrl,
-          bodyText,
-          bodyJson,
-          resourceJson,
-          scopeJson,
-          attributesJson: jsonStringOrNull(attributes),
-          droppedAttributesCount: numberOrNull(
-            getRecordValue(logRecord, "droppedAttributesCount", "dropped_attributes_count"),
-          ),
-          rawRecordJson: JSON.stringify(logRecord),
+          scopeAttributes,
+          body: normalizeBody(getRecordValue(logRecord, "body")),
+          logAttributes,
         });
       }
     }
@@ -420,20 +410,14 @@ export function normalizeOtlpTraceDocument(document: Record<string, unknown>): N
 
   for (const resourceSpan of resourceSpans) {
     const resource = toObjectRecord(getRecordValue(resourceSpan, "resource"));
-    const resourceAttributes = keyValueArrayToObject(getRecordValue(resource ?? {}, "attributes"));
-    const resourceJson = jsonStringOrNull(resourceAttributes);
-    const serviceNameValue = resourceAttributes["service.name"];
-    const serviceName = typeof serviceNameValue === "string" ? serviceNameValue : null;
-    const resourceSchemaUrl = stringOrNull(getRecordValue(resourceSpan, "schemaUrl", "schema_url"));
+    const resourceAttributes = otelAttributeMap(getRecordValue(resource ?? {}, "attributes"));
+    const serviceName = attributeString(resourceAttributes, "service.name");
 
     const scopeSpans = toObjectArray(getRecordValue(resourceSpan, "scopeSpans", "scope_spans"));
     for (const scopeSpan of scopeSpans) {
       const scope = toObjectRecord(getRecordValue(scopeSpan, "scope"));
-      const scopeAttributes = keyValueArrayToObject(getRecordValue(scope ?? {}, "attributes"));
-      const scopeJson = jsonStringOrNull(scopeAttributes);
-      const scopeName = stringOrNull(getRecordValue(scope ?? {}, "name"));
-      const scopeVersion = stringOrNull(getRecordValue(scope ?? {}, "version"));
-      const scopeSchemaUrl = stringOrNull(getRecordValue(scopeSpan, "schemaUrl", "schema_url"));
+      const scopeName = stringOrNull(getRecordValue(scope ?? {}, "name")) ?? "";
+      const scopeVersion = stringOrNull(getRecordValue(scope ?? {}, "version")) ?? "";
 
       const rawSpans = toObjectArray(getRecordValue(scopeSpan, "spans"));
       for (const span of rawSpans) {
@@ -451,41 +435,29 @@ export function normalizeOtlpTraceDocument(document: Record<string, unknown>): N
           continue;
         }
 
-        const attributes = keyValueArrayToObject(getRecordValue(span, "attributes"));
         const status = toObjectRecord(getRecordValue(span, "status"));
 
         spans.push({
           traceId,
           spanId,
-          parentSpanId: optionalHex(getRecordValue(span, "parentSpanId", "parent_span_id")),
-          name,
-          kind: normalizeSpanKind(getRecordValue(span, "kind")),
-          startTime,
-          endTime,
-          durationUs: durationUsFromNanos(startValue, endValue) ?? durationUsFromIso(startTime, endTime),
+          parentSpanId: optionalHex(getRecordValue(span, "parentSpanId", "parent_span_id")) ?? "",
+          traceState: stringOrNull(getRecordValue(span, "traceState", "trace_state")) ?? "",
+          timestamp: startTime,
+          spanName: name,
+          spanKind: normalizeSpanKind(getRecordValue(span, "kind")),
           statusCode: normalizeStatusCode(getRecordValue(status ?? {}, "code")),
-          statusMessage: stringOrNull(getRecordValue(status ?? {}, "message")),
+          statusMessage: stringOrNull(getRecordValue(status ?? {}, "message")) ?? "",
           serviceName,
-          resourceSchemaUrl,
+          resourceAttributes,
           scopeName,
           scopeVersion,
-          scopeSchemaUrl,
-          resourceJson,
-          scopeJson,
-          attributesJson: jsonStringOrNull(attributes),
-          droppedAttributesCount: integerOrNull(
-            getRecordValue(span, "droppedAttributesCount", "dropped_attributes_count"),
-          ),
-          rawSpanJson: JSON.stringify(span),
+          spanAttributes: otelAttributeMap(getRecordValue(span, "attributes")),
+          durationNs: durationNsFromNanos(startValue, endValue) ?? durationNsFromIso(startTime, endTime),
           events: normalizeSpanEvents(span, {
             traceId,
             spanId,
-            serviceName,
-            resourceSchemaUrl,
-            scopeName,
-            scopeVersion,
-            scopeSchemaUrl,
           }),
+          links: normalizeSpanLinks(span),
         });
       }
     }

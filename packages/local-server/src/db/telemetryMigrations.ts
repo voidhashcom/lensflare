@@ -7,15 +7,8 @@ interface TelemetryMigration {
 
 const migrations: ReadonlyArray<TelemetryMigration> = [
   {
-    id: "0001_create_telemetry_tables",
+    id: "0001_create_otel_telemetry_tables",
     async apply(connection) {
-      await connection.run(`
-        CREATE TABLE IF NOT EXISTS telemetry_migrations (
-          id TEXT PRIMARY KEY,
-          applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-      `);
-
       await connection.run(`
         CREATE TABLE IF NOT EXISTS ingest_batches (
           id TEXT PRIMARY KEY,
@@ -29,134 +22,86 @@ const migrations: ReadonlyArray<TelemetryMigration> = [
           request_content_encoding TEXT,
           request_bytes BIGINT NOT NULL,
           accepted_records BIGINT NOT NULL,
-          received_at TIMESTAMP NOT NULL,
+          received_at TIMESTAMP_NS NOT NULL,
           client_addr TEXT
         )
       `);
 
       await connection.run(`
-        CREATE TABLE IF NOT EXISTS log_records (
-          id TEXT PRIMARY KEY,
-          batch_id TEXT NOT NULL,
-          project_id TEXT NOT NULL,
-          project_slug TEXT NOT NULL,
-          dataset_id TEXT NOT NULL,
-          dataset_slug TEXT NOT NULL,
-          provider_kind TEXT NOT NULL,
-          ingested_at TIMESTAMP NOT NULL,
-          timestamp TIMESTAMP,
-          observed_timestamp TIMESTAMP,
-          trace_id TEXT,
-          span_id TEXT,
-          trace_flags TEXT,
-          severity_number INTEGER,
-          severity_text TEXT,
-          service_name TEXT,
-          resource_schema_url TEXT,
-          scope_name TEXT,
-          scope_version TEXT,
-          scope_schema_url TEXT,
-          body_text TEXT,
-          body_json JSON,
-          resource_json JSON,
-          scope_json JSON,
-          attributes_json JSON,
-          dropped_attributes_count INTEGER,
-          raw_record_json JSON
+        CREATE TABLE IF NOT EXISTS otel_logs (
+          LensflareRecordId TEXT PRIMARY KEY,
+          BatchId TEXT NOT NULL,
+          Timestamp TIMESTAMP_NS NOT NULL,
+          TraceId TEXT NOT NULL,
+          SpanId TEXT NOT NULL,
+          TraceFlags UINTEGER NOT NULL,
+          SeverityText TEXT NOT NULL,
+          SeverityNumber INTEGER NOT NULL,
+          ServiceName TEXT NOT NULL,
+          Body TEXT NOT NULL,
+          ResourceSchemaUrl TEXT NOT NULL,
+          ResourceAttributes MAP(VARCHAR, VARCHAR) NOT NULL,
+          ScopeSchemaUrl TEXT NOT NULL,
+          ScopeName TEXT NOT NULL,
+          ScopeVersion TEXT NOT NULL,
+          ScopeAttributes MAP(VARCHAR, VARCHAR) NOT NULL,
+          LogAttributes MAP(VARCHAR, VARCHAR) NOT NULL
         )
       `);
 
       await connection.run(`
-        CREATE INDEX IF NOT EXISTS log_records_dataset_slug_idx
-        ON log_records (dataset_slug, ingested_at)
+        CREATE INDEX IF NOT EXISTS otel_logs_time_idx
+        ON otel_logs (Timestamp, LensflareRecordId)
       `);
       await connection.run(`
-        CREATE INDEX IF NOT EXISTS log_records_batch_id_idx
-        ON log_records (batch_id)
+        CREATE INDEX IF NOT EXISTS otel_logs_trace_idx
+        ON otel_logs (TraceId)
       `);
-    },
-  },
-  {
-    id: "0002_create_span_records",
-    async apply(connection) {
       await connection.run(`
-        CREATE TABLE IF NOT EXISTS span_records (
-          id TEXT PRIMARY KEY,
-          batch_id TEXT NOT NULL,
-          project_id TEXT NOT NULL,
-          project_slug TEXT NOT NULL,
-          dataset_id TEXT NOT NULL,
-          dataset_slug TEXT NOT NULL,
-          provider_kind TEXT NOT NULL,
-          ingested_at TIMESTAMP NOT NULL,
-          trace_id TEXT NOT NULL,
-          span_id TEXT NOT NULL,
-          parent_span_id TEXT,
-          name TEXT NOT NULL,
-          kind TEXT,
-          start_time TIMESTAMP NOT NULL,
-          end_time TIMESTAMP,
-          duration_us BIGINT NOT NULL,
-          status_code INTEGER,
-          status_message TEXT,
-          service_name TEXT,
-          resource_schema_url TEXT,
-          scope_name TEXT,
-          scope_version TEXT,
-          scope_schema_url TEXT,
-          resource_json JSON,
-          scope_json JSON,
-          attributes_json JSON,
-          dropped_attributes_count INTEGER,
-          raw_span_json JSON
+        CREATE INDEX IF NOT EXISTS otel_logs_service_idx
+        ON otel_logs (ServiceName, SeverityText, Timestamp)
+      `);
+
+      await connection.run(`
+        CREATE TABLE IF NOT EXISTS otel_traces (
+          LensflareRecordId TEXT PRIMARY KEY,
+          BatchId TEXT NOT NULL,
+          Timestamp TIMESTAMP_NS NOT NULL,
+          TraceId TEXT NOT NULL,
+          SpanId TEXT NOT NULL,
+          ParentSpanId TEXT NOT NULL,
+          TraceState TEXT NOT NULL,
+          SpanName TEXT NOT NULL,
+          SpanKind TEXT NOT NULL,
+          ServiceName TEXT NOT NULL,
+          ResourceAttributes MAP(VARCHAR, VARCHAR) NOT NULL,
+          ScopeName TEXT NOT NULL,
+          ScopeVersion TEXT NOT NULL,
+          SpanAttributes MAP(VARCHAR, VARCHAR) NOT NULL,
+          Duration BIGINT NOT NULL,
+          StatusCode TEXT NOT NULL,
+          StatusMessage TEXT NOT NULL,
+          "Events.Timestamp" TIMESTAMP_NS[] NOT NULL,
+          "Events.Name" TEXT[] NOT NULL,
+          "Events.Attributes" MAP(VARCHAR, VARCHAR)[] NOT NULL,
+          "Links.TraceId" TEXT[] NOT NULL,
+          "Links.SpanId" TEXT[] NOT NULL,
+          "Links.TraceState" TEXT[] NOT NULL,
+          "Links.Attributes" MAP(VARCHAR, VARCHAR)[] NOT NULL
         )
       `);
 
       await connection.run(`
-        CREATE INDEX IF NOT EXISTS span_records_trace_idx
-        ON span_records (project_id, dataset_id, trace_id, start_time)
+        CREATE INDEX IF NOT EXISTS otel_traces_time_idx
+        ON otel_traces (Timestamp, LensflareRecordId)
       `);
       await connection.run(`
-        CREATE INDEX IF NOT EXISTS span_records_batch_id_idx
-        ON span_records (batch_id)
-      `);
-    },
-  },
-  {
-    id: "0003_create_span_event_records",
-    async apply(connection) {
-      await connection.run(`
-        CREATE TABLE IF NOT EXISTS span_event_records (
-          id TEXT PRIMARY KEY,
-          batch_id TEXT NOT NULL,
-          project_id TEXT NOT NULL,
-          project_slug TEXT NOT NULL,
-          dataset_id TEXT NOT NULL,
-          dataset_slug TEXT NOT NULL,
-          provider_kind TEXT NOT NULL,
-          ingested_at TIMESTAMP NOT NULL,
-          trace_id TEXT NOT NULL,
-          span_id TEXT NOT NULL,
-          timestamp TIMESTAMP NOT NULL,
-          name TEXT NOT NULL,
-          service_name TEXT,
-          resource_schema_url TEXT,
-          scope_name TEXT,
-          scope_version TEXT,
-          scope_schema_url TEXT,
-          attributes_json JSON,
-          dropped_attributes_count INTEGER,
-          raw_event_json JSON
-        )
-      `);
-
-      await connection.run(`
-        CREATE INDEX IF NOT EXISTS span_event_records_span_idx
-        ON span_event_records (project_id, dataset_id, trace_id, span_id, timestamp)
+        CREATE INDEX IF NOT EXISTS otel_traces_trace_idx
+        ON otel_traces (TraceId, Timestamp)
       `);
       await connection.run(`
-        CREATE INDEX IF NOT EXISTS span_event_records_batch_id_idx
-        ON span_event_records (batch_id)
+        CREATE INDEX IF NOT EXISTS otel_traces_service_idx
+        ON otel_traces (ServiceName, SpanName, Timestamp)
       `);
     },
   },

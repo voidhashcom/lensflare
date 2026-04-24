@@ -30,7 +30,7 @@ describe("compileTelemetryFilterToSql", () => {
     );
 
     expect(result.whereClause).toBe(
-      "(json_extract_string(telemetry.attributes_json, '$.http.method') = $flt_0)",
+      "(COALESCE(telemetry.attributes_json['http.method'], telemetry.attributes_json['method']) = $flt_0)",
     );
   });
 
@@ -45,9 +45,8 @@ describe("compileTelemetryFilterToSql", () => {
 
     expect(result.whereClause).toContain("telemetry.kind = 'span'");
     expect(result.whereClause).toContain("EXISTS");
-    expect(result.whereClause).toContain(
-      "json_extract_string(related.attributes_json, '$.\"exception.type\"')",
-    );
+    expect(result.whereClause).toContain('related."Events.Attributes"[event_index.i]');
+    expect(result.whereClause).toContain("['exception.type']");
     expect(result.params).toStrictEqual({ flt_0: "%timeouterror%" });
   });
 });

@@ -88,8 +88,8 @@ export class LogIngestService extends Context.Service<
             signal: "traces",
             spans: input.batch.spans,
           } as const;
-          const { batchId, records, events: spanEvents } = yield* spans.writeBatch(request);
-          yield* events.publishSpanBatch(request, records, spanEvents);
+          const { batchId, records } = yield* spans.writeBatch(request);
+          yield* events.publishSpanBatch(request, records);
 
           return {
             batchId,

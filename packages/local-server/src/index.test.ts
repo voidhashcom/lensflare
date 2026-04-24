@@ -441,11 +441,11 @@ describe("startLocalServer", () => {
     try {
       const spanRows = await queryDuckDb(
         duckdbDatabaseFile,
-        "SELECT COUNT(*) AS count FROM span_records WHERE project_slug = 'lensflare' AND dataset_slug = 'lensflare-dev'",
+        "SELECT COUNT(*) AS count FROM otel_traces",
       );
       const logRows = await queryDuckDb(
         duckdbDatabaseFile,
-        "SELECT COUNT(*) AS count FROM log_records WHERE project_slug = 'lensflare' AND dataset_slug = 'lensflare-dev'",
+        "SELECT COUNT(*) AS count FROM otel_logs",
       );
 
       expect(Number(spanRows[0]?.count ?? 0)).toBeGreaterThan(0);
