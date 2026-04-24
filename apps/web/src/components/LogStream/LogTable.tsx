@@ -45,9 +45,15 @@ export interface LogTableHandle {
  * `items-center` + truncating cells keeps every row a single line tall so the
  * list height is stable when the details panel opens and the table
  * container narrows.
+ *
+ * `min-w-[75rem]` pins the header and every row to the natural sum of their
+ * column tracks (6 + 14 + 14 + 8 + 16 + 7 + 1.5 rem columns, 6rem of gaps,
+ * 2rem of padding ≈ 74.5rem). When the surrounding container is narrower the
+ * enclosing scroll wrapper takes over and pans sideways instead of letting
+ * the `Name / Message` column collapse or the header labels wrap.
  */
 const ROW_GRID_CLASS =
-  "grid grid-cols-[6rem_14rem_14rem_8rem_minmax(0,1fr)_7rem_auto] items-center gap-4 px-4";
+  "grid min-w-[75rem] grid-cols-[6rem_14rem_14rem_8rem_minmax(0,1fr)_7rem_auto] items-center gap-4 px-4";
 
 const ROW_ESTIMATED_SIZE = 40;
 
@@ -155,30 +161,45 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
 
   return (
     <div className={cn("relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden", className)}>
-      <Header />
-      <LegendList
-        className="min-h-0 min-w-0 flex-1"
-        data={logs as Array<TelemetryEntry>}
-        estimatedItemSize={ROW_ESTIMATED_SIZE}
-        extraData={{ onSelectLog, selectedLogId }}
-        keyExtractor={extractLogKey}
-        // Keep short log sets anchored to the top of the viewport; live-tail
-        // following is handled separately by `maintainScrollAtEnd`.
-        maintainScrollAtEnd={true}
-        ListHeaderComponent={
-          hasPreviousPage ? (
-            <LoadPreviousHeader loading={isLoadingPrevious} onClick={loadPreviousPage} />
-          ) : logs.length > 0 ? (
-            <StartOfLogsHeader />
-          ) : null
-        }
-        ListFooterComponent={waiting ? <WaitingFooter /> : null}
-        onScroll={handleScroll}
-        recycleItems
-        ref={listRef}
-        renderItem={renderRow}
-        style={{ minHeight: 0, width: "100%" }}
-      />
+      {/*
+       * Inner wrapper is the horizontal scroll container: the header and the
+       * virtualised row list must pan together so columns stay aligned, which
+       * means both need to live inside the same `overflow-x-auto` box. We pin
+       * `overflow-y: hidden` here because LegendList owns vertical scrolling
+       * internally — otherwise this wrapper would fight it for the vertical
+       * scrollbar. The outer container keeps `overflow: hidden` so the
+       * absolutely-positioned "Jump to end" button stays anchored to the
+       * viewport instead of scrolling off sideways with the content.
+       */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-auto overflow-y-hidden">
+        <Header />
+        <LegendList
+          // `min-w-[75rem]` matches the row grid's natural width so the list's
+          // internal scroll container is as wide as the rows it renders,
+          // avoiding a second (inner) horizontal scrollbar.
+          className="min-h-0 min-w-[75rem] flex-1"
+          data={logs as Array<TelemetryEntry>}
+          estimatedItemSize={ROW_ESTIMATED_SIZE}
+          extraData={{ onSelectLog, selectedLogId }}
+          keyExtractor={extractLogKey}
+          // Keep short log sets anchored to the top of the viewport; live-tail
+          // following is handled separately by `maintainScrollAtEnd`.
+          maintainScrollAtEnd={true}
+          ListHeaderComponent={
+            hasPreviousPage ? (
+              <LoadPreviousHeader loading={isLoadingPrevious} onClick={loadPreviousPage} />
+            ) : logs.length > 0 ? (
+              <StartOfLogsHeader />
+            ) : null
+          }
+          ListFooterComponent={waiting ? <WaitingFooter /> : null}
+          onScroll={handleScroll}
+          recycleItems
+          ref={listRef}
+          renderItem={renderRow}
+          style={{ minHeight: 0, width: "100%" }}
+        />
+      </div>
       {showJumpToEnd ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-4">
           <Button
@@ -232,7 +253,11 @@ function Header() {
   return (
     <div
       className={cn(
-        "shrink-0 border-b border-border/60 bg-background/90 py-2 font-medium text-[11px] text-muted-foreground/70 uppercase tracking-wide backdrop-blur",
+        // `whitespace-nowrap` keeps each label on one line so the header's
+        // height is stable as the table container narrows — otherwise the
+        // `Name / Message` label wraps and the whole list jumps down by a
+        // line or two.
+        "shrink-0 whitespace-nowrap border-b border-border/60 bg-background/90 py-2 font-medium text-[11px] text-muted-foreground/70 uppercase tracking-wide backdrop-blur",
         ROW_GRID_CLASS,
       )}
     >
