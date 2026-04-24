@@ -172,14 +172,14 @@ export function FilterQueryInput({
           const count = suggestionCountRef.current;
           if (count <= 0) return false;
           event.preventDefault();
-          const direction = event.key === "ArrowDown" ? 1 : -1;
-          setHighlightedSuggestionIndex((index) =>
-            index === null
-              ? event.key === "ArrowDown"
-                ? 0
-                : count - 1
-              : modulo(index + direction, count),
-          );
+          setHighlightedSuggestionIndex((index) => {
+            if (index === null) {
+              return event.key === "ArrowDown" ? 0 : count - 1;
+            }
+
+            const nextIndex = event.key === "ArrowDown" ? index + 1 : index - 1;
+            return nextIndex < 0 || nextIndex >= count ? null : nextIndex;
+          });
           return true;
         }
 
@@ -457,13 +457,13 @@ export function FilterQueryInput({
 
       <CommandDialogPopup
         aria-label="Dataset filter"
-        className="max-w-2xl overflow-hidden p-0"
+        className="max-h-[min(52rem,calc(100vh-2rem))] max-w-2xl overflow-hidden p-0"
         finalFocus={() => {
           triggerRef.current?.focus();
           return false;
         }}
       >
-        <div className="border-b px-4 py-3">
+        <div className="shrink-0 border-b px-4 py-3">
           <div className="flex items-start gap-2">
             <SearchIcon className="mt-2 size-4 shrink-0 text-muted-foreground/80" />
             <div className="relative min-w-0 flex-1">
@@ -493,7 +493,7 @@ export function FilterQueryInput({
             ) : null}
           </div>
         </div>
-        <CommandPanel className="max-h-[min(26rem,60vh)] rounded-none border-x-0 border-t-0 shadow-none [clip-path:none] before:hidden">
+        <CommandPanel className="min-h-0 flex-1 overflow-hidden rounded-none border-x-0 border-t-0 shadow-none [clip-path:none] before:hidden">
           <FilterSuggestionsPanel
             cursorContext={parsed.cursorContext}
             datasetId={datasetId}
@@ -501,7 +501,6 @@ export function FilterQueryInput({
             highlightedSuggestionIndex={highlightedSuggestionIndex}
             onApplySuggestion={handleApplySuggestion}
             onEditPill={handleEditPill}
-            onHighlightSuggestion={setHighlightedSuggestionIndex}
             onRemovePill={handleRemovePill}
             onSuggestionCountChange={handleSuggestionCountChange}
             pills={parsed.pills}
@@ -509,7 +508,7 @@ export function FilterQueryInput({
             suggestionsId={suggestionsId}
           />
         </CommandPanel>
-        <CommandFooter className="gap-3 max-sm:flex-col max-sm:items-start">
+        <CommandFooter className="shrink-0 gap-3 max-sm:flex-col max-sm:items-start">
           <div className="flex items-center gap-3">
             <KbdGroup className="items-center gap-1.5">
               <Kbd>↑</Kbd>
@@ -595,10 +594,6 @@ function getEditorTextOffset(editor: Editor): number {
 
 function clampTextOffset(offset: number, text: string): number {
   return Math.max(0, Math.min(offset, text.length));
-}
-
-function modulo(value: number, size: number): number {
-  return ((value % size) + size) % size;
 }
 
 function cursorContextToKey(context: ReturnType<typeof parseFilterInput>["cursorContext"]): string {

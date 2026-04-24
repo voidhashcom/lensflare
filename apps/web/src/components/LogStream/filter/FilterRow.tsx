@@ -1,10 +1,13 @@
 import type { FilterOperator } from "@lensflare/contracts";
 import { TrashIcon } from "lucide-react";
-import { useMemo } from "react";
+import { useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import {
   Combobox,
+  ComboboxChip,
+  ComboboxChips,
+  ComboboxChipsInput,
   ComboboxEmpty,
   ComboboxInput,
   ComboboxItem,
@@ -14,15 +17,18 @@ import {
 import { Input } from "~/components/ui/input";
 import {
   Select,
-  SelectButton,
   SelectItem,
   SelectPopup,
+  SelectTrigger,
+  SelectValue,
 } from "~/components/ui/select";
 import type { TelemetryLogField } from "~/data/logApi";
+import { cn } from "~/lib/utils";
 
-import { limitAttributeFieldSuggestions } from "./fieldSuggestionLimits";
+import { FieldTypeBadge } from "./FieldTypeBadge";
 import { useFieldValues } from "./hooks/useFieldValues";
 import {
+  LIST_OPERATORS,
   OPERATOR_LABELS,
   UNARY_OPERATORS,
   operatorsForField,
@@ -33,7 +39,6 @@ interface FilterRowProps {
   projectId: string;
   datasetId: string;
   draft: FilterRowDraft;
-  fields: ReadonlyArray<TelemetryLogField>;
   onChange: (next: FilterRowDraft) => void;
   onRemove: () => void;
 }
@@ -42,44 +47,22 @@ function fieldLabel(field: TelemetryLogField): string {
   return field.label;
 }
 
-function fieldKey(field: TelemetryLogField): string {
-  return field.path.join(".");
-}
-
 /**
  * A single editable `{ field, operator, value }` row inside the query builder
- * popover. The three inputs are coupled:
- *   - Picking a field resets the operator to the first valid choice for its
- *     kind (so e.g. switching from `level` → `status_code` drops `contains`).
- *   - Switching to a unary operator (`exists` / `notExists`) clears the value
- *     because the AST won't carry one anyway.
- *   - When the backend has known values for the field (enum, or harvested
- *     `values` attached to the catalog entry), the value input becomes a
- *     combobox that autocompletes against those values while still accepting
- *     free text.
+ * popover. The field is fixed to the parsed pill; changing the operator or
+ * value rewrites that pill back into the source query.
  */
 export function FilterRow({
   projectId,
   datasetId,
   draft,
-  fields,
   onChange,
   onRemove,
 }: FilterRowProps) {
   const field = draft.field;
   const operators = field === null ? [] : operatorsForField(field.kind);
   const isUnary = UNARY_OPERATORS.includes(draft.operator);
-  const fieldOptions = useMemo(() => {
-    const limited = limitAttributeFieldSuggestions(fields);
-    if (field === null) return limited;
-
-    const selectedKey = fieldKey(field);
-    if (limited.some((option) => fieldKey(option) === selectedKey)) {
-      return limited;
-    }
-
-    return [field, ...limited];
-  }, [field, fields]);
+  const isListOperator = LIST_OPERATORS.includes(draft.operator);
 
   // Only fetch distinct values from the server for enum-kinded fields or when
   // the catalog entry didn't include values pre-baked. Fetching for every
@@ -94,18 +77,6 @@ export function FilterRow({
   );
   const knownValues =
     field?.values && field.values.length > 0 ? field.values : valuesState.values;
-
-  const handleFieldChange = (next: TelemetryLogField | null) => {
-    if (next === null) {
-      onChange({ ...draft, field: null });
-      return;
-    }
-    const allowedOps = operatorsForField(next.kind);
-    const nextOp = allowedOps.includes(draft.operator)
-      ? draft.operator
-      : (allowedOps[0] ?? "eq");
-    onChange({ ...draft, field: next, operator: nextOp });
-  };
 
   const handleOperatorChange = (next: FilterOperator) => {
     const nextUnary = UNARY_OPERATORS.includes(next);
@@ -123,32 +94,19 @@ export function FilterRow({
   return (
     <div className="flex items-start gap-2">
       <div className="min-w-0 flex-[1.5]">
-        <Combobox
-          items={fieldOptions as Array<TelemetryLogField>}
-          itemToStringLabel={fieldLabel}
-          itemToStringValue={fieldKey}
-          onValueChange={(next) => handleFieldChange(next)}
-          value={field}
+        <div
+          className={cn(
+            "flex min-h-8 w-full min-w-0 items-center gap-2 rounded-lg border border-input bg-background px-[calc(--spacing(2.5)-1px)] text-sm shadow-xs/5 sm:min-h-7",
+            field === null && "border-destructive/40 bg-destructive/5",
+          )}
         >
-          <ComboboxInput placeholder="Field" size="sm" />
-          <ComboboxPopup>
-            <ComboboxList>
-              {(item: TelemetryLogField) => (
-                <ComboboxItem key={fieldKey(item)} value={item}>
-                  <div className="flex flex-col">
-                    <span className="text-foreground">{item.label}</span>
-                    {item.path.length > 1 ? (
-                      <span className="text-muted-foreground text-xs">
-                        {item.path.join(".")}
-                      </span>
-                    ) : null}
-                  </div>
-                </ComboboxItem>
-              )}
-            </ComboboxList>
-            <ComboboxEmpty>No fields.</ComboboxEmpty>
-          </ComboboxPopup>
-        </Combobox>
+          {field === null ? null : (
+            <FieldTypeBadge className="-ms-0.5 shrink-0" kind={field.kind} />
+          )}
+          <span className="min-w-0 truncate font-medium text-foreground">
+            {field === null ? "Unknown field" : fieldLabel(field)}
+          </span>
+        </div>
       </div>
 
       <div className="w-36 shrink-0">
@@ -157,7 +115,9 @@ export function FilterRow({
           onValueChange={(next: unknown) => handleOperatorChange(next as FilterOperator)}
           value={draft.operator}
         >
-          <SelectButton size="sm">{OPERATOR_LABELS[draft.operator]}</SelectButton>
+          <SelectTrigger size="sm">
+            <SelectValue>{OPERATOR_LABELS[draft.operator]}</SelectValue>
+          </SelectTrigger>
           <SelectPopup>
             {operators.map((op) => (
               <SelectItem key={op} value={op}>
@@ -171,6 +131,12 @@ export function FilterRow({
       <div className="min-w-0 flex-[1.5]">
         {isUnary ? (
           <Input disabled placeholder="—" size="sm" value="" />
+        ) : isListOperator && knownValues.length > 0 ? (
+          <ListValueCombobox
+            onChange={handleValueChange}
+            options={knownValues}
+            value={draft.value}
+          />
         ) : knownValues.length > 0 ? (
           <Combobox
             inputValue={draft.value}
@@ -217,4 +183,57 @@ export function FilterRow({
       </Button>
     </div>
   );
+}
+
+interface ListValueComboboxProps {
+  value: string;
+  options: ReadonlyArray<string>;
+  onChange: (next: string) => void;
+}
+
+function ListValueCombobox({ value, options, onChange }: ListValueComboboxProps) {
+  const [inputValue, setInputValue] = useState("");
+  const selectedValues = splitListInput(value);
+
+  return (
+    <Combobox
+      inputValue={inputValue}
+      items={options as Array<string>}
+      multiple
+      onInputValueChange={setInputValue}
+      onValueChange={(next) => {
+        onChange(next.join(", "));
+        setInputValue("");
+      }}
+      value={selectedValues}
+    >
+      <ComboboxChips className="min-h-8 p-[calc(--spacing(1)-1px)] sm:min-h-7">
+        {selectedValues.map((item) => (
+          <ComboboxChip key={item}>{item}</ComboboxChip>
+        ))}
+        <ComboboxChipsInput
+          className="min-w-20"
+          placeholder={selectedValues.length === 0 ? "Select values" : ""}
+          size="sm"
+        />
+      </ComboboxChips>
+      <ComboboxPopup>
+        <ComboboxList>
+          {(item: string) => (
+            <ComboboxItem key={item} value={item}>
+              {item}
+            </ComboboxItem>
+          )}
+        </ComboboxList>
+        <ComboboxEmpty>No values.</ComboboxEmpty>
+      </ComboboxPopup>
+    </Combobox>
+  );
+}
+
+function splitListInput(value: string): Array<string> {
+  return value
+    .split(",")
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0);
 }

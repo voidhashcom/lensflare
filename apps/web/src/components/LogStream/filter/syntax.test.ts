@@ -118,6 +118,38 @@ describe("parseFilterInput — pills", () => {
     expect(pill.operator).toBe("ne");
   });
 
+  it("parses textual membership operator tokens", () => {
+    const source = "level:in:error,warn serviceName:notIn:api,worker ";
+    const result = parseFilterInput(source, source.length);
+
+    expect(result.pills[0]?.operatorToken).toBe(":in:");
+    expect(result.pills[0]?.operator).toBe("in");
+    expect(result.pills[0]?.rawValue).toBe("error,warn");
+    expect(result.pills[1]?.operatorToken).toBe(":notIn:");
+    expect(result.pills[1]?.operator).toBe("notIn");
+    expect(result.pills[1]?.rawValue).toBe("api,worker");
+  });
+
+  it("parses the textual regex operator token", () => {
+    const source = 'message:re:"error|fatal" ';
+    const result = parseFilterInput(source, source.length);
+    expect(result.pills[0]?.operatorToken).toBe(":re:");
+    expect(result.pills[0]?.operator).toBe("matchesRegex");
+    expect(result.pills[0]?.rawValue).toBe("error|fatal");
+  });
+
+  it("parses textual valueless operator tokens", () => {
+    const source = "level:exists: serviceName:notExists: ";
+    const result = parseFilterInput(source, source.length);
+
+    expect(result.pills[0]?.operatorToken).toBe(":exists:");
+    expect(result.pills[0]?.operator).toBe("exists");
+    expect(result.pills[0]?.rawValue).toBe("");
+    expect(result.pills[1]?.operatorToken).toBe(":notExists:");
+    expect(result.pills[1]?.operator).toBe("notExists");
+    expect(result.pills[1]?.rawValue).toBe("");
+  });
+
   it("treats `level:` (no value) as trailing, not a pill", () => {
     const result = parseFilterInput("level:", 6);
     expect(result.pills).toHaveLength(0);
@@ -299,6 +331,40 @@ describe("parsedToFilter", () => {
     });
   });
 
+  it("emits cmp nodes without values for valueless operators", () => {
+    const result = parseFilterInput(
+      "level:exists: serviceName:notExists:",
+      "level:exists: serviceName:notExists:".length,
+    );
+
+    expect(parsedToFilter(result, catalog)).toEqual({
+      _tag: "and",
+      children: [
+        {
+          _tag: "cmp",
+          field: { path: ["level"] },
+          op: "exists",
+        },
+        {
+          _tag: "cmp",
+          field: { path: ["serviceName"] },
+          op: "notExists",
+        },
+      ],
+    });
+  });
+
+  it("emits list values for textual membership operators", () => {
+    const result = parseFilterInput("level:in:error,warn", "level:in:error,warn".length);
+
+    expect(parsedToFilter(result, catalog)).toEqual({
+      _tag: "cmp",
+      field: { path: ["level"] },
+      op: "in",
+      value: { _tag: "list", values: ["error", "warn"] },
+    });
+  });
+
   it("combines committed pills with trailing free text", () => {
     const source = "level:error timeout";
     const result = parseFilterInput(source, source.length);
@@ -370,6 +436,13 @@ describe("serialisePill round-trip", () => {
     expect(pill.rawValue).toBe('a"b');
     expect(serialisePill(pill)).toBe('message:"a\\"b"');
   });
+
+  it("serialises valueless pills without adding an empty quoted value", () => {
+    const parsed = parseFilterInput("level:exists: ", "level:exists: ".length);
+    const pill = parsed.pills[0];
+    if (!pill) throw new Error("missing pill");
+    expect(serialisePill(pill)).toBe("level:exists:");
+  });
 });
 
 describe("operator token helpers", () => {
@@ -387,5 +460,10 @@ describe("operator token helpers", () => {
     expect(preferredTokenForOperator("eq", false, "number")).toBe("=");
     expect(preferredTokenForOperator("ne", false, "number")).toBe("!=");
     expect(preferredTokenForOperator("contains", true, "string")).toBe("!~");
+    expect(preferredTokenForOperator("in", false, "enum")).toBe(":in:");
+    expect(preferredTokenForOperator("notIn", false, "string")).toBe(":notIn:");
+    expect(preferredTokenForOperator("matchesRegex", false, "string")).toBe(":re:");
+    expect(preferredTokenForOperator("exists", false, "enum")).toBe(":exists:");
+    expect(preferredTokenForOperator("notExists", false, "number")).toBe(":notExists:");
   });
 });

@@ -49,6 +49,11 @@ export const OPERATOR_SYNTAX: ReadonlyArray<OperatorSyntax> = [
   { token: "<=", operator: "lte", negated: false, kinds: ["number"], label: "≤" },
   { token: ">", operator: "gt", negated: false, kinds: ["number"], label: ">" },
   { token: "<", operator: "lt", negated: false, kinds: ["number"], label: "<" },
+  { token: ":in:", operator: "in", negated: false, kinds: ["string", "number", "enum"], label: "is one of" },
+  { token: ":notIn:", operator: "notIn", negated: false, kinds: ["string", "number", "enum"], label: "is none of" },
+  { token: ":re:", operator: "matchesRegex", negated: false, kinds: ["string"], label: "matches regex" },
+  { token: ":exists:", operator: "exists", negated: false, kinds: ["string", "number", "enum"], label: "exists" },
+  { token: ":notExists:", operator: "notExists", negated: false, kinds: ["string", "number", "enum"], label: "does not exist" },
 ];
 
 /**
@@ -183,6 +188,19 @@ function tryReadPill(source: string, start: number): ParsedPill | null {
 
   const opRead = readOperatorToken(source, fieldRead.end);
   if (opRead === null) return null;
+
+  if (isValuelessOperator(opRead.syntax.operator)) {
+    return {
+      fieldPath: fieldRead.segments,
+      operatorToken: opRead.syntax.token,
+      operator: opRead.syntax.operator,
+      negated: opRead.syntax.negated,
+      rawValue: "",
+      valueWasQuoted: false,
+      start,
+      end: opRead.end,
+    };
+  }
 
   const valueRead = readValue(source, opRead.end);
   if (valueRead === null) return null;
@@ -436,6 +454,9 @@ function normaliseValuePrefix(valuePrefix: string): string {
  */
 export function serialisePill(pill: ParsedPill): string {
   const field = pill.fieldPath.join(".");
+  if (isValuelessOperator(pill.operator)) {
+    return `${field}${pill.operatorToken}`;
+  }
   const value = pill.valueWasQuoted || needsQuoting(pill.rawValue)
     ? `"${escapeQuoted(pill.rawValue)}"`
     : pill.rawValue;
@@ -493,6 +514,18 @@ export function parsedToFilter(
   for (const pill of pills) {
     const field = resolvePillField(pill, fields);
     if (field === null) continue;
+
+    if (isValuelessOperator(pill.operator)) {
+      const cmp: FilterNode = {
+        _tag: "cmp",
+        field: {
+          path: field.path as unknown as readonly [string, ...ReadonlyArray<string>],
+        },
+        op: pill.operator,
+      };
+      children.push(pill.negated ? { _tag: "not", child: cmp } : cmp);
+      continue;
+    }
 
     const value = buildFilterValue(field, pill.operator, pill.rawValue);
     if (value === undefined) continue;
@@ -581,10 +614,11 @@ export function preferredTokenForOperator(
     if (entry.negated !== negated) continue;
     if (entry.kinds.includes(kind)) return entry.token;
   }
-  // Shorthand doesn't exist for this op (e.g. matchesRegex / in / notIn);
-  // we can't represent it in the bare `source` form. Callers should keep it
-  // stored as a structured side-channel or drop it from the input — for now
-  // we return the closest fallback to keep the serialisation round-trippable
-  // enough for the current codepath.
+  // Keep an equality fallback for any future operator added to the contract
+  // before the query text grammar learns its source token.
   return ":";
+}
+
+function isValuelessOperator(operator: FilterOperator): boolean {
+  return operator === "exists" || operator === "notExists";
 }

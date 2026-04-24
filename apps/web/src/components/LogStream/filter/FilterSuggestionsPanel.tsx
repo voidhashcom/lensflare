@@ -1,5 +1,5 @@
 import type { FilterOperator } from "@lensflare/contracts";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import type { TelemetryLogField } from "~/data/logApi";
 import { cn } from "~/lib/utils";
@@ -57,7 +57,6 @@ interface FilterSuggestionsPanelProps {
   cursorContext: CursorContext;
   highlightedSuggestionIndex: number | null;
   onEditPill: (index: number, mutation: PillMutation) => void;
-  onHighlightSuggestion: (index: number) => void;
   onRemovePill: (index: number) => void;
   onApplySuggestion: (suggestion: FilterSuggestion) => void;
   onSuggestionCountChange: (count: number) => void;
@@ -75,7 +74,7 @@ interface FilterSuggestionsPanelProps {
  *      fields when the caret is in a field position, operators when it's in
  *      an operator position, and (for enum-ish fields) known values when in
  *      a value position. The list is derived purely from `cursorContext` and
- *      the catalog — it doesn't own any interaction state beyond hover.
+ *      the catalog.
  */
 export function FilterSuggestionsPanel({
   suggestionsId,
@@ -86,13 +85,15 @@ export function FilterSuggestionsPanel({
   cursorContext,
   highlightedSuggestionIndex,
   onEditPill,
-  onHighlightSuggestion,
   onRemovePill,
   onApplySuggestion,
   onSuggestionCountChange,
 }: FilterSuggestionsPanelProps) {
   return (
-    <div className="flex w-full min-w-0 flex-col divide-y" id={suggestionsId}>
+    <div
+      className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-y-auto divide-y"
+      id={suggestionsId}
+    >
       {pills.length > 0 ? (
         <QueryBuilderSection
           datasetId={datasetId}
@@ -109,7 +110,6 @@ export function FilterSuggestionsPanel({
         fields={fields}
         highlightedSuggestionIndex={highlightedSuggestionIndex}
         onApplySuggestion={onApplySuggestion}
-        onHighlightSuggestion={onHighlightSuggestion}
         onSuggestionCountChange={onSuggestionCountChange}
         projectId={projectId}
       />
@@ -218,7 +218,6 @@ function PillRow({
       <FilterRow
         datasetId={datasetId}
         draft={draft}
-        fields={fields}
         onChange={handleChange}
         onRemove={() => onRemovePill(index)}
         projectId={projectId}
@@ -246,7 +245,6 @@ interface SuggestionsSectionProps {
   cursorContext: CursorContext;
   highlightedSuggestionIndex: number | null;
   onApplySuggestion: (suggestion: FilterSuggestion) => void;
-  onHighlightSuggestion: (index: number) => void;
   onSuggestionCountChange: (count: number) => void;
 }
 
@@ -257,7 +255,6 @@ function SuggestionsSection({
   cursorContext,
   highlightedSuggestionIndex,
   onApplySuggestion,
-  onHighlightSuggestion,
   onSuggestionCountChange,
 }: SuggestionsSectionProps) {
   switch (cursorContext.kind) {
@@ -266,7 +263,6 @@ function SuggestionsSection({
         <FieldSuggestions
           fields={fields}
           highlightedSuggestionIndex={highlightedSuggestionIndex}
-          onHighlightSuggestion={onHighlightSuggestion}
           onSelect={(field) => onApplySuggestion({ kind: "field", field })}
           onSuggestionCountChange={onSuggestionCountChange}
           prefix={cursorContext.prefix}
@@ -277,7 +273,6 @@ function SuggestionsSection({
         <OperatorSuggestions
           fields={fields}
           highlightedSuggestionIndex={highlightedSuggestionIndex}
-          onHighlightSuggestion={onHighlightSuggestion}
           onSelect={(syntax) => onApplySuggestion({ kind: "operator", syntax })}
           onSuggestionCountChange={onSuggestionCountChange}
           path={cursorContext.fieldPath}
@@ -290,7 +285,6 @@ function SuggestionsSection({
           datasetId={datasetId}
           fields={fields}
           highlightedSuggestionIndex={highlightedSuggestionIndex}
-          onHighlightSuggestion={onHighlightSuggestion}
           onSelect={(value) => onApplySuggestion({ kind: "value", value })}
           onSuggestionCountChange={onSuggestionCountChange}
           path={cursorContext.fieldPath}
@@ -305,7 +299,6 @@ interface FieldSuggestionsProps {
   fields: ReadonlyArray<TelemetryLogField>;
   prefix: string;
   highlightedSuggestionIndex: number | null;
-  onHighlightSuggestion: (index: number) => void;
   onSelect: (field: TelemetryLogField) => void;
   onSuggestionCountChange: (count: number) => void;
 }
@@ -314,7 +307,6 @@ function FieldSuggestions({
   fields,
   prefix,
   highlightedSuggestionIndex,
-  onHighlightSuggestion,
   onSelect,
   onSuggestionCountChange,
 }: FieldSuggestionsProps) {
@@ -338,9 +330,7 @@ function FieldSuggestions({
       {suggestions.map((field, index) => (
         <SuggestionListItem
           highlighted={index === highlightedSuggestionIndex}
-          index={index}
           key={field.path.join(".")}
-          onHighlight={onHighlightSuggestion}
           onSelect={() => onSelect(field)}
         >
           <FieldTypeBadge className="-ms-0.5" kind={field.kind} />
@@ -365,7 +355,6 @@ interface OperatorSuggestionsProps {
   path: ReadonlyArray<string>;
   tokenPrefix: string;
   highlightedSuggestionIndex: number | null;
-  onHighlightSuggestion: (index: number) => void;
   onSelect: (syntax: OperatorSyntax) => void;
   onSuggestionCountChange: (count: number) => void;
 }
@@ -375,7 +364,6 @@ function OperatorSuggestions({
   path,
   tokenPrefix,
   highlightedSuggestionIndex,
-  onHighlightSuggestion,
   onSelect,
   onSuggestionCountChange,
 }: OperatorSuggestionsProps) {
@@ -396,9 +384,7 @@ function OperatorSuggestions({
       {options.map((syntax, index) => (
         <SuggestionListItem
           highlighted={index === highlightedSuggestionIndex}
-          index={index}
           key={`${syntax.token}-${syntax.operator}-${syntax.negated}`}
-          onHighlight={onHighlightSuggestion}
           onSelect={() => onSelect(syntax)}
         >
           <span className="w-12 font-mono text-foreground text-sm">
@@ -421,7 +407,6 @@ interface ValueSuggestionsProps {
   path: ReadonlyArray<string>;
   valuePrefix: string;
   highlightedSuggestionIndex: number | null;
-  onHighlightSuggestion: (index: number) => void;
   onSelect: (value: string) => void;
   onSuggestionCountChange: (count: number) => void;
 }
@@ -433,7 +418,6 @@ function ValueSuggestions({
   path,
   valuePrefix,
   highlightedSuggestionIndex,
-  onHighlightSuggestion,
   onSelect,
   onSuggestionCountChange,
 }: ValueSuggestionsProps) {
@@ -494,9 +478,7 @@ function ValueSuggestions({
       {filtered.map((value, index) => (
         <SuggestionListItem
           highlighted={index === highlightedSuggestionIndex}
-          index={index}
           key={value}
-          onHighlight={onHighlightSuggestion}
           onSelect={() => onSelect(value)}
         >
           <span className="truncate text-foreground">{value}</span>
@@ -536,19 +518,22 @@ function SuggestionList({ title, emptyLabel, children }: SuggestionListProps) {
 
 interface SuggestionListItemProps {
   highlighted: boolean;
-  index: number;
-  onHighlight: (index: number) => void;
   onSelect: () => void;
   children: React.ReactNode;
 }
 
 function SuggestionListItem({
   highlighted,
-  index,
-  onHighlight,
   onSelect,
   children,
 }: SuggestionListItemProps) {
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!highlighted) return;
+    buttonRef.current?.scrollIntoView({ block: "nearest" });
+  }, [highlighted]);
+
   return (
     <li aria-selected={highlighted} role="option">
       <button
@@ -563,8 +548,8 @@ function SuggestionListItem({
         onMouseDown={(event) => {
           event.preventDefault();
         }}
-        onMouseEnter={() => onHighlight(index)}
         onClick={onSelect}
+        ref={buttonRef}
         type="button"
       >
         {children}
