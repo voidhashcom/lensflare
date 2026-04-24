@@ -143,19 +143,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          SIGNED_ARGS=()
+          SIGNED_ARG=""
           if [[ "${{ matrix.platform }}" == "mac" && -n "${CSC_LINK:-}" && -n "${CSC_KEY_PASSWORD:-}" && -n "${APPLE_API_KEY:-}" && -n "${APPLE_API_KEY_ID:-}" && -n "${APPLE_API_ISSUER:-}" ]]; then
-            SIGNED_ARGS+=(--signed)
-          fi
-          if [[ "${{ matrix.platform }}" == "win" && -n "${AZURE_TRUSTED_SIGNING_PUBLISHER_NAME:-}" && -n "${AZURE_TRUSTED_SIGNING_ENDPOINT:-}" && -n "${AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME:-}" && -n "${AZURE_TRUSTED_SIGNING_ACCOUNT_NAME:-}" ]]; then
-            SIGNED_ARGS+=(--signed)
+            SIGNED_ARG="--signed"
           fi
           pnpm run release:desktop:artifact -- \
             --platform "${{ matrix.platform }}" \
             --arch "${{ matrix.arch }}" \
             --target "${{ matrix.target }}" \
             --build-version "${{ needs.prepare.outputs.version }}" \
-            "${SIGNED_ARGS[@]}"
+            ${SIGNED_ARG}
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.platform }}-${{ matrix.arch }}
