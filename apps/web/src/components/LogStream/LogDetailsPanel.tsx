@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Checkbox } from "~/components/ui/checkbox";
 import { ScrollArea } from "~/components/ui/scroll-area";
+import { Skeleton } from "~/components/ui/skeleton";
 import { TopTabsItem, TopTabsList, TopTabsTrigger } from "~/components/ui/top-tabs";
 import { getLogTraceContext } from "~/data/logApi";
 import { cn } from "~/lib/utils";
@@ -20,6 +21,12 @@ import type { TelemetryEntry, TraceContext } from "./types";
 type LogDetailsTab = "properties" | "raw";
 
 const SHEET_EXIT_ANIMATION_MS = 220;
+
+type TraceLoadState =
+  | { readonly status: "idle" }
+  | { readonly status: "loading"; readonly traceId: string }
+  | { readonly status: "ready"; readonly trace: TraceContext }
+  | { readonly status: "unavailable"; readonly traceId: string };
 
 interface LogDetailsPanelProps {
   projectId: string;
@@ -48,27 +55,36 @@ export function LogDetailsPanel({
 }: LogDetailsPanelProps) {
   const [tab, setTab] = useState<LogDetailsTab>("properties");
   const [showNullValues, setShowNullValues] = useState(false);
-  const [traceContext, setTraceContext] = useState<TraceContext | null>(null);
+  const [traceLoadState, setTraceLoadState] = useState<TraceLoadState>(() =>
+    log.traceId ? { status: "loading", traceId: log.traceId } : { status: "idle" },
+  );
 
   useEffect(() => {
     let cancelled = false;
 
-    setTraceContext(null);
     if (!log.traceId) {
+      setTraceLoadState({ status: "idle" });
       return () => {
         cancelled = true;
       };
     }
 
-    void getLogTraceContext(projectId, datasetId, log.traceId, log.spanId).then(
+    const traceId = log.traceId;
+    setTraceLoadState({ status: "loading", traceId });
+
+    void getLogTraceContext(projectId, datasetId, traceId, log.spanId).then(
       (trace) => {
         if (!cancelled) {
-          setTraceContext(trace);
+          setTraceLoadState(
+            trace !== null
+              ? { status: "ready", trace }
+              : { status: "unavailable", traceId },
+          );
         }
       },
       () => {
         if (!cancelled) {
-          setTraceContext(null);
+          setTraceLoadState({ status: "unavailable", traceId });
         }
       },
     );
@@ -77,6 +93,14 @@ export function LogDetailsPanel({
       cancelled = true;
     };
   }, [datasetId, log.spanId, log.traceId, projectId]);
+
+  const traceContext =
+    traceLoadState.status === "ready" && traceLoadState.trace.traceId === log.traceId
+      ? traceLoadState.trace
+      : null;
+  const shouldShowTraceSlot =
+    Boolean(log.traceId) &&
+    !(traceLoadState.status === "unavailable" && traceLoadState.traceId === log.traceId);
 
   const handleExploreTrace = useCallback(() => {
     if (!traceContext) return;
@@ -116,6 +140,8 @@ export function LogDetailsPanel({
 
       {traceContext !== null ? (
         <TraceOverview onExplore={handleExploreTrace} trace={traceContext} />
+      ) : shouldShowTraceSlot && log.traceId ? (
+        <PendingTraceOverview traceId={log.traceId} />
       ) : null}
       <TabBar activeTab={tab} onSelect={setTab} />
 
@@ -129,6 +155,73 @@ export function LogDetailsPanel({
         <RawDataTab log={log} />
       )}
     </div>
+  );
+}
+
+/**
+ * Placeholder row shapes for the {@link PendingTraceOverview} skeleton.
+ * Depths and widths are staggered to evoke the silhouette of a real waterfall
+ * without implying any specific data — see {@link TraceOverview} for the
+ * component whose layout is being mirrored here.
+ */
+const TRACE_SKELETON_ROWS = [
+  { depth: 0, name: "w-36", service: "w-16", duration: "w-11", barStart: 0, barWidth: 92 },
+  { depth: 1, name: "w-32", service: "w-20", duration: "w-9", barStart: 4, barWidth: 54 },
+  { depth: 1, name: "w-28", service: "w-14", duration: "w-8", barStart: 10, barWidth: 28 },
+  { depth: 2, name: "w-32", service: "w-16", duration: "w-10", barStart: 14, barWidth: 38 },
+  { depth: 2, name: "w-24", service: "w-20", duration: "w-9", barStart: 22, barWidth: 18 },
+  { depth: 1, name: "w-20", service: "w-14", duration: "w-8", barStart: 58, barWidth: 32 },
+] as const;
+
+function PendingTraceOverview({ traceId }: { traceId: string }) {
+  return (
+    <div
+      aria-label="Trace overview"
+      aria-busy="true"
+      className="h-[216px] shrink-0 overflow-hidden border-b border-border/60 bg-muted/10"
+    >
+      <div className="flex h-8 items-center justify-between gap-3 px-4 font-mono text-[10px] uppercase tracking-wide text-muted-foreground/70">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="text-muted-foreground/50">Trace</span>
+          <span className="min-w-0 truncate text-foreground/70" title={traceId}>
+            {shortenTraceId(traceId)}
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
+          <Skeleton className="h-3 w-14" />
+          <Skeleton className="h-3 w-10" />
+        </div>
+      </div>
+      <ol className="flex flex-col py-1">
+        {TRACE_SKELETON_ROWS.map((row, index) => (
+          <TraceSkeletonRow key={index} row={row} />
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+function TraceSkeletonRow({ row }: { row: (typeof TRACE_SKELETON_ROWS)[number] }) {
+  return (
+    <li className="grid h-6 grid-cols-[minmax(0,1fr)_minmax(120px,1.2fr)_auto] items-center gap-3 px-4">
+      <div className="flex min-w-0 items-center">
+        {/* Depth indent — mirrors SpanRow so skeleton rows line up with real
+            rows once the trace resolves. */}
+        <span aria-hidden className="shrink-0" style={{ width: row.depth * 10 }} />
+        <Skeleton className="mr-2 size-1.5 shrink-0 rounded-full" />
+        <Skeleton className={cn("h-3", row.name)} />
+        <Skeleton className={cn("ml-2 h-2.5", row.service)} />
+      </div>
+      <div
+        aria-hidden
+        className="flex h-1.5 w-full items-stretch overflow-hidden rounded-sm bg-foreground/[0.04]"
+      >
+        <span className="block" style={{ width: `${row.barStart}%` }} />
+        <Skeleton className="block rounded-sm" style={{ width: `${row.barWidth}%` }} />
+        <span className="block" style={{ width: `${100 - row.barStart - row.barWidth}%` }} />
+      </div>
+      <Skeleton className={cn("h-2.5 shrink-0", row.duration)} />
+    </li>
   );
 }
 
