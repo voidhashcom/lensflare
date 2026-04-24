@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "types": ["astro/client"],
+    "allowImportingTsExtensions": false,
+    "rewriteRelativeImportExtensions": false,
+    "verbatimModuleSyntax": false,
+    "erasableSyntaxOnly": false,
+    "paths": {
+      "~/*": ["./src/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.astro", "astro.config.mjs"],
+  "exclude": ["dist", ".astro", "node_modules"]
+}

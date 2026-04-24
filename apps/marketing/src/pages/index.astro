@@ -1,0 +1,28 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import Header from "../components/Header.astro";
+import { Hero } from "../components/Hero";
+import { OpenSourceBanner } from "../components/OpenSourceBanner";
+import { AiAndHumans } from "../components/AiAndHumans";
+import { Features } from "../components/Features";
+import { HowItWorks } from "../components/HowItWorks";
+import { OtelCallout } from "../components/OtelCallout";
+import { Platforms } from "../components/Platforms";
+import { FinalCta } from "../components/FinalCta";
+import { Footer } from "../components/Footer";
+---
+
+<BaseLayout>
+  <Header />
+  <main>
+    <Hero />
+    <OpenSourceBanner />
+    <AiAndHumans />
+    <Features />
+    <HowItWorks />
+    <OtelCallout />
+    <Platforms />
+    <FinalCta />
+  </main>
+  <Footer />
+</BaseLayout>
