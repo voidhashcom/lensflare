@@ -95,12 +95,12 @@ function DatasetTabButton({ active, tab, onSelect, onClose }: DatasetTabButtonPr
         {tab.title}
       </TopTabsTrigger>
       {tab.closable ? (
-        <div className="pointer-events-auto absolute inset-y-0 right-0 flex items-center pl-3 opacity-0 group-hover:opacity-100">
+        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pl-3 opacity-0 group-hover:opacity-100">
           <div className="h-full w-4 bg-linear-to-r from-background/0 to-background" />
-          <div className="bg-background pl-2 pointer-events-auto">
+          <div className="bg-background pl-2">
             <button
               aria-label={`Close ${tab.title}`}
-              className="mr-2 inline-flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-70 hover:bg-accent hover:text-foreground"
+              className="pointer-events-auto mr-2 inline-flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-70 hover:bg-accent hover:text-foreground"
               onClick={() => onClose(tab.id)}
               type="button"
             >

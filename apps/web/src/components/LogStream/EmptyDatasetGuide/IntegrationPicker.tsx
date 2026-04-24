@@ -1,3 +1,5 @@
+import { useRef, type MouseEvent } from "react";
+
 import { integrationRegistry } from "~/integrations/registry";
 import type { Language, LibraryMeta } from "~/integrations/types";
 import { cn } from "~/lib/utils";
@@ -76,6 +78,28 @@ interface LibraryPillProps {
 }
 
 function LibraryPill({ active, library, onSelect }: LibraryPillProps) {
+  const selectedOnMouseDownRef = useRef(false);
+
+  const handleMouseDown = (event: MouseEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) {
+      return;
+    }
+
+    selectedOnMouseDownRef.current = true;
+    onSelect();
+  };
+
+  const handleClick = (event: MouseEvent<HTMLButtonElement>) => {
+    const selectedOnMouseDown = selectedOnMouseDownRef.current;
+    selectedOnMouseDownRef.current = false;
+
+    if (selectedOnMouseDown && event.detail !== 0) {
+      return;
+    }
+
+    onSelect();
+  };
+
   return (
     <button
       aria-selected={active}
@@ -86,7 +110,8 @@ function LibraryPill({ active, library, onSelect }: LibraryPillProps) {
           ? "border-foreground/20 bg-foreground text-background"
           : "border-border/70 bg-background text-muted-foreground hover:border-border hover:text-foreground",
       )}
-      onClick={onSelect}
+      onClick={handleClick}
+      onMouseDown={handleMouseDown}
       role="tab"
       type="button"
     >

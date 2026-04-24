@@ -1,4 +1,4 @@
-import type { ComponentPropsWithoutRef, ReactNode } from "react";
+import { useRef, type ComponentPropsWithoutRef, type MouseEvent, type ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
 
@@ -50,10 +50,36 @@ export function TopTabsTrigger({
   children,
   className,
   leading,
+  onClick,
+  onMouseDown,
   size = "compact",
   type = "button",
   ...props
 }: TopTabsTriggerProps) {
+  const selectedOnMouseDownRef = useRef(false);
+
+  const handleMouseDown = (event: MouseEvent<HTMLButtonElement>) => {
+    onMouseDown?.(event);
+
+    if (event.defaultPrevented || event.button !== 0) {
+      return;
+    }
+
+    selectedOnMouseDownRef.current = true;
+    onClick?.(event);
+  };
+
+  const handleClick = (event: MouseEvent<HTMLButtonElement>) => {
+    const selectedOnMouseDown = selectedOnMouseDownRef.current;
+    selectedOnMouseDownRef.current = false;
+
+    if (selectedOnMouseDown && event.detail !== 0) {
+      return;
+    }
+
+    onClick?.(event);
+  };
+
   return (
     <button
       aria-selected={active}
@@ -63,6 +89,8 @@ export function TopTabsTrigger({
         active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
         className,
       )}
+      onClick={handleClick}
+      onMouseDown={handleMouseDown}
       role="tab"
       type={type}
       {...props}
