@@ -10,7 +10,11 @@ import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { preloadTelemetryFilterCatalog } from "~/collections/telemetryFilterCatalogCollection";
 import { listDatasetTelemetry, subscribeDatasetTelemetryEntries } from "~/data/logApi";
 
-import { mergeUniqueLogs, toTelemetryEntry } from "./telemetryEntry";
+import {
+  mergeUniqueLogs,
+  normalizeTelemetrySortTimestamp,
+  toTelemetryEntry,
+} from "./telemetryEntry";
 import type { SourceIconKind, TelemetryEntry } from "./types";
 
 export type DatasetStreamKey = `${string}:${string}`;
@@ -65,6 +69,7 @@ interface DatasetStreamSession {
   filterSource: string;
   filter: FilterNode | null;
   rawRecentRecords: ReadonlyArray<TelemetryRecord>;
+  pendingLiveRecords: ReadonlyArray<TelemetryRecord>;
   logs: ReadonlyArray<TelemetryEntry>;
   pageInfo: TelemetryLogPageInfo | null;
   selectedLogId: string | null;
@@ -75,6 +80,7 @@ interface DatasetStreamSession {
   hasLoadedOnce: boolean;
   activeCount: number;
   subscriptionCancel: (() => void) | undefined;
+  pendingLiveFlushTimer: ReturnType<typeof setTimeout> | null;
   initialLoadPromise: Promise<void> | null;
   queuedInitialLoad: "initial" | "refresh" | null;
   olderLoadPromise: Promise<void> | null;
@@ -90,10 +96,15 @@ interface LogStreamStoreDependencies {
   readonly preloadFilterCatalog: typeof preloadTelemetryFilterCatalog;
 }
 
+interface LogStreamStoreTestConfiguration extends Partial<LogStreamStoreDependencies> {
+  readonly liveFlushDelayMs?: number;
+}
+
 const LOG_PAGE_SIZE = 100;
 const MAX_INACTIVE_SESSIONS = 4;
 const MAX_RECENT_RECORDS_PER_SESSION = 10_000;
 const STALE_AFTER_MS = 30_000;
+const DEFAULT_LIVE_FLUSH_DELAY_MS = 125;
 
 const listeners = new Set<() => void>();
 const sessions = new Map<DatasetStreamKey, DatasetStreamSession>();
@@ -103,6 +114,7 @@ let dependencies: LogStreamStoreDependencies = {
   subscribeTelemetry: subscribeDatasetTelemetryEntries,
   preloadFilterCatalog: preloadTelemetryFilterCatalog,
 };
+let liveFlushDelayMs = DEFAULT_LIVE_FLUSH_DELAY_MS;
 
 function emit(): void {
   for (const listener of listeners) {
@@ -288,6 +300,7 @@ export function invalidateDatasetTelemetry(projectId: string, datasetId: string)
     return;
   }
   session.subscriptionCancel?.();
+  clearPendingLiveFlush(session);
   sessions.delete(key);
   emit();
 }
@@ -309,6 +322,7 @@ export function getDatasetStreamSnapshot(
     filterSource: "",
     filter: null,
     rawRecentRecords: [],
+    pendingLiveRecords: [],
     logs: [],
     pageInfo: null,
     selectedLogId: null,
@@ -319,6 +333,7 @@ export function getDatasetStreamSnapshot(
     hasLoadedOnce: false,
     activeCount: 0,
     subscriptionCancel: undefined,
+    pendingLiveFlushTimer: null,
     initialLoadPromise: null,
     queuedInitialLoad: null,
     olderLoadPromise: null,
@@ -332,6 +347,7 @@ export function getDatasetStreamSnapshot(
 export function resetLogStreamStoreForTests(): void {
   for (const session of sessions.values()) {
     session.subscriptionCancel?.();
+    clearPendingLiveFlush(session);
   }
   sessions.clear();
   listeners.clear();
@@ -340,15 +356,20 @@ export function resetLogStreamStoreForTests(): void {
     subscribeTelemetry: subscribeDatasetTelemetryEntries,
     preloadFilterCatalog: preloadTelemetryFilterCatalog,
   };
+  liveFlushDelayMs = DEFAULT_LIVE_FLUSH_DELAY_MS;
 }
 
 export function configureLogStreamStoreForTests(
-  nextDependencies: Partial<LogStreamStoreDependencies>,
+  nextConfiguration: LogStreamStoreTestConfiguration,
 ): void {
+  const { liveFlushDelayMs: nextLiveFlushDelayMs, ...nextDependencies } = nextConfiguration;
   dependencies = {
     ...dependencies,
     ...nextDependencies,
   };
+  if (nextLiveFlushDelayMs !== undefined) {
+    liveFlushDelayMs = nextLiveFlushDelayMs;
+  }
 }
 
 export function getLogStreamStoreSessionCountForTests(): number {
@@ -443,26 +464,66 @@ function ensureSubscription(session: DatasetStreamSession): void {
       if (!sessions.has(session.key)) {
         return;
       }
-      const log = toTelemetryEntry(
-        entry,
-        session.metadata.datasetName,
-        session.metadata.datasetIcon ?? "js",
-      );
-      session.rawRecentRecords = trimNewestRecords(
-        mergeUniqueRecords(session.rawRecentRecords, [entry]),
-        MAX_RECENT_RECORDS_PER_SESSION,
-      );
-      if (session.filter === null || evaluateFilter(session.filter, entry)) {
-        session.logs = mergeUniqueLogs(session.logs, [log]);
-      }
-      session.errorMessage = null;
-      commitSession(session);
+      queueLiveTelemetryRecord(session, entry);
     },
     (error) => {
       session.errorMessage = error.message;
       commitSession(session);
     },
   );
+}
+
+function queueLiveTelemetryRecord(
+  session: DatasetStreamSession,
+  entry: TelemetryRecord,
+): void {
+  session.pendingLiveRecords = mergeUniqueRecords(session.pendingLiveRecords, [entry]);
+  session.errorMessage = null;
+
+  if (liveFlushDelayMs <= 0) {
+    flushPendingLiveRecords(session);
+    return;
+  }
+
+  if (session.pendingLiveFlushTimer !== null) {
+    return;
+  }
+
+  session.pendingLiveFlushTimer = setTimeout(() => {
+    session.pendingLiveFlushTimer = null;
+    flushPendingLiveRecords(session);
+  }, liveFlushDelayMs);
+}
+
+function flushPendingLiveRecords(session: DatasetStreamSession): void {
+  if (!sessions.has(session.key) || session.pendingLiveRecords.length === 0) {
+    return;
+  }
+
+  const pendingRecords = session.pendingLiveRecords;
+  session.pendingLiveRecords = [];
+  session.rawRecentRecords = trimNewestRecords(
+    mergeUniqueRecords(session.rawRecentRecords, pendingRecords),
+    MAX_RECENT_RECORDS_PER_SESSION,
+  );
+
+  const matchingEntries = filterRecordsForSession(session, pendingRecords).map((entry) =>
+    toTelemetryEntry(entry, session.metadata.datasetName, session.metadata.datasetIcon ?? "js"),
+  );
+  if (matchingEntries.length > 0) {
+    session.logs = mergeUniqueLogs(session.logs, matchingEntries);
+  }
+
+  session.errorMessage = null;
+  commitSession(session);
+}
+
+function clearPendingLiveFlush(session: DatasetStreamSession): void {
+  if (session.pendingLiveFlushTimer === null) {
+    return;
+  }
+  clearTimeout(session.pendingLiveFlushTimer);
+  session.pendingLiveFlushTimer = null;
 }
 
 function getOrCreateSession(
@@ -484,6 +545,7 @@ function getOrCreateSession(
     filterSource: "",
     filter: null,
     rawRecentRecords: [],
+    pendingLiveRecords: [],
     logs: [],
     pageInfo: null,
     selectedLogId: null,
@@ -494,6 +556,7 @@ function getOrCreateSession(
     hasLoadedOnce: false,
     activeCount: 0,
     subscriptionCancel: undefined,
+    pendingLiveFlushTimer: null,
     initialLoadPromise: null,
     queuedInitialLoad: null,
     olderLoadPromise: null,
@@ -563,6 +626,7 @@ function evictInactiveSessions(): void {
       return;
     }
     session.subscriptionCancel?.();
+    clearPendingLiveFlush(session);
     sessions.delete(session.key);
   }
 }
@@ -608,9 +672,11 @@ function trimNewestRecords(
 }
 
 function compareRecords(left: TelemetryRecord, right: TelemetryRecord): number {
-  const timestampDelta = Date.parse(left.timestamp) - Date.parse(right.timestamp);
-  if (timestampDelta !== 0 && !Number.isNaN(timestampDelta)) {
-    return timestampDelta;
+  const timestampComparison = normalizeTelemetrySortTimestamp(left.timestamp).localeCompare(
+    normalizeTelemetrySortTimestamp(right.timestamp),
+  );
+  if (timestampComparison !== 0) {
+    return timestampComparison;
   }
   return left.id.localeCompare(right.id);
 }

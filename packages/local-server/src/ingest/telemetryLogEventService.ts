@@ -6,7 +6,7 @@ import {
   type TelemetryRecord,
   type TelemetrySpanRecord,
 } from "@lensflare/contracts";
-import { Context, Effect, Layer, PubSub, Stream } from "effect";
+import { Clock, Context, Duration, Effect, Layer, PubSub, Schedule, Stream } from "effect";
 import type {
   IngestWriteRequest,
   NormalizedLogRecord,
@@ -20,6 +20,18 @@ interface TelemetryEvent {
   readonly datasetId: string;
   readonly entry: TelemetryRecord;
 }
+
+interface BufferedTelemetryEvent extends TelemetryEvent {
+  readonly receivedAtMs: number;
+}
+
+interface TelemetryEventBufferOptions {
+  readonly cooldownMs?: number;
+  readonly flushIntervalMs?: number;
+}
+
+const TELEMETRY_EVENT_COOLDOWN_MS = 2_000;
+const TELEMETRY_EVENT_FLUSH_INTERVAL_MS = 100;
 
 function toTimestamp(raw: string | null, fallback: string): string {
   const parsed = new Date(raw ?? fallback);
@@ -170,6 +182,71 @@ function toTelemetrySpanEventRecord(
   };
 }
 
+function telemetryEventKey(event: TelemetryEvent): string {
+  return `${event.projectId}:${event.datasetId}:${event.entry.id}`;
+}
+
+function telemetryEventTimeMs(event: BufferedTelemetryEvent): number {
+  const parsed = Date.parse(event.entry.timestamp);
+  return Number.isNaN(parsed) ? event.receivedAtMs : parsed;
+}
+
+function normalizeTimestampForSort(timestamp: string): string {
+  const trimmed = timestamp.trim();
+  const match =
+    /^(?<prefix>.+[T ]\d{2}:\d{2}:\d{2})(?:\.(?<fraction>\d+))?(?<zone>Z|[+-]\d{2}:?\d{2})?$/u.exec(
+      trimmed,
+    );
+  if (!match?.groups) {
+    return trimmed;
+  }
+
+  const prefix = match.groups.prefix;
+  if (prefix === undefined) {
+    return trimmed;
+  }
+
+  const fraction = (match.groups.fraction ?? "").padEnd(9, "0").slice(0, 9);
+  return `${prefix.replace(" ", "T")}.${fraction}${match.groups.zone ?? "Z"}`;
+}
+
+function compareBufferedTelemetryEvents(
+  left: BufferedTelemetryEvent,
+  right: BufferedTelemetryEvent,
+): number {
+  const timestampDelta = telemetryEventTimeMs(left) - telemetryEventTimeMs(right);
+  if (timestampDelta !== 0) {
+    return timestampDelta;
+  }
+
+  const timestampComparison = normalizeTimestampForSort(left.entry.timestamp).localeCompare(
+    normalizeTimestampForSort(right.entry.timestamp),
+  );
+  if (timestampComparison !== 0) {
+    return timestampComparison;
+  }
+
+  return left.entry.id.localeCompare(right.entry.id);
+}
+
+function mergeBufferedTelemetryEvents(
+  current: ReadonlyArray<BufferedTelemetryEvent>,
+  incoming: ReadonlyArray<BufferedTelemetryEvent>,
+): ReadonlyArray<BufferedTelemetryEvent> {
+  const byKey = new Map<string, BufferedTelemetryEvent>();
+  for (const event of current) {
+    byKey.set(telemetryEventKey(event), event);
+  }
+  for (const event of incoming) {
+    const existing = byKey.get(telemetryEventKey(event));
+    byKey.set(telemetryEventKey(event), {
+      ...event,
+      receivedAtMs: existing?.receivedAtMs ?? event.receivedAtMs,
+    });
+  }
+  return [...byKey.values()].sort(compareBufferedTelemetryEvents);
+}
+
 export class TelemetryLogEventService extends Context.Service<
   TelemetryLogEventService,
   {
@@ -193,49 +270,98 @@ export class TelemetryLogEventService extends Context.Service<
     ) => Stream.Stream<TelemetryRecord>;
   }
 >()("@lensflare/local-server/TelemetryLogEventService") {
-  static readonly layer = Layer.effect(
-    TelemetryLogEventService,
-    Effect.gen(function* () {
-      const pubsub = yield* PubSub.unbounded<TelemetryEvent>();
-      const stream = Stream.fromPubSub(pubsub);
+  static layerWithOptions(options: TelemetryEventBufferOptions = {}) {
+    const cooldownMs = options.cooldownMs ?? TELEMETRY_EVENT_COOLDOWN_MS;
+    const flushIntervalMs = options.flushIntervalMs ?? TELEMETRY_EVENT_FLUSH_INTERVAL_MS;
 
-      const publishBatch = Effect.fn("TelemetryLogEventService.publishBatch")(function* (
-        request: IngestWriteRequest,
-        records: ReadonlyArray<WrittenLogRecord>,
-      ) {
-        yield* Effect.forEach(
-          records,
-          (record) =>
-            PubSub.publish(pubsub, {
+    return Layer.effect(
+      TelemetryLogEventService,
+      Effect.gen(function* () {
+        const pubsub = yield* PubSub.unbounded<TelemetryEvent>();
+        const stream = Stream.fromPubSub(pubsub);
+        let bufferedEvents: ReadonlyArray<BufferedTelemetryEvent> = [];
+
+        yield* Effect.addFinalizer(() => PubSub.shutdown(pubsub));
+
+        const enqueueEvents = Effect.fn("TelemetryLogEventService.enqueueEvents")(function* (
+          events: ReadonlyArray<TelemetryEvent>,
+        ) {
+          const receivedAtMs = yield* Clock.currentTimeMillis;
+          bufferedEvents = mergeBufferedTelemetryEvents(
+            bufferedEvents,
+            events.map((event) => ({ ...event, receivedAtMs })),
+          );
+        });
+
+        const flushReadyEvents = Effect.fn("TelemetryLogEventService.flushReadyEvents")(function* () {
+          const nowMs = yield* Clock.currentTimeMillis;
+          const cutoffMs = nowMs - cooldownMs;
+          const readyEvents = yield* Effect.sync(() => {
+            const ready: Array<BufferedTelemetryEvent> = [];
+            const pending: Array<BufferedTelemetryEvent> = [];
+
+            for (const event of bufferedEvents) {
+              if (telemetryEventTimeMs(event) <= cutoffMs) {
+                ready.push(event);
+              } else {
+                pending.push(event);
+              }
+            }
+
+            bufferedEvents = pending;
+            return ready.sort(compareBufferedTelemetryEvents);
+          });
+
+          if (readyEvents.length === 0) {
+            return;
+          }
+
+          yield* PubSub.publishAll(
+            pubsub,
+            readyEvents.map((event) => ({
+              projectId: event.projectId,
+              datasetId: event.datasetId,
+              entry: event.entry,
+            })),
+          ).pipe(Effect.asVoid);
+        });
+
+        yield* flushReadyEvents().pipe(
+          Effect.repeat(Schedule.spaced(Duration.millis(flushIntervalMs))),
+          Effect.forkScoped({ startImmediately: true }),
+        );
+
+        const publishBatch = Effect.fn("TelemetryLogEventService.publishBatch")(function* (
+          request: IngestWriteRequest,
+          records: ReadonlyArray<WrittenLogRecord>,
+        ) {
+          yield* enqueueEvents(
+            records.map((record) => ({
               projectId: request.projectId,
-                datasetId: request.datasetId,
+              datasetId: request.datasetId,
               entry: toTelemetryLogRecord(request, record),
-            }),
-          { discard: true },
-        );
-      });
+            })),
+          );
+        });
 
-      const publishSpanBatch = Effect.fn("TelemetryLogEventService.publishSpanBatch")(function* (
-        request: SpanIngestWriteRequest,
-        records: ReadonlyArray<WrittenSpanRecord>,
-      ) {
-        const spanEvents = records.flatMap((record) =>
-          record.record.events.map((_, index) => toTelemetrySpanEventRecord(request, record, index)),
-        );
-        yield* Effect.forEach(
-          [
-            ...records.map((record) => toTelemetrySpanRecord(request, record)),
-            ...spanEvents,
-          ],
-          (entry) =>
-            PubSub.publish(pubsub, {
+        const publishSpanBatch = Effect.fn("TelemetryLogEventService.publishSpanBatch")(function* (
+          request: SpanIngestWriteRequest,
+          records: ReadonlyArray<WrittenSpanRecord>,
+        ) {
+          const spanEvents = records.flatMap((record) =>
+            record.record.events.map((_, index) => toTelemetrySpanEventRecord(request, record, index)),
+          );
+          yield* enqueueEvents(
+            [
+              ...records.map((record) => toTelemetrySpanRecord(request, record)),
+              ...spanEvents,
+            ].map((entry) => ({
               projectId: request.projectId,
               datasetId: request.datasetId,
               entry,
-            }),
-          { discard: true },
-        );
-      });
+            })),
+          );
+        });
 
       const streamDatasetLogs = (
         projectId: string,
@@ -270,12 +396,15 @@ export class TelemetryLogEventService extends Context.Service<
           : byDataset.pipe(Stream.filter((entry) => evaluateFilter(filter, entry)));
       };
 
-      return TelemetryLogEventService.of({
-        publishBatch,
-        publishSpanBatch,
-        streamDatasetLogs,
-        streamDatasetTelemetry,
-      });
-    }),
-  );
+        return TelemetryLogEventService.of({
+          publishBatch,
+          publishSpanBatch,
+          streamDatasetLogs,
+          streamDatasetTelemetry,
+        });
+      }),
+    );
+  }
+
+  static readonly layer = TelemetryLogEventService.layerWithOptions();
 }

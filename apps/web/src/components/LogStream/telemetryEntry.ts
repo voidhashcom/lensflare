@@ -9,12 +9,14 @@ export function toTelemetryEntry(
 ): TelemetryEntry {
   const parsedTimestamp = new Date(entry.timestamp);
   const timestamp = Number.isNaN(parsedTimestamp.getTime()) ? new Date() : parsedTimestamp;
+  const sortTimestamp = normalizeTelemetrySortTimestamp(entry.timestamp);
 
   if (entry.kind === "span") {
     return {
       id: entry.id,
       kind: "span",
       timestamp,
+      sortTimestamp,
       sourceName: entry.sourceName || datasetName,
       sourceIcon: inferSourceIcon(entry.sourceName, datasetIcon),
       traceId: entry.traceId,
@@ -41,6 +43,7 @@ export function toTelemetryEntry(
       id: entry.id,
       kind: "spanEvent",
       timestamp,
+      sortTimestamp,
       sourceName: entry.sourceName || datasetName,
       sourceIcon: inferSourceIcon(entry.sourceName, datasetIcon),
       traceId: entry.traceId,
@@ -55,6 +58,7 @@ export function toTelemetryEntry(
     id: entry.id,
     kind: "log",
     timestamp,
+    sortTimestamp,
     sourceName: entry.sourceName || datasetName,
     sourceIcon: inferSourceIcon(entry.sourceName, datasetIcon),
     level: entry.level,
@@ -97,11 +101,22 @@ export function trimNewestTelemetryEntries(
 }
 
 export function compareLogEntries(left: TelemetryEntry, right: TelemetryEntry): number {
-  const timestampDelta = left.timestamp.getTime() - right.timestamp.getTime();
-  if (timestampDelta !== 0) {
-    return timestampDelta;
+  const timestampComparison = left.sortTimestamp.localeCompare(right.sortTimestamp);
+  if (timestampComparison !== 0) {
+    return timestampComparison;
   }
   return left.id.localeCompare(right.id);
+}
+
+export function normalizeTelemetrySortTimestamp(timestamp: string): string {
+  const trimmed = timestamp.trim();
+  const match = /^(?<prefix>.+T\d{2}:\d{2}:\d{2})(?:\.(?<fraction>\d+))?Z$/u.exec(trimmed);
+  if (!match?.groups) {
+    return trimmed;
+  }
+
+  const fraction = (match.groups.fraction ?? "").padEnd(9, "0").slice(0, 9);
+  return `${match.groups.prefix}.${fraction}Z`;
 }
 
 function inferSourceIcon(sourceName: string, fallback: SourceIconKind): SourceIconKind {

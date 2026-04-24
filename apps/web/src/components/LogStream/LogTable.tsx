@@ -198,6 +198,8 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
           ListFooterComponent={waiting ? <WaitingFooter /> : null}
           onScroll={handleScroll}
           recycleItems
+          maintainVisibleContentPosition={{ data: true }}
+          alwaysRender={{ top: 20, bottom: 20 }}
           ref={listRef}
           renderItem={renderRow}
           style={{ minHeight: 0, width: "100%" }}

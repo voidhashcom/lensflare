@@ -34,12 +34,14 @@ export interface SpanEventSummary {
 export type TelemetryEntry =
   | (LogEntry & {
       readonly kind: "log";
+      readonly sortTimestamp: string;
       readonly attributes: Readonly<Record<string, unknown>>;
     })
   | {
       readonly id: string;
       readonly kind: "span";
       readonly timestamp: Date;
+      readonly sortTimestamp: string;
       readonly sourceName: string;
       readonly sourceIcon: SourceIconKind;
       readonly traceId: string;
@@ -57,6 +59,7 @@ export type TelemetryEntry =
       readonly id: string;
       readonly kind: "spanEvent";
       readonly timestamp: Date;
+      readonly sortTimestamp: string;
       readonly sourceName: string;
       readonly sourceIcon: SourceIconKind;
       readonly traceId: string;

@@ -197,6 +197,71 @@ describe("logStreamStore", () => {
     expect(snapshot.selectedLog?.id).toBe("old");
   });
 
+  it("keeps row order stable when same-millisecond records arrive later", async () => {
+    const fakes = installFakes({
+      pages: [
+        page([
+          logRecord("z-first", "first", "info", "2026-01-01T00:00:00.000000100Z"),
+          logRecord("a-last", "last", "info", "2026-01-01T00:00:00.000000300Z"),
+        ]),
+      ],
+    });
+    activateDatasetStream(baseInput());
+    await flushStream("p", "d");
+
+    fakes.emit("p", "d", logRecord("m-middle", "middle", "info", "2026-01-01T00:00:00.000000200Z"));
+
+    expect(getDatasetStreamSnapshot("p", "d").logs.map((log) => log.id)).toEqual([
+      "z-first",
+      "m-middle",
+      "a-last",
+    ]);
+  });
+
+  it("delays live rows so logs and spans can be sorted into correct positions together", async () => {
+    const fakes = installFakes({
+      liveFlushDelayMs: 15,
+      pages: [
+        page([
+          logRecord("old", "old", "info", "2026-01-01T00:00:00.000000100Z"),
+          logRecord("new", "new", "info", "2026-01-01T00:00:00.000000400Z"),
+        ]),
+      ],
+    });
+    activateDatasetStream(baseInput());
+    await flushStream("p", "d");
+
+    fakes.emit("p", "d", logRecord("live-log", "live", "info", "2026-01-01T00:00:00.000000300Z"));
+    fakes.emit("p", "d", spanRecord("live-span", "span", "2026-01-01T00:00:00.000000200Z"));
+
+    expect(getDatasetStreamSnapshot("p", "d").logs.map((log) => log.id)).toEqual(["old", "new"]);
+
+    await wait(25);
+
+    expect(getDatasetStreamSnapshot("p", "d").logs.map((log) => log.id)).toEqual([
+      "old",
+      "live-span",
+      "live-log",
+      "new",
+    ]);
+  });
+
+  it("deduplicates a live record that also appears in a refreshed page", async () => {
+    const fakes = installFakes({
+      pages: [
+        page([]),
+        page([logRecord("same", "from refresh", "info", "2026-01-01T00:00:00.000000100Z")]),
+      ],
+    });
+    activateDatasetStream(baseInput());
+    await flushStream("p", "d");
+    fakes.emit("p", "d", logRecord("same", "from websocket", "info", "2026-01-01T00:00:00.000000100Z"));
+
+    await refreshDatasetTelemetry("p", "d");
+
+    expect(getDatasetStreamSnapshot("p", "d").logs.map((log) => log.id)).toEqual(["same"]);
+  });
+
   it("queues a filtered first-page load when the filter changes during an in-flight load", async () => {
     const firstPage = deferred<TelemetryRecordPage>();
     const secondPage = deferred<TelemetryRecordPage>();
@@ -209,6 +274,7 @@ describe("logStreamStore", () => {
       listTelemetry,
       subscribeTelemetry,
       preloadFilterCatalog: vi.fn(async () => {}),
+      liveFlushDelayMs: 0,
     });
 
     activateDatasetStream(baseInput());
@@ -286,7 +352,13 @@ function baseInput(overrides: { readonly datasetId?: string } = {}) {
   };
 }
 
-function installFakes({ pages }: { readonly pages: ReadonlyArray<TelemetryRecordPage> }) {
+function installFakes({
+  pages,
+  liveFlushDelayMs = 0,
+}: {
+  readonly pages: ReadonlyArray<TelemetryRecordPage>;
+  readonly liveFlushDelayMs?: number;
+}) {
   const callbacks = new Map<string, (entry: TelemetryRecord) => void>();
   let cancelled = 0;
   let pageIndex = 0;
@@ -309,6 +381,7 @@ function installFakes({ pages }: { readonly pages: ReadonlyArray<TelemetryRecord
     listTelemetry,
     subscribeTelemetry,
     preloadFilterCatalog: vi.fn(async () => {}),
+    liveFlushDelayMs,
   });
 
   return {
@@ -334,11 +407,15 @@ function deferred<A>() {
 }
 
 async function flushStream(projectId: string, datasetId: string): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await wait(0);
   const snapshot = getDatasetStreamSnapshot(projectId, datasetId);
   if (snapshot.isInitialLoading || snapshot.isRefreshing) {
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await wait(0);
   }
+}
+
+async function wait(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function page(
@@ -375,5 +452,24 @@ function logRecord(
     traceId: null,
     spanId: null,
     attributes: {},
+  };
+}
+
+function spanRecord(id: string, name: string, timestamp: string): TelemetryRecord {
+  return {
+    id,
+    kind: "span",
+    timestamp,
+    sourceName: "node",
+    traceId: `trace-${id}`,
+    spanId: `span-${id}`,
+    parentSpanId: null,
+    name,
+    serviceName: "api",
+    status: "ok",
+    statusMessage: null,
+    durationUs: 1_000,
+    attributes: {},
+    events: [],
   };
 }
