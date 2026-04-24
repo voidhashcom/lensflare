@@ -1,4 +1,4 @@
-import { APP_NAME, APP_VERSION } from "@lensflare/shared";
+import { APP_NAME, APP_VERSION } from "@lensflare/shared/browser";
 import { ExternalLinkIcon } from "lucide-react";
 
 import { Button } from "~/components/ui/button";

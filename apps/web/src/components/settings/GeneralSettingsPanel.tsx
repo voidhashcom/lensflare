@@ -15,6 +15,7 @@ import {
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
+import { IconButtonTooltip } from "~/components/ui/tooltip";
 import { clearDatasetData, listDatasetStorageStats } from "~/data/datasetApi";
 
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
@@ -152,16 +153,17 @@ export function GeneralSettingsPanel() {
     <SettingsPageContainer>
       <SettingsSection
         headerAction={
-          <Button
-            aria-label="Refresh dataset storage"
-            disabled={storageLoading}
-            onClick={() => void refreshStorageStats()}
-            size="icon-xs"
-            title="Refresh"
-            variant="ghost"
-          >
-            <RefreshCwIcon className={storageLoading ? "size-3 animate-spin" : "size-3"} />
-          </Button>
+          <IconButtonTooltip label="Refresh">
+            <Button
+              aria-label="Refresh dataset storage"
+              disabled={storageLoading}
+              onClick={() => void refreshStorageStats()}
+              size="icon-xs"
+              variant="ghost"
+            >
+              <RefreshCwIcon className={storageLoading ? "size-3 animate-spin" : "size-3"} />
+            </Button>
+          </IconButtonTooltip>
         }
         title="Storage"
       >

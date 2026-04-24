@@ -8,6 +8,7 @@ import {
 import { useCallback, useEffect, useMemo, useState, type MouseEvent, type KeyboardEvent } from "react";
 
 import { TopTabsItem, TopTabsList, TopTabsTrigger } from "~/components/ui/top-tabs";
+import { IconButtonTooltip } from "~/components/ui/tooltip";
 import { getLogTraceContext } from "~/data/logApi";
 import { useHorizontalResizablePanel } from "~/hooks/useHorizontalResizablePanel";
 import { cn } from "~/lib/utils";
@@ -288,13 +289,15 @@ function ExplorerToolbar({
           value={filter}
         />
       </div>
-      <button
-        aria-label="Toggle span tree"
-        className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-input bg-background/60 text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-        type="button"
-      >
-        <ListTreeIcon className="size-3.5" />
-      </button>
+      <IconButtonTooltip label="Toggle span tree">
+        <button
+          aria-label="Toggle span tree"
+          className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-input bg-background/60 text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+          type="button"
+        >
+          <ListTreeIcon className="size-3.5" />
+        </button>
+      </IconButtonTooltip>
       <div className="flex shrink-0 items-center gap-3 font-mono text-xs text-muted-foreground/80">
         <span>
           {spanCount} span{spanCount === 1 ? "" : "s"}
@@ -307,26 +310,30 @@ function ExplorerToolbar({
           {errorCount} error{errorCount === 1 ? "" : "s"}
         </span>
         <div className="inline-flex items-center gap-0.5">
-          <button
-            aria-label="Select previous span"
-            className="inline-flex size-6 cursor-pointer items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
-            disabled={moveUpDisabled}
-            onClick={handleMoveClick("prev")}
-            onMouseDown={handleMoveMouseDown("prev")}
-            type="button"
-          >
-            <ChevronUpIcon className="size-3.5" />
-          </button>
-          <button
-            aria-label="Select next span"
-            className="inline-flex size-6 cursor-pointer items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
-            disabled={moveDownDisabled}
-            onClick={handleMoveClick("next")}
-            onMouseDown={handleMoveMouseDown("next")}
-            type="button"
-          >
-            <ChevronDownIcon className="size-3.5" />
-          </button>
+          <IconButtonTooltip label="Select previous span">
+            <button
+              aria-label="Select previous span"
+              className="inline-flex size-6 cursor-pointer items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+              disabled={moveUpDisabled}
+              onClick={handleMoveClick("prev")}
+              onMouseDown={handleMoveMouseDown("prev")}
+              type="button"
+            >
+              <ChevronUpIcon className="size-3.5" />
+            </button>
+          </IconButtonTooltip>
+          <IconButtonTooltip label="Select next span">
+            <button
+              aria-label="Select next span"
+              className="inline-flex size-6 cursor-pointer items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+              disabled={moveDownDisabled}
+              onClick={handleMoveClick("next")}
+              onMouseDown={handleMoveMouseDown("next")}
+              type="button"
+            >
+              <ChevronDownIcon className="size-3.5" />
+            </button>
+          </IconButtonTooltip>
         </div>
       </div>
     </div>
@@ -640,14 +647,16 @@ function SpanDetailsHeader({ span }: { span: TraceSpan }) {
       >
         {span.id}
       </span>
-      <button
-        aria-label="Copy span id"
-        className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-        onClick={handleCopy}
-        type="button"
-      >
-        <CopyIcon className="size-3.5" />
-      </button>
+      <IconButtonTooltip label="Copy span id">
+        <button
+          aria-label="Copy span id"
+          className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+          onClick={handleCopy}
+          type="button"
+        >
+          <CopyIcon className="size-3.5" />
+        </button>
+      </IconButtonTooltip>
     </div>
   );
 }

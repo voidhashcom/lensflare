@@ -5,6 +5,7 @@ import { XIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Button } from "~/components/ui/button";
 import { ScrollArea } from "~/components/ui/scroll-area";
+import { IconButtonTooltip } from "~/components/ui/tooltip";
 
 const DialogCreateHandle = DialogPrimitive.createHandle;
 
@@ -74,13 +75,15 @@ function DialogPopup({
         >
           {children}
           {showCloseButton && (
-            <DialogPrimitive.Close
-              aria-label="Close"
-              className="absolute end-2 top-2"
-              render={<Button size="icon" variant="ghost" />}
-            >
-              <XIcon />
-            </DialogPrimitive.Close>
+            <IconButtonTooltip label="Close">
+              <DialogPrimitive.Close
+                aria-label="Close"
+                className="absolute end-2 top-2"
+                render={<Button size="icon" variant="ghost" />}
+              >
+                <XIcon />
+              </DialogPrimitive.Close>
+            </IconButtonTooltip>
           )}
         </DialogPrimitive.Popup>
       </DialogViewport>

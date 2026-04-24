@@ -10,6 +10,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "~/components/ui/sidebar";
+import { IconButtonTooltip } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
 
 import { getProjectIconComponent } from "./constants";
@@ -78,17 +79,18 @@ export function ProjectRow({
           </span>
         </SidebarMenuButton>
 
-        <button
-          aria-label={`New dataset in ${project.name}`}
-          className="desktop-no-drag absolute top-1 right-1.5 inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground/70 opacity-0 transition-opacity hover:bg-secondary hover:text-foreground focus-visible:opacity-100 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring group-hover/project-header:opacity-100"
-          onClick={() => {
-            onCreateDataset(project);
-          }}
-          title="New dataset"
-          type="button"
-        >
-          <PlusIcon className="size-3.5" />
-        </button>
+        <IconButtonTooltip label="New dataset" side="right">
+          <button
+            aria-label={`New dataset in ${project.name}`}
+            className="desktop-no-drag absolute top-1 right-1.5 inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground/70 opacity-0 transition-opacity hover:bg-secondary hover:text-foreground focus-visible:opacity-100 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring group-hover/project-header:opacity-100"
+            onClick={() => {
+              onCreateDataset(project);
+            }}
+            type="button"
+          >
+            <PlusIcon className="size-3.5" />
+          </button>
+        </IconButtonTooltip>
       </div>
 
       {hasDatasets && datasetsOpen ? (

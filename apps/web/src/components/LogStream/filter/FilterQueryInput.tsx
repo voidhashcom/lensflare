@@ -23,6 +23,7 @@ import {
   CommandPanel,
 } from "~/components/ui/command";
 import { Kbd, KbdGroup } from "~/components/ui/kbd";
+import { IconButtonTooltip } from "~/components/ui/tooltip";
 import type { TelemetryLogField } from "~/data/logApi";
 import { cn } from "~/lib/utils";
 
@@ -428,18 +429,20 @@ export function FilterQueryInput({
           ) : null}
         </button>
         {hasAppliedContent ? (
-          <button
-            aria-label="Clear filters"
-            className="absolute right-1.5 top-1/2 inline-flex size-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-muted-foreground/80 hover:bg-accent/60 hover:text-foreground"
-            onClick={(event) => {
-              event.stopPropagation();
-              handleClearApplied();
-            }}
-            onMouseDown={(event) => event.preventDefault()}
-            type="button"
-          >
-            <XIcon className="size-3.5" />
-          </button>
+          <IconButtonTooltip label="Clear filters">
+            <button
+              aria-label="Clear filters"
+              className="absolute right-1.5 top-1/2 inline-flex size-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-muted-foreground/80 hover:bg-accent/60 hover:text-foreground"
+              onClick={(event) => {
+                event.stopPropagation();
+                handleClearApplied();
+              }}
+              onMouseDown={(event) => event.preventDefault()}
+              type="button"
+            >
+              <XIcon className="size-3.5" />
+            </button>
+          </IconButtonTooltip>
         ) : null}
       </div>
 
@@ -469,15 +472,17 @@ export function FilterQueryInput({
               />
             </div>
             {hasDraftContent ? (
-              <button
-                aria-label="Clear filters"
-                className="mt-1 inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground/80 hover:bg-accent/60 hover:text-foreground"
-                onClick={handleClearDraft}
-                onMouseDown={(event) => event.preventDefault()}
-                type="button"
-              >
-                <XIcon className="size-4" />
-              </button>
+              <IconButtonTooltip label="Clear filters">
+                <button
+                  aria-label="Clear filters"
+                  className="mt-1 inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground/80 hover:bg-accent/60 hover:text-foreground"
+                  onClick={handleClearDraft}
+                  onMouseDown={(event) => event.preventDefault()}
+                  type="button"
+                >
+                  <XIcon className="size-4" />
+                </button>
+              </IconButtonTooltip>
             ) : null}
           </div>
         </div>

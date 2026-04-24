@@ -6,6 +6,7 @@ import {
   SelectItem,
   SelectPopup,
 } from "~/components/ui/select";
+import { IconButtonTooltip } from "~/components/ui/tooltip";
 import type { TelemetryLogField } from "~/data/logApi";
 import { cn } from "~/lib/utils";
 
@@ -99,15 +100,17 @@ export function FilterPillChip({
       <span className="max-w-[12rem] truncate text-foreground/90">
         {pill.valueWasQuoted ? `"${pill.rawValue}"` : pill.rawValue}
       </span>
-      <button
-        aria-label={`Remove filter ${fieldLabel}`}
-        className="ml-0.5 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground/80 hover:bg-destructive/20 hover:text-destructive"
-        onClick={onRemove}
-        onMouseDown={(event) => event.preventDefault()}
-        type="button"
-      >
-        <XIcon className="size-3.5" />
-      </button>
+      <IconButtonTooltip label={`Remove filter ${fieldLabel}`}>
+        <button
+          aria-label={`Remove filter ${fieldLabel}`}
+          className="ml-0.5 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground/80 hover:bg-destructive/20 hover:text-destructive"
+          onClick={onRemove}
+          onMouseDown={(event) => event.preventDefault()}
+          type="button"
+        >
+          <XIcon className="size-3.5" />
+        </button>
+      </IconButtonTooltip>
     </span>
   );
 }

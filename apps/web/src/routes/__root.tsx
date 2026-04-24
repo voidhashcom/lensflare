@@ -5,6 +5,7 @@ import { AppSidebar } from "~/components/AppSidebar";
 import { DatasetTabsTitlebar } from "~/components/LogStream/DatasetTabsTitlebar";
 import { RpcConnectionModal } from "~/components/RpcConnectionModal";
 import { Sidebar, SidebarInset, SidebarProvider, SidebarRail } from "~/components/ui/sidebar";
+import { TooltipProvider } from "~/components/ui/tooltip";
 import { syncBrowserChromeTheme, useTheme } from "~/hooks/useTheme";
 import { cn } from "~/lib/utils";
 
@@ -35,37 +36,39 @@ function RootLayout() {
   }, [pathname]);
 
   return (
-    <SidebarProvider className="overflow-hidden bg-transparent" defaultOpen>
-      <Sidebar
-        className="text-foreground"
-        collapsible="offcanvas"
-        resizable={{
-          minWidth: APP_SIDEBAR_MIN_WIDTH,
-          shouldAcceptWidth: ({ nextWidth, wrapper }) =>
-            wrapper.clientWidth - nextWidth >= APP_MAIN_CONTENT_MIN_WIDTH,
-          storageKey: APP_SIDEBAR_WIDTH_STORAGE_KEY,
-        }}
-        side="left"
-      >
-        <AppSidebar />
-        <SidebarRail />
-      </Sidebar>
-      <SidebarInset className="overflow-hidden">
-        {isMacDesktop ? (
-          <div
-            className={cn(
-              "desktop-drag flex h-[var(--desktop-titlebar-height)] shrink-0 items-stretch bg-background",
-              !isOnSettings && "border-border/70 border-b",
-            )}
-          >
-            <DatasetTabsTitlebar />
+    <TooltipProvider delay={0}>
+      <SidebarProvider className="overflow-hidden bg-transparent" defaultOpen>
+        <Sidebar
+          className="text-foreground"
+          collapsible="offcanvas"
+          resizable={{
+            minWidth: APP_SIDEBAR_MIN_WIDTH,
+            shouldAcceptWidth: ({ nextWidth, wrapper }) =>
+              wrapper.clientWidth - nextWidth >= APP_MAIN_CONTENT_MIN_WIDTH,
+            storageKey: APP_SIDEBAR_WIDTH_STORAGE_KEY,
+          }}
+          side="left"
+        >
+          <AppSidebar />
+          <SidebarRail />
+        </Sidebar>
+        <SidebarInset className="overflow-hidden">
+          {isMacDesktop ? (
+            <div
+              className={cn(
+                "desktop-drag flex h-[var(--desktop-titlebar-height)] shrink-0 items-stretch bg-background",
+                !isOnSettings && "border-border/70 border-b",
+              )}
+            >
+              <DatasetTabsTitlebar />
+            </div>
+          ) : null}
+          <div className="flex min-h-0 flex-1 flex-col">
+            <Outlet />
           </div>
-        ) : null}
-        <div className="flex min-h-0 flex-1 flex-col">
-          <Outlet />
-        </div>
-      </SidebarInset>
-      <RpcConnectionModal />
-    </SidebarProvider>
+        </SidebarInset>
+        <RpcConnectionModal />
+      </SidebarProvider>
+    </TooltipProvider>
   );
 }

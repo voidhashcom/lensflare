@@ -2,6 +2,7 @@ import { Undo2Icon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Button } from "~/components/ui/button";
+import { IconButtonTooltip } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
 
 /**
@@ -88,19 +89,20 @@ export function SettingsRow({
  */
 export function SettingResetButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <Button
-      aria-label={`Reset ${label} to default`}
-      className="size-5 rounded-sm p-0 text-muted-foreground hover:text-foreground"
-      onClick={(event) => {
-        event.stopPropagation();
-        onClick();
-      }}
-      size="icon-xs"
-      title="Reset to default"
-      variant="ghost"
-    >
-      <Undo2Icon className="size-3" />
-    </Button>
+    <IconButtonTooltip label="Reset to default">
+      <Button
+        aria-label={`Reset ${label} to default`}
+        className="size-5 rounded-sm p-0 text-muted-foreground hover:text-foreground"
+        onClick={(event) => {
+          event.stopPropagation();
+          onClick();
+        }}
+        size="icon-xs"
+        variant="ghost"
+      >
+        <Undo2Icon className="size-3" />
+      </Button>
+    </IconButtonTooltip>
   );
 }
 

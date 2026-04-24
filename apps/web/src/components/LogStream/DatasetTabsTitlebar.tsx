@@ -4,6 +4,7 @@ import { useMemo, type MouseEvent } from "react";
 
 import { LogoSymbol } from "~/components/Logo";
 import { TopTabsItem, TopTabsList, TopTabsTrigger } from "~/components/ui/top-tabs";
+import { IconButtonTooltip } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
 
 import { getDatasetTabState, type DatasetTab, type DatasetTabId } from "./datasetTabs";
@@ -101,14 +102,16 @@ function DatasetTabButton({ active, tab, onSelect, onClose }: DatasetTabButtonPr
         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pl-3 opacity-0 group-hover:opacity-100">
           <div className="h-full w-4 bg-linear-to-r from-background/0 to-background" />
           <div className="bg-background pl-2">
-            <button
-              aria-label={`Close ${tab.title}`}
-              className="pointer-events-auto mr-2 inline-flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-70 hover:bg-accent hover:text-foreground"
-              onClick={() => onClose(tab.id)}
-              type="button"
-            >
-              <XIcon className="size-3" />
-            </button>
+            <IconButtonTooltip label={`Close ${tab.title}`}>
+              <button
+                aria-label={`Close ${tab.title}`}
+                className="pointer-events-auto mr-2 inline-flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-70 hover:bg-accent hover:text-foreground"
+                onClick={() => onClose(tab.id)}
+                type="button"
+              >
+                <XIcon className="size-3" />
+              </button>
+            </IconButtonTooltip>
           </div>
         </div>
       ) : null}

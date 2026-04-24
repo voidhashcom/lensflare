@@ -1,7 +1,17 @@
 import { existsSync, readFileSync } from "node:fs";
 import { Buffer } from "node:buffer";
 import { resolve } from "node:path";
-import { app, BrowserWindow, ipcMain, nativeTheme, screen, type WebContents } from "electron";
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  nativeTheme,
+  screen,
+  type MenuItemConstructorOptions,
+  type WebContents,
+} from "electron";
 import type {
   DesktopEnvironmentBootstrap,
   DesktopLocalServerState,
@@ -321,6 +331,44 @@ async function checkForUpdates(reason: string): Promise<boolean> {
   }
 }
 
+function handleCheckForUpdatesMenuClick(): void {
+  const disabledReason = resolveAutoUpdateDisabledReason();
+  if (disabledReason) {
+    console.info("[lensflare-updater] manual update check requested while updates are disabled");
+    void dialog.showMessageBox({
+      type: "info",
+      title: "Updates unavailable",
+      message: "Automatic updates are not available right now.",
+      detail: disabledReason,
+      buttons: ["OK"],
+    });
+    return;
+  }
+
+  void checkForUpdatesFromMenu();
+}
+
+async function checkForUpdatesFromMenu(): Promise<void> {
+  await checkForUpdates("menu");
+
+  if (updateState.status === "up-to-date") {
+    void dialog.showMessageBox({
+      type: "info",
+      title: "You're up to date",
+      message: `${APP_NAME} ${updateState.currentVersion} is currently the newest version available.`,
+      buttons: ["OK"],
+    });
+  } else if (updateState.status === "error") {
+    void dialog.showMessageBox({
+      type: "warning",
+      title: "Update check failed",
+      message: "Could not check for updates.",
+      detail: updateState.message ?? "An unknown error occurred. Please try again later.",
+      buttons: ["OK"],
+    });
+  }
+}
+
 async function downloadAvailableUpdate(): Promise<{ accepted: boolean; completed: boolean }> {
   if (!updaterConfigured || updateDownloadInFlight || updateState.status !== "available") {
     return { accepted: false, completed: false };
@@ -490,6 +538,66 @@ function configureAutoUpdater(): void {
     void checkForUpdates("poll");
   }, AUTO_UPDATE_POLL_INTERVAL_MS);
   updatePollTimer.unref();
+}
+
+function configureApplicationMenu(): void {
+  const template: MenuItemConstructorOptions[] = [];
+
+  if (process.platform === "darwin") {
+    template.push({
+      label: APP_NAME,
+      submenu: [
+        { role: "about" },
+        {
+          label: "Check for Updates...",
+          click: () => handleCheckForUpdatesMenuClick(),
+        },
+        { type: "separator" },
+        { role: "services" },
+        { type: "separator" },
+        { role: "hide" },
+        { role: "hideOthers" },
+        { role: "unhide" },
+        { type: "separator" },
+        { role: "quit" },
+      ],
+    });
+  }
+
+  template.push(
+    {
+      label: "File",
+      submenu: [{ role: process.platform === "darwin" ? "close" : "quit" }],
+    },
+    { role: "editMenu" },
+    {
+      label: "View",
+      submenu: [
+        { role: "reload" },
+        { role: "forceReload" },
+        { role: "toggleDevTools" },
+        { type: "separator" },
+        { role: "resetZoom" },
+        { role: "zoomIn", accelerator: "CmdOrCtrl+=" },
+        { role: "zoomIn", accelerator: "CmdOrCtrl+Plus", visible: false },
+        { role: "zoomOut" },
+        { type: "separator" },
+        { role: "togglefullscreen" },
+      ],
+    },
+    { role: "windowMenu" },
+    {
+      role: "help",
+      submenu: [
+        {
+          label: "Check for Updates...",
+          click: () => handleCheckForUpdatesMenuClick(),
+        },
+      ],
+    },
+  );
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
 async function main(): Promise<void> {
@@ -809,6 +917,7 @@ async function main(): Promise<void> {
   }
 
   await app.whenReady();
+  configureApplicationMenu();
   const developmentIconPath = resolveDevelopmentIconPath();
   if (developmentIconPath && process.platform === "darwin" && app.dock) {
     app.dock.setIcon(developmentIconPath);

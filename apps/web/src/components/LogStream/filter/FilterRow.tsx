@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import { IconButtonTooltip } from "~/components/ui/tooltip";
 import type { TelemetryLogField } from "~/data/logApi";
 import { cn } from "~/lib/utils";
 
@@ -173,14 +174,16 @@ export function FilterRow({
         )}
       </div>
 
-      <Button
-        aria-label="Remove filter"
-        onClick={onRemove}
-        size="icon-sm"
-        variant="ghost"
-      >
-        <TrashIcon />
-      </Button>
+      <IconButtonTooltip label="Remove filter">
+        <Button
+          aria-label="Remove filter"
+          onClick={onRemove}
+          size="icon-sm"
+          variant="ghost"
+        >
+          <TrashIcon />
+        </Button>
+      </IconButtonTooltip>
     </div>
   );
 }

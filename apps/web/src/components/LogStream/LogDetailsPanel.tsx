@@ -5,6 +5,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { Skeleton } from "~/components/ui/skeleton";
 import { TopTabsItem, TopTabsList, TopTabsTrigger } from "~/components/ui/top-tabs";
+import { IconButtonTooltip } from "~/components/ui/tooltip";
 import { getLogTraceContext } from "~/data/logApi";
 import { useHorizontalResizablePanel } from "~/hooks/useHorizontalResizablePanel";
 import { cn } from "~/lib/utils";
@@ -269,14 +270,16 @@ function LogDetailsHeader({
       >
         {title}
       </span>
-      <button
-        aria-label="Close log details"
-        className="desktop-no-drag inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-        onClick={onClose}
-        type="button"
-      >
-        <XIcon className="size-3.5" />
-      </button>
+      <IconButtonTooltip label="Close log details">
+        <button
+          aria-label="Close log details"
+          className="desktop-no-drag inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+          onClick={onClose}
+          type="button"
+        >
+          <XIcon className="size-3.5" />
+        </button>
+      </IconButtonTooltip>
     </div>
   );
 }

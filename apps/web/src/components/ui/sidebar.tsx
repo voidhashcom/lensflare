@@ -16,7 +16,12 @@ import {
   SheetTitle,
 } from "~/components/ui/sheet";
 import { Skeleton } from "~/components/ui/skeleton";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
+import {
+  IconButtonTooltip,
+  Tooltip,
+  TooltipPopup,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
@@ -341,21 +346,24 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<t
   const { toggleSidebar, openMobile } = useSidebar();
 
   return (
-    <Button
-      className={cn("size-7", className)}
-      data-sidebar="trigger"
-      data-slot="sidebar-trigger"
-      onClick={(event) => {
-        onClick?.(event);
-        toggleSidebar();
-      }}
-      size="icon"
-      variant="ghost"
-      {...props}
-    >
-      {openMobile ? <PanelLeftCloseIcon /> : <PanelLeftIcon />}
-      <span className="sr-only">Toggle Sidebar</span>
-    </Button>
+    <IconButtonTooltip label="Toggle sidebar" side="right">
+      <Button
+        aria-label="Toggle sidebar"
+        className={cn("size-7", className)}
+        data-sidebar="trigger"
+        data-slot="sidebar-trigger"
+        onClick={(event) => {
+          onClick?.(event);
+          toggleSidebar();
+        }}
+        size="icon"
+        variant="ghost"
+        {...props}
+      >
+        {openMobile ? <PanelLeftCloseIcon /> : <PanelLeftIcon />}
+        <span className="sr-only">Toggle Sidebar</span>
+      </Button>
+    </IconButtonTooltip>
   );
 }
 

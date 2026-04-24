@@ -15,6 +15,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "~/components/ui/sidebar";
+import { IconButtonTooltip } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
 
 import { BrandRow } from "./BrandRow";
@@ -123,16 +124,17 @@ export function AppSidebar() {
                 <span className="font-medium text-[10px] text-muted-foreground/60 uppercase tracking-wider">
                   Projects
                 </span>
-                <button
-                  aria-label="New project"
-                  className="desktop-no-drag inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
-                  disabled={projectDialog.submitting}
-                  onClick={() => projectDialog.openCreate()}
-                  title="New project"
-                  type="button"
-                >
-                  <PlusIcon className="size-3.5" />
-                </button>
+                <IconButtonTooltip label="New project" side="right">
+                  <button
+                    aria-label="New project"
+                    className="desktop-no-drag inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+                    disabled={projectDialog.submitting}
+                    onClick={() => projectDialog.openCreate()}
+                    type="button"
+                  >
+                    <PlusIcon className="size-3.5" />
+                  </button>
+                </IconButtonTooltip>
               </div>
 
               <SidebarMenu>

@@ -5,6 +5,7 @@ import { XIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Button } from "~/components/ui/button";
 import { ScrollArea } from "~/components/ui/scroll-area";
+import { IconButtonTooltip } from "~/components/ui/tooltip";
 
 const Sheet = SheetPrimitive.Root;
 
@@ -95,13 +96,15 @@ function SheetPopup({
         >
           {children}
           {showCloseButton && (
-            <SheetPrimitive.Close
-              aria-label="Close"
-              className="absolute end-2 top-2"
-              render={<Button size="icon" variant="ghost" />}
-            >
-              <XIcon />
-            </SheetPrimitive.Close>
+            <IconButtonTooltip label="Close">
+              <SheetPrimitive.Close
+                aria-label="Close"
+                className="absolute end-2 top-2"
+                render={<Button size="icon" variant="ghost" />}
+              >
+                <XIcon />
+              </SheetPrimitive.Close>
+            </IconButtonTooltip>
           )}
         </SheetPrimitive.Popup>
       </SheetViewport>

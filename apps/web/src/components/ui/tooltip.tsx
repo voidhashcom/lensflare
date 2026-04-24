@@ -1,4 +1,5 @@
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
+import type { ComponentProps, ReactElement, ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
 
@@ -56,4 +57,27 @@ function TooltipPopup({
   );
 }
 
-export { TooltipCreateHandle, TooltipProvider, Tooltip, TooltipTrigger, TooltipPopup };
+function IconButtonTooltip({
+  children,
+  label,
+  ...popupProps
+}: {
+  children: ReactElement<Record<string, unknown>>;
+  label: ReactNode;
+} & Omit<ComponentProps<typeof TooltipPopup>, "children">) {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={children} />
+      <TooltipPopup {...popupProps}>{label}</TooltipPopup>
+    </Tooltip>
+  );
+}
+
+export {
+  TooltipCreateHandle,
+  TooltipProvider,
+  Tooltip,
+  TooltipTrigger,
+  TooltipPopup,
+  IconButtonTooltip,
+};

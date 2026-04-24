@@ -9,6 +9,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "re
 import { ChevronUpIcon, ColumnsIcon, LoaderCircleIcon } from "lucide-react";
 
 import { cn } from "~/lib/utils";
+import { IconButtonTooltip } from "~/components/ui/tooltip";
 
 import { getLogLevelLabel, getLogLevelText, LogLevelBadge } from "./LogLevelBadge";
 import { SourceBadge } from "./SourceBadge";
@@ -272,13 +273,15 @@ function Header() {
       <div>Status</div>
       <div>Name / Message</div>
       <div>Duration</div>
-      <button
-        aria-label="Configure columns"
-        className="inline-flex size-6 cursor-pointer items-center justify-center rounded text-muted-foreground/60 hover:bg-accent/50 hover:text-foreground"
-        type="button"
-      >
-        <ColumnsIcon className="size-3.5" />
-      </button>
+      <IconButtonTooltip label="Configure columns">
+        <button
+          aria-label="Configure columns"
+          className="inline-flex size-6 cursor-pointer items-center justify-center rounded text-muted-foreground/60 hover:bg-accent/50 hover:text-foreground"
+          type="button"
+        >
+          <ColumnsIcon className="size-3.5" />
+        </button>
+      </IconButtonTooltip>
     </div>
   );
 }

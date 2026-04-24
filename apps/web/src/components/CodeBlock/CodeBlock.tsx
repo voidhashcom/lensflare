@@ -7,6 +7,7 @@ import { cn } from "~/lib/utils";
 import { useTheme } from "~/hooks/useTheme";
 
 import { Button } from "../ui/button";
+import { IconButtonTooltip } from "../ui/tooltip";
 import {
   loadHighlighter,
   SHIKI_DARK_THEME,
@@ -130,16 +131,18 @@ export function CodeBlock({ snippet, variables, className }: CodeBlockProps) {
           </pre>
         )}
 
-        <Button
-          aria-label={copied ? "Copied" : "Copy code"}
-          className="absolute end-2 top-2 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 data-[copied=true]:opacity-100"
-          data-copied={copied}
-          onClick={handleCopy}
-          size="icon-xs"
-          variant="outline"
-        >
-          {copied ? <CheckIcon /> : <CopyIcon />}
-        </Button>
+        <IconButtonTooltip label={copied ? "Copied" : "Copy code"}>
+          <Button
+            aria-label={copied ? "Copied" : "Copy code"}
+            className="absolute end-2 top-2 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 data-[copied=true]:opacity-100"
+            data-copied={copied}
+            onClick={handleCopy}
+            size="icon-xs"
+            variant="outline"
+          >
+            {copied ? <CheckIcon /> : <CopyIcon />}
+          </Button>
+        </IconButtonTooltip>
       </div>
     </div>
   );
