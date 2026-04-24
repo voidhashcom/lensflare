@@ -4,7 +4,6 @@ import type {
   DesktopLocalServerState,
 } from "@lensflare/contracts";
 import { contextBridge, ipcRenderer } from "electron";
-import { Buffer } from "node:buffer";
 import {
   GET_LOCAL_SERVER_STATE_CHANNEL,
   LOCAL_SERVER_STATE_CHANNEL,
@@ -36,7 +35,10 @@ function readBootstrapFromArgs(): DesktopEnvironmentBootstrap | null {
     }
 
     try {
-      const json = Buffer.from(arg.slice(BOOTSTRAP_ARG_PREFIX.length), "base64").toString("utf8");
+      const bytes = Uint8Array.from(atob(arg.slice(BOOTSTRAP_ARG_PREFIX.length)), (char) =>
+        char.charCodeAt(0),
+      );
+      const json = new TextDecoder().decode(bytes);
       return JSON.parse(json) as DesktopEnvironmentBootstrap;
     } catch {
       return null;
