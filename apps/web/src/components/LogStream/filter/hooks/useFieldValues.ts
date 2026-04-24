@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
+import type { TelemetryFilterCatalogEntry } from "@lensflare/contracts";
+import { eq } from "@tanstack/db";
+import { useLiveQuery } from "@tanstack/react-db";
+import { useMemo } from "react";
 
-import { listDatasetTelemetryFieldValues } from "~/data/logApi";
+import { createTelemetryFilterCatalogCollection } from "~/collections/telemetryFilterCatalogCollection";
 
 interface FieldValuesState {
   readonly values: ReadonlyArray<string>;
@@ -21,43 +24,29 @@ export function useFieldValues(
   datasetId: string,
   path: ReadonlyArray<string> | null,
 ): FieldValuesState {
-  const [state, setState] = useState<FieldValuesState>({
-    values: [],
-    isLoading: false,
-    error: null,
-  });
-
-  // Stable cache-key for the path so the effect only re-runs when the field
-  // actually changes, not on every render of the parent row.
   const pathKey = path === null ? null : path.join(".");
+  const collection = useMemo(
+    () => createTelemetryFilterCatalogCollection(projectId, datasetId),
+    [projectId, datasetId],
+  );
+  const query = useLiveQuery((q) =>
+    q
+      .from({ field: collection as any })
+      .where(({ field }: any) => eq(field.label, pathKey ?? ""))
+      .select(({ field }: any) => field),
+  );
+  const field = ((query.data ?? []) as unknown as ReadonlyArray<TelemetryFilterCatalogEntry>)[0];
 
-  useEffect(() => {
-    if (pathKey === null || path === null) {
-      setState({ values: [], isLoading: false, error: null });
-      return;
-    }
+  if (pathKey === null) {
+    return { values: [], isLoading: false, error: null };
+  }
 
-    let cancelled = false;
-    setState({ values: [], isLoading: true, error: null });
-
-    listDatasetTelemetryFieldValues(projectId, datasetId, path)
-      .then((values) => {
-        if (cancelled) return;
-        setState({ values, isLoading: false, error: null });
-      })
-      .catch((error: unknown) => {
-        if (cancelled) return;
-        setState({
-          values: [],
-          isLoading: false,
-          error: error instanceof Error ? error : new Error("Failed to load values."),
-        });
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, datasetId, pathKey, path]);
-
-  return state;
+  return {
+    values: field && !field.highCardinality ? field.values : [],
+    isLoading: query.isLoading,
+    error:
+      collection.utils.lastError instanceof Error
+        ? collection.utils.lastError
+        : null,
+  };
 }

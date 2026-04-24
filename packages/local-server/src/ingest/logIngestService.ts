@@ -2,6 +2,7 @@ import { Context, Effect, Layer } from "effect";
 import { SqlError } from "effect/unstable/sql";
 import { ProjectDatasetMismatch, UnknownDatasetSlug, UnknownProjectSlug } from "./errors.ts";
 import { IngestTargetResolver } from "./targetResolver.ts";
+import { TelemetryFilterCatalogService } from "./telemetryFilterCatalogService.ts";
 import { TelemetryLogEventService } from "./telemetryLogEventService.ts";
 import { TelemetryLogsRepository } from "./telemetryLogsRepository.ts";
 import { TelemetrySpansRepository } from "./telemetrySpansRepository.ts";
@@ -65,6 +66,7 @@ export class LogIngestService extends Context.Service<
       const logs = yield* TelemetryLogsRepository;
       const spans = yield* TelemetrySpansRepository;
       const events = yield* TelemetryLogEventService;
+      const filterCatalog = yield* TelemetryFilterCatalogService;
 
       const ingest = Effect.fn("LogIngestService.ingest")(function* (input: IngestInput) {
         const target = yield* resolver.resolve(input.projectSlug, input.datasetSlug);
@@ -89,6 +91,7 @@ export class LogIngestService extends Context.Service<
             spans: input.batch.spans,
           } as const;
           const { batchId, records } = yield* spans.writeBatch(request);
+          yield* filterCatalog.applySpanBatch(request);
           yield* events.publishSpanBatch(request, records);
 
           return {
@@ -105,6 +108,7 @@ export class LogIngestService extends Context.Service<
           records: input.batch.records,
         } as const;
         const { batchId, records } = yield* logs.writeBatch(request);
+        yield* filterCatalog.applyLogBatch(request);
         yield* events.publishBatch(request, records);
 
         return {

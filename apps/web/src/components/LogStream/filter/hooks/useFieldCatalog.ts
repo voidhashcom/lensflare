@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
+import type { TelemetryFilterCatalogEntry } from "@lensflare/contracts";
+import { useLiveQuery } from "@tanstack/react-db";
+import { useMemo } from "react";
 
-import { listDatasetTelemetryFields, type TelemetryLogField } from "~/data/logApi";
+import { createTelemetryFilterCatalogCollection } from "~/collections/telemetryFilterCatalogCollection";
+import type { TelemetryLogField } from "~/data/logApi";
 
 interface FieldCatalogState {
   readonly fields: ReadonlyArray<TelemetryLogField>;
@@ -22,35 +25,32 @@ export function useFieldCatalog(
   projectId: string,
   datasetId: string,
 ): FieldCatalogState {
-  const [state, setState] = useState<FieldCatalogState>({
-    fields: [],
-    isLoading: true,
-    error: null,
-  });
+  const collection = useMemo(
+    () => createTelemetryFilterCatalogCollection(projectId, datasetId),
+    [projectId, datasetId],
+  );
+  const query = useLiveQuery((q) =>
+    q
+      .from({ field: collection as any })
+      .orderBy(({ field }: any) => field.label)
+      .select(({ field }: any) => field),
+  );
+  const fields = ((query.data ?? []) as unknown as ReadonlyArray<TelemetryFilterCatalogEntry>).map(
+    (entry): TelemetryLogField => ({
+      path: entry.path,
+      label: entry.label,
+      kind: entry.kind,
+      frequency: entry.frequency,
+      ...(entry.highCardinality ? {} : { values: entry.values }),
+    }),
+  );
 
-  useEffect(() => {
-    let cancelled = false;
-
-    setState({ fields: [], isLoading: true, error: null });
-
-    listDatasetTelemetryFields(projectId, datasetId)
-      .then((fields) => {
-        if (cancelled) return;
-        setState({ fields, isLoading: false, error: null });
-      })
-      .catch((error: unknown) => {
-        if (cancelled) return;
-        setState({
-          fields: [],
-          isLoading: false,
-          error: error instanceof Error ? error : new Error("Failed to load fields."),
-        });
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, datasetId]);
-
-  return state;
+  return {
+    fields,
+    isLoading: query.isLoading,
+    error:
+      collection.utils.lastError instanceof Error
+        ? collection.utils.lastError
+        : null,
+  };
 }

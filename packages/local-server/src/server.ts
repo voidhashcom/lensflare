@@ -31,6 +31,7 @@ import { makeSqliteDatabaseLayer } from "./db/database.ts";
 import { makeDatasetTag } from "./domain/slug.ts";
 import { AxiomNativeDecoder } from "./ingest/providers/axiom/decoder.ts";
 import { axiomRouteLayer } from "./ingest/providers/axiom/route.ts";
+import { TelemetryFilterCatalogService } from "./ingest/telemetryFilterCatalogService.ts";
 import { LogIngestService } from "./ingest/logIngestService.ts";
 import { TelemetryLogEventService } from "./ingest/telemetryLogEventService.ts";
 import { OtlpLogsDecoder, OtlpTracesDecoder } from "./ingest/providers/otlp/decoder.ts";
@@ -279,8 +280,14 @@ export async function startLocalServer(
   // resolver and the telemetry repository. Decoders move down into the
   // per-provider route layers where they're actually consumed.
   const telemetryLogEventLayer = TelemetryLogEventService.layer;
+  const telemetryFilterCatalogLayer = TelemetryFilterCatalogService.layer.pipe(
+    Layer.provide(DatasetsRepository.layer),
+    Layer.provide(sqliteDatabaseLayer),
+    Layer.provide(telemetryStoreLayer),
+  );
   const ingestServicesLayer = LogIngestService.layer.pipe(
     Layer.provide(telemetryLogEventLayer),
+    Layer.provide(telemetryFilterCatalogLayer),
     Layer.provide(TelemetryLogsRepository.layer),
     Layer.provide(TelemetrySpansRepository.layer),
     Layer.provide(IngestTargetResolver.layer),
@@ -360,6 +367,7 @@ export async function startLocalServer(
     telemetryQueryLayer,
     unifiedTelemetryQueryLayer,
     telemetryLogEventLayer,
+    telemetryFilterCatalogLayer,
   );
   const infrastructureLayer = Layer.merge(platformLayer, servicesLayer);
 
@@ -388,6 +396,8 @@ export async function startLocalServer(
     Effect.gen(function* () {
       const service = yield* ProjectService;
       yield* service.listProjects();
+      const filterCatalog = yield* TelemetryFilterCatalogService;
+      yield* filterCatalog.rebuildAll();
     }),
   );
 

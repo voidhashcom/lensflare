@@ -5,6 +5,7 @@ import type { TelemetryLogField } from "~/data/logApi";
 import {
   ATTRIBUTE_FIELD_SUGGESTION_LIMIT,
   limitAttributeFieldSuggestions,
+  sortFieldsByFrequency,
 } from "./fieldSuggestionLimits";
 
 const staticField: TelemetryLogField = {
@@ -37,5 +38,23 @@ describe("limitAttributeFieldSuggestions", () => {
     expect(limited.filter((field) => field.path[0] === "attributes")).toHaveLength(
       ATTRIBUTE_FIELD_SUGGESTION_LIMIT,
     );
+  });
+});
+
+describe("sortFieldsByFrequency", () => {
+  it("orders frequent fields first and uses label as a stable tie-breaker", () => {
+    const fields: ReadonlyArray<TelemetryLogField> = [
+      { path: ["attributes", "z"], label: "attributes.z", kind: "string", frequency: 4 },
+      { path: ["attributes", "a"], label: "attributes.a", kind: "string", frequency: 4 },
+      { path: ["serviceName"], label: "serviceName", kind: "string", frequency: 20 },
+      { path: ["traceId"], label: "traceId", kind: "string" },
+    ];
+
+    expect(sortFieldsByFrequency(fields).map((field) => field.label)).toEqual([
+      "serviceName",
+      "attributes.a",
+      "attributes.z",
+      "traceId",
+    ]);
   });
 });

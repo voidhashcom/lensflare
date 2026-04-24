@@ -24,6 +24,7 @@ export interface TelemetryLogField {
   readonly label: string;
   readonly kind: "string" | "number" | "enum";
   readonly values?: ReadonlyArray<string>;
+  readonly frequency?: number;
 }
 
 export type TelemetryField = TelemetryLogField;

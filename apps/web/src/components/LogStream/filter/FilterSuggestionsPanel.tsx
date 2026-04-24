@@ -6,7 +6,7 @@ import { cn } from "~/lib/utils";
 
 import { FieldTypeBadge } from "./FieldTypeBadge";
 import { FilterRow } from "./FilterRow";
-import { limitAttributeFieldSuggestions } from "./fieldSuggestionLimits";
+import { limitAttributeFieldSuggestions, sortFieldsByFrequency } from "./fieldSuggestionLimits";
 import {
   OPERATOR_LABELS,
   UNARY_OPERATORS,
@@ -326,7 +326,7 @@ function FieldSuggestions({
       return label.includes(needle) || path.includes(needle);
     });
 
-    return limitAttributeFieldSuggestions(matches);
+    return limitAttributeFieldSuggestions(sortFieldsByFrequency(matches));
   }, [fields, needle]);
 
   useEffect(() => {

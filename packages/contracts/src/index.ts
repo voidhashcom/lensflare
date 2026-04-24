@@ -455,6 +455,42 @@ export const TelemetryRecordPageSchema = Schema.Struct({
 
 export type TelemetryRecordPage = Schema.Schema.Type<typeof TelemetryRecordPageSchema>;
 
+export const TelemetryFilterFieldKindSchema = Schema.Literals(["string", "number", "enum"]);
+
+export type TelemetryFilterFieldKind = Schema.Schema.Type<typeof TelemetryFilterFieldKindSchema>;
+
+export const TelemetryFilterCatalogEntrySchema = Schema.Struct({
+  id: Schema.String,
+  projectId: Schema.String,
+  datasetId: Schema.String,
+  path: Schema.Array(Schema.String),
+  label: Schema.String,
+  kind: TelemetryFilterFieldKindSchema,
+  values: Schema.Array(Schema.String),
+  frequency: Schema.Number,
+  highCardinality: Schema.Boolean,
+  updatedAt: Schema.String,
+});
+
+export type TelemetryFilterCatalogEntry = Schema.Schema.Type<
+  typeof TelemetryFilterCatalogEntrySchema
+>;
+
+export const TelemetryFilterCatalogChangeEventSchema = Schema.Union([
+  Schema.Struct({
+    action: Schema.Literal("upsert"),
+    value: TelemetryFilterCatalogEntrySchema,
+  }),
+  Schema.Struct({
+    action: Schema.Literal("delete"),
+    id: Schema.String,
+  }),
+]);
+
+export type TelemetryFilterCatalogChangeEvent = Schema.Schema.Type<
+  typeof TelemetryFilterCatalogChangeEventSchema
+>;
+
 const decodeProjectEntitySchema = Schema.decodeUnknownSync(ProjectEntitySchema);
 const decodeProjectSchema = Schema.decodeUnknownSync(ProjectSchema);
 const decodeDatasetSchema = Schema.decodeUnknownSync(DatasetSchema);
@@ -679,9 +715,31 @@ class SubscribeTelemetryEvents extends Rpc.make("SubscribeTelemetryEvents", {
   stream: true,
 }) {}
 
+class ListTelemetryFilterCatalog extends Rpc.make("ListTelemetryFilterCatalog", {
+  payload: {
+    projectId: Schema.String,
+    datasetId: Schema.String,
+  },
+  success: Schema.Array(TelemetryFilterCatalogEntrySchema),
+}) {}
+
+class SubscribeTelemetryFilterCatalogEvents extends Rpc.make(
+  "SubscribeTelemetryFilterCatalogEvents",
+  {
+    payload: {
+      projectId: Schema.String,
+      datasetId: Schema.String,
+    },
+    success: TelemetryFilterCatalogChangeEventSchema,
+    stream: true,
+  },
+) {}
+
 export const TelemetryLogRpcGroup = RpcGroup.make(
   SubscribeTelemetryLogEvents,
   SubscribeTelemetryEvents,
+  ListTelemetryFilterCatalog,
+  SubscribeTelemetryFilterCatalogEvents,
 );
 
 export function formatProjectError(error: unknown): string {
