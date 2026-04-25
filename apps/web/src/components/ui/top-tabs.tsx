@@ -84,7 +84,7 @@ export function TopTabsTrigger({
     <button
       aria-selected={active}
       className={cn(
-        "inline-flex min-w-0 cursor-pointer items-center gap-1.5 outline-none transition-colors focus-visible:ring-1 focus-visible:ring-ring",
+        "inline-flex min-w-0  items-center gap-1.5 outline-none transition-colors focus-visible:ring-1 focus-visible:ring-ring",
         "px-3 py-2.5 text-xs",
         active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
         className,

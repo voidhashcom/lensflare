@@ -6,7 +6,7 @@ import {
   type NativeSyntheticEvent,
 } from "@legendapp/list/react";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { ChevronUpIcon, ColumnsIcon, LoaderCircleIcon } from "lucide-react";
+import { ArrowDownIcon, ChevronUpIcon, ColumnsIcon, LoaderCircleIcon } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
@@ -209,12 +209,13 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
       {showJumpToEnd ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-4">
           <Button
-            className="pointer-events-auto shadow-lg"
+            className="pointer-events-auto"
             onClick={handleJumpToEnd}
             size="sm"
             variant="secondary"
           >
-            Jump to end
+            <ArrowDownIcon className="size-3.5" />
+            <span>Jump to end</span>
           </Button>
         </div>
       ) : null}
@@ -274,11 +275,7 @@ function Header() {
       <div>Name / Message</div>
       <div>Duration</div>
       <IconButtonTooltip label="Configure columns">
-        <Button
-          aria-label="Configure columns"
-          size="icon"
-          variant="ghost"
-        >
+        <Button aria-label="Configure columns" size="icon" variant="ghost">
           <ColumnsIcon className="size-3.5" />
         </Button>
       </IconButtonTooltip>
@@ -313,7 +310,7 @@ function LogRow({ log, isSelected, onSelect }: LogRowProps) {
         // A 2px transparent left border is always present so the layout
         // stays identical when a row flips to the selected state; the border
         // just gains its accent colour instead of appearing out of nowhere.
-        "h-10 w-full cursor-pointer border-b border-l-2 border-border/40 border-l-transparent text-left font-mono text-xs text-foreground/90 outline-none hover:bg-accent/25 focus-visible:bg-accent/40",
+        "h-10 w-full  border-b border-l-2 border-border/40 border-l-transparent text-left font-mono text-xs text-foreground/90 outline-none hover:bg-accent/25 focus-visible:bg-accent/40",
         isSelected && "border-l-primary bg-accent/70 text-foreground hover:bg-accent/70",
         ROW_GRID_CLASS,
       )}

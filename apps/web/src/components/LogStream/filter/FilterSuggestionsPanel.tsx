@@ -8,11 +8,7 @@ import { FieldTypeBadge } from "./FieldTypeBadge";
 import { limitAttributeFieldSuggestions, sortFieldsByFrequency } from "./fieldSuggestionLimits";
 import { OPERATOR_LABELS } from "./filterTypes";
 import { useFieldValues } from "./hooks/useFieldValues";
-import {
-  operatorSyntaxesForKind,
-  type CursorContext,
-  type OperatorSyntax,
-} from "./syntax";
+import { operatorSyntaxesForKind, type CursorContext, type OperatorSyntax } from "./syntax";
 
 /**
  * What the user emits when they pick a row from the suggestions list. Each
@@ -143,11 +139,14 @@ function FieldSuggestions({
 }: FieldSuggestionsProps) {
   const needle = prefix.trim().toLowerCase();
   const suggestions = useMemo(() => {
-    const matches = needle.length === 0 ? fields : fields.filter((field) => {
-      const label = field.label.toLowerCase();
-      const path = field.path.join(".").toLowerCase();
-      return label.includes(needle) || path.includes(needle);
-    });
+    const matches =
+      needle.length === 0
+        ? fields
+        : fields.filter((field) => {
+            const label = field.label.toLowerCase();
+            const path = field.path.join(".").toLowerCase();
+            return label.includes(needle) || path.includes(needle);
+          });
 
     return limitAttributeFieldSuggestions(sortFieldsByFrequency(matches));
   }, [fields, needle]);
@@ -166,13 +165,9 @@ function FieldSuggestions({
         >
           <FieldTypeBadge className="-ms-0.5" kind={field.kind} />
           <span className="flex min-w-0 flex-col">
-            <span className="truncate font-medium text-foreground">
-              {field.label}
-            </span>
+            <span className="truncate font-medium text-foreground">{field.label}</span>
             {field.path.length > 1 ? (
-              <span className="truncate text-muted-foreground text-xs">
-                {field.path.join(".")}
-              </span>
+              <span className="truncate text-muted-foreground text-xs">{field.path.join(".")}</span>
             ) : null}
           </span>
         </SuggestionListItem>
@@ -263,11 +258,7 @@ function ValueSuggestions({
   // them in already.
   const shouldFetchValues =
     field !== null && field.kind === "enum" && (!field.values || field.values.length === 0);
-  const valuesState = useFieldValues(
-    projectId,
-    datasetId,
-    shouldFetchValues ? field.path : null,
-  );
+  const valuesState = useFieldValues(projectId, datasetId, shouldFetchValues ? field.path : null);
 
   const knownValues = useMemo(() => {
     if (field === null) return [];
@@ -302,9 +293,7 @@ function ValueSuggestions({
     return (
       <SuggestionList
         emptyLabel={
-          valuesState.isLoading
-            ? "Loading values…"
-            : "Type a value and press space to commit."
+          valuesState.isLoading ? "Loading values…" : "Type a value and press space to commit."
         }
         title="Values"
       >
@@ -341,9 +330,7 @@ interface SuggestionListProps {
 
 function SuggestionList({ title, emptyLabel, children }: SuggestionListProps) {
   const items = Array.isArray(children) ? children : [children];
-  const hasItems = items.some((child) =>
-    child !== null && child !== undefined && child !== false
-  );
+  const hasItems = items.some((child) => child !== null && child !== undefined && child !== false);
 
   return (
     <section className="flex flex-col gap-1 p-2">
@@ -369,11 +356,7 @@ interface SuggestionListItemProps {
   children: React.ReactNode;
 }
 
-function SuggestionListItem({
-  highlighted,
-  onSelect,
-  children,
-}: SuggestionListItemProps) {
+function SuggestionListItem({ highlighted, onSelect, children }: SuggestionListItemProps) {
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -385,7 +368,7 @@ function SuggestionListItem({
     <li aria-selected={highlighted} role="option">
       <button
         className={cn(
-          "flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50",
+          "flex w-full min-w-0  items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/50",
           highlighted && "bg-accent text-accent-foreground",
         )}
         data-filter-suggestion-active={highlighted ? "true" : undefined}

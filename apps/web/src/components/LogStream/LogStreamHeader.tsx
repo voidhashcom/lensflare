@@ -77,11 +77,7 @@ export function LogStreamHeader({
               render={
                 <SheetTrigger
                   render={
-                    <Button
-                      aria-label="View setup guide"
-                      size="icon"
-                      variant="ghost"
-                    >
+                    <Button aria-label="View setup guide" size="icon" variant="ghost">
                       <BookOpenIcon className="size-3.5" />
                     </Button>
                   }
@@ -116,7 +112,7 @@ export function LogStreamHeader({
 
         <button
           aria-label="Run search"
-          className="inline-flex size-8 cursor-pointer items-center justify-center rounded-md border border-input bg-background/60 text-foreground hover:bg-accent/50"
+          className="inline-flex size-8  items-center justify-center rounded-md border border-input bg-background/60 text-foreground hover:bg-accent/50"
           onClick={onRunQuery}
           type="button"
         >
@@ -131,7 +127,7 @@ export function LogStreamHeader({
 
         <button
           aria-label="Column layout"
-          className="inline-flex size-8 cursor-pointer items-center justify-center rounded-md border border-input bg-background/60 text-muted-foreground/80 hover:bg-accent/50 hover:text-foreground"
+          className="inline-flex size-8  items-center justify-center rounded-md border border-input bg-background/60 text-muted-foreground/80 hover:bg-accent/50 hover:text-foreground"
           type="button"
         >
           <ColumnsIcon className="size-3.5" />
@@ -139,7 +135,7 @@ export function LogStreamHeader({
 
         <button
           aria-label="Settings"
-          className="inline-flex size-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground/80 hover:bg-accent/50 hover:text-foreground"
+          className="inline-flex size-8  items-center justify-center rounded-md text-muted-foreground/80 hover:bg-accent/50 hover:text-foreground"
           onClick={onSettingsClick}
           type="button"
         >

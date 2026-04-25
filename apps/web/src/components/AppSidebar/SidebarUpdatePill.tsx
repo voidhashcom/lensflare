@@ -134,7 +134,7 @@ export function SidebarUpdatePill() {
                 <button
                   aria-disabled={disabled || undefined}
                   aria-label={tooltip}
-                  className="update-main relative flex h-full flex-1 items-center gap-2 px-2 enabled:cursor-pointer"
+                  className="update-main relative flex h-full flex-1 items-center gap-2 px-2 enabled:"
                   disabled={disabled}
                   onClick={handleAction}
                   type="button"

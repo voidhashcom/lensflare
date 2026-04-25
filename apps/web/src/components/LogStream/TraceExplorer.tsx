@@ -1,11 +1,12 @@
+import { ChevronDownIcon, ChevronUpIcon, CopyIcon, ListTreeIcon, SearchIcon } from "lucide-react";
 import {
-  ChevronDownIcon,
-  ChevronUpIcon,
-  CopyIcon,
-  ListTreeIcon,
-  SearchIcon,
-} from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, type MouseEvent, type KeyboardEvent } from "react";
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type MouseEvent,
+  type KeyboardEvent,
+} from "react";
 
 import { Button } from "~/components/ui/button";
 import { TopTabsItem, TopTabsList, TopTabsTrigger } from "~/components/ui/top-tabs";
@@ -73,9 +74,7 @@ export function TraceExplorer({
   className,
 }: TraceExplorerProps) {
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
-  const [selectedSpanId, setSelectedSpanId] = useState<string | null>(
-    initialSpanId ?? null,
-  );
+  const [selectedSpanId, setSelectedSpanId] = useState<string | null>(initialSpanId ?? null);
   const [filter, setFilter] = useState("");
   const [detailsTab, setDetailsTab] = useState<DetailsTab>("fields");
   const { panelRef, resizeHandleProps, width } = useHorizontalResizablePanel<HTMLElement>({
@@ -191,9 +190,7 @@ export function TraceExplorer({
           onFilterChange={setFilter}
           onMoveSelection={moveSelection}
           selectedVisibleIndex={selectedVisibleIndex}
-          spanCount={
-            loadState.status === "ready" ? loadState.trace.spans.length : 0
-          }
+          spanCount={loadState.status === "ready" ? loadState.trace.spans.length : 0}
           visibleSpanCount={filteredSpans.length}
         />
         <TraceBody
@@ -509,7 +506,7 @@ function ExplorerSpanRow({
         aria-label={`Select span ${span.name}`}
         aria-pressed={isSelected}
         className={cn(
-          "grid w-full cursor-pointer items-center gap-3 border-l-2 border-transparent px-4 py-2 text-left hover:bg-foreground/[0.03] focus-visible:ring-1 focus-visible:ring-ring",
+          "grid w-full  items-center gap-3 border-l-2 border-transparent px-4 py-2 text-left hover:bg-foreground/[0.03] focus-visible:ring-1 focus-visible:ring-ring",
           isSelected && "border-foreground/60 bg-foreground/[0.05]",
         )}
         onClick={handleClick}
@@ -544,29 +541,32 @@ function ExplorerSpanRow({
         </div>
 
         <div className="flex min-w-0 flex-col gap-1">
-        <div
-          aria-hidden
-          className="relative flex h-2 w-full items-stretch overflow-hidden rounded-sm bg-foreground/[0.04]"
-        >
-          <span className="block" style={{ width: `${startPercent}%` }} />
-          <span className={cn("block rounded-sm", barColour)} style={{ width: `${widthPercent}%` }} />
-          <span className="block" style={{ width: `${remainingPercent}%` }} />
-          {/* Small diamond marker at the end of the bar — echoes the Axiom
+          <div
+            aria-hidden
+            className="relative flex h-2 w-full items-stretch overflow-hidden rounded-sm bg-foreground/[0.04]"
+          >
+            <span className="block" style={{ width: `${startPercent}%` }} />
+            <span
+              className={cn("block rounded-sm", barColour)}
+              style={{ width: `${widthPercent}%` }}
+            />
+            <span className="block" style={{ width: `${remainingPercent}%` }} />
+            {/* Small diamond marker at the end of the bar — echoes the Axiom
               screenshot where each span terminates with a ◆ glyph. */}
+            <span
+              className={cn(
+                "-translate-x-1/2 -translate-y-1/2 absolute top-1/2 size-1.5 rotate-45",
+                dotColour,
+              )}
+              style={{ left: `${Math.min(startPercent + widthPercent, 100)}%` }}
+            />
+          </div>
           <span
-            className={cn(
-              "-translate-x-1/2 -translate-y-1/2 absolute top-1/2 size-1.5 rotate-45",
-              dotColour,
-            )}
-            style={{ left: `${Math.min(startPercent + widthPercent, 100)}%` }}
-          />
-        </div>
-        <span
-          className="font-mono text-[10px] text-muted-foreground/70 tabular-nums"
-          style={{ paddingLeft: `${startPercent}%` }}
-        >
-          {formatDuration(span.durationUs)}
-        </span>
+            className="font-mono text-[10px] text-muted-foreground/70 tabular-nums"
+            style={{ paddingLeft: `${startPercent}%` }}
+          >
+            {formatDuration(span.durationUs)}
+          </span>
         </div>
       </button>
     </li>
@@ -599,12 +599,7 @@ interface SpanDetailsPanelProps {
   onSelectTab: (tab: DetailsTab) => void;
 }
 
-function SpanDetailsPanel({
-  trace,
-  selectedSpan,
-  activeTab,
-  onSelectTab,
-}: SpanDetailsPanelProps) {
+function SpanDetailsPanel({ trace, selectedSpan, activeTab, onSelectTab }: SpanDetailsPanelProps) {
   if (!selectedSpan) {
     return (
       <div className="flex h-full items-center justify-center px-4 text-center text-muted-foreground/70 text-xs">
@@ -644,10 +639,7 @@ function SpanDetailsHeader({ span }: { span: TraceSpan }) {
     <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-4 py-3">
       <span className="font-mono text-sm text-muted-foreground/80">Span</span>
       <span className="text-muted-foreground/50">—</span>
-      <span
-        className="min-w-0 flex-1 truncate font-mono text-foreground text-sm"
-        title={span.id}
-      >
+      <span className="min-w-0 flex-1 truncate font-mono text-foreground text-sm" title={span.id}>
         {span.id}
       </span>
       <IconButtonTooltip label="Copy span id">
@@ -692,8 +684,18 @@ function SpanDetailsTabs({ active, onSelect, span }: SpanDetailsTabsProps) {
   return (
     <TopTabsList aria-label="Span detail tabs" className="gap-1 px-2">
       <TabHeader active={active === "fields"} label="Fields" onClick={() => onSelect("fields")} />
-      <TabHeader active={active === "events"} badge={span.events.length} label="Events" onClick={() => onSelect("events")} />
-      <TabHeader active={active === "links"} badge={0} label="Links" onClick={() => onSelect("links")} />
+      <TabHeader
+        active={active === "events"}
+        badge={span.events.length}
+        label="Events"
+        onClick={() => onSelect("events")}
+      />
+      <TabHeader
+        active={active === "links"}
+        badge={0}
+        label="Links"
+        onClick={() => onSelect("links")}
+      />
     </TopTabsList>
   );
 }
@@ -756,7 +758,10 @@ function SpanEventsTab({ span }: SpanTabContentProps) {
           <div className="border-b border-border/40 px-4 py-3 last:border-b-0" key={event.id}>
             <div className="flex items-center gap-2">
               <span className="truncate text-foreground">{event.name}</span>
-              <time className="shrink-0 text-[11px] text-muted-foreground/70" dateTime={event.timestamp.toISOString()}>
+              <time
+                className="shrink-0 text-[11px] text-muted-foreground/70"
+                dateTime={event.timestamp.toISOString()}
+              >
                 {event.timestamp.toISOString()}
               </time>
             </div>
@@ -774,8 +779,8 @@ function SpanEventsTab({ span }: SpanTabContentProps) {
       <p>No events recorded for this span.</p>
       {span.status === "error" ? (
         <p className="text-muted-foreground/50">
-          Span finished with an error — once exception events are sent by the
-          collector they will appear here.
+          Span finished with an error — once exception events are sent by the collector they will
+          appear here.
         </p>
       ) : null}
     </div>

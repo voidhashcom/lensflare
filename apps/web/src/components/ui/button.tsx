@@ -8,7 +8,7 @@ import type * as React from "react";
 import { cn } from "~/lib/utils";
 
 const buttonVariants = cva(
-  "[&_svg]:-mx-0.5 relative inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg border font-medium text-base outline-none before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-64 sm:text-sm [&_svg:not([class*='opacity-'])]:opacity-80 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+  "[&_svg]:-mx-0.5 relative inline-flex shrink-0  items-center justify-center gap-2 whitespace-nowrap rounded-lg border font-medium text-base outline-none before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-64 sm:text-sm [&_svg:not([class*='opacity-'])]:opacity-80 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
     defaultVariants: {
       size: "default",
@@ -17,8 +17,7 @@ const buttonVariants = cva(
     variants: {
       size: {
         default: "h-9 px-[calc(--spacing(3)-1px)] text-foreground sm:h-8",
-        icon:
-          "size-8 rounded-md text-muted-foreground/70 before:rounded-[calc(var(--radius-md)-1px)] hover:text-foreground data-pressed:text-foreground hover:[&_svg:not([class*='opacity-'])]:opacity-100 data-pressed:[&_svg:not([class*='opacity-'])]:opacity-100 sm:size-8 [&_svg:not([class*='opacity-'])]:opacity-65",
+        icon: "size-8 rounded-md text-muted-foreground/70 before:rounded-[calc(var(--radius-md)-1px)] hover:text-foreground data-pressed:text-foreground hover:[&_svg:not([class*='opacity-'])]:opacity-100 data-pressed:[&_svg:not([class*='opacity-'])]:opacity-100 sm:size-8 [&_svg:not([class*='opacity-'])]:opacity-65",
         "icon-lg":
           "size-8 rounded-md text-muted-foreground/70 before:rounded-[calc(var(--radius-md)-1px)] hover:text-foreground data-pressed:text-foreground hover:[&_svg:not([class*='opacity-'])]:opacity-100 data-pressed:[&_svg:not([class*='opacity-'])]:opacity-100 sm:size-8 [&_svg:not([class*='opacity-'])]:opacity-65",
         "icon-sm":
@@ -39,8 +38,7 @@ const buttonVariants = cva(
           "not-disabled:inset-shadow-[0_1px_--theme(--color-white/16%)] border-destructive bg-destructive text-white shadow-destructive/24 shadow-xs [:active,[data-pressed]]:inset-shadow-[0_1px_--theme(--color-black/8%)] [:disabled,:active,[data-pressed]]:shadow-none [:hover,[data-pressed]]:bg-destructive/90",
         "destructive-outline":
           "border-input bg-popover not-dark:bg-clip-padding text-destructive-foreground shadow-xs/5 not-disabled:not-active:not-data-pressed:before:shadow-[0_1px_--theme(--color-black/4%)] dark:bg-input/32 dark:not-disabled:before:shadow-[0_-1px_--theme(--color-white/2%)] dark:not-disabled:not-active:not-data-pressed:before:shadow-[0_-1px_--theme(--color-white/6%)] [:disabled,:active,[data-pressed]]:shadow-none [:hover,[data-pressed]]:border-destructive/32 [:hover,[data-pressed]]:bg-destructive/4",
-        ghost:
-          "border-transparent data-pressed:bg-accent [:hover,[data-pressed]]:bg-accent/60",
+        ghost: "border-transparent data-pressed:bg-accent [:hover,[data-pressed]]:bg-accent/60",
         link: "border-transparent underline-offset-4 [:hover,[data-pressed]]:underline",
         outline:
           "border-input bg-popover not-dark:bg-clip-padding text-foreground shadow-xs/5 not-disabled:not-active:not-data-pressed:before:shadow-[0_1px_--theme(--color-black/4%)] dark:bg-input/32 dark:not-disabled:before:shadow-[0_-1px_--theme(--color-white/2%)] dark:not-disabled:not-active:not-data-pressed:before:shadow-[0_-1px_--theme(--color-white/6%)] [:disabled,:active,[data-pressed]]:shadow-none [:hover,[data-pressed]]:bg-accent/50 dark:[:hover,[data-pressed]]:bg-input/64",

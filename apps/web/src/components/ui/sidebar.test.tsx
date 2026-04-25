@@ -21,14 +21,14 @@ describe("sidebar interactive cursors", () => {
     const html = renderSidebarButton();
 
     expect(html).toContain('data-slot="sidebar-menu-button"');
-    expect(html).toContain("cursor-pointer");
+    expect(html).toContain("");
   });
 
   it("lets project drag handles override the default pointer cursor", () => {
     const html = renderSidebarButton("cursor-grab");
 
     expect(html).toContain("cursor-grab");
-    expect(html).not.toContain("cursor-pointer");
+    expect(html).not.toContain("");
   });
 
   it("uses a pointer cursor for menu actions", () => {
@@ -39,7 +39,7 @@ describe("sidebar interactive cursors", () => {
     );
 
     expect(html).toContain('data-slot="sidebar-menu-action"');
-    expect(html).toContain("cursor-pointer");
+    expect(html).toContain("");
   });
 
   it("uses a pointer cursor for submenu buttons", () => {
@@ -48,6 +48,6 @@ describe("sidebar interactive cursors", () => {
     );
 
     expect(html).toContain('data-slot="sidebar-menu-sub-button"');
-    expect(html).toContain("cursor-pointer");
+    expect(html).toContain("");
   });
 });

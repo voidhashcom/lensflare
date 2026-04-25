@@ -68,7 +68,7 @@ export function TraceOverview({ trace, className, onExplore }: TraceOverviewProp
       </ol>
       <button
         aria-label="Explore trace"
-        className="absolute inset-0 flex cursor-pointer items-center justify-center bg-background/35 opacity-0 backdrop-blur-xs duration-100 hover:transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 disabled:cursor-default"
+        className="absolute inset-0 flex  items-center justify-center bg-background/35 opacity-0 backdrop-blur-xs duration-100 hover:transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 disabled:cursor-default"
         disabled={onExplore === undefined}
         onClick={onExplore}
         type="button"
@@ -118,8 +118,7 @@ function SpanRow({ span, depth, isCurrent, totalDurationUs }: SpanRowProps) {
   const widthPercent = Math.max(span.durationUs * scale, 0.8);
   const remainingPercent = Math.max(100 - startPercent - widthPercent, 0);
 
-  const barColour =
-    span.status === "error" ? "bg-rose-500/70" : "bg-sky-500/70 dark:bg-sky-400/70";
+  const barColour = span.status === "error" ? "bg-rose-500/70" : "bg-sky-500/70 dark:bg-sky-400/70";
 
   return (
     <li

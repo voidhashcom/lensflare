@@ -413,7 +413,7 @@ export function FilterQueryInput({
         <button
           aria-label="Open telemetry filter"
           className={cn(
-            "inline-flex h-8 min-w-0 w-full cursor-pointer items-center gap-2 rounded-md  bg-card px-2.5 text-left text-sm text-foreground/80 shadow-xs/5 hover:bg-accent/50",
+            "inline-flex h-8 min-w-0 w-full  items-center gap-2 rounded-md  bg-card px-2.5 text-left text-sm text-foreground/80 shadow-xs/5 hover:bg-accent/50",
             hasAppliedContent ? "pr-9" : "pr-2.5",
             "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/24",
           )}
