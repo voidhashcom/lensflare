@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import { CheckIcon } from "lucide-react";
 
 import type { TelemetryLogField } from "~/data/logApi";
 import { cn } from "~/lib/utils";
@@ -113,10 +114,12 @@ function SuggestionsSection({
           datasetId={datasetId}
           fields={fields}
           highlightedSuggestionIndex={highlightedSuggestionIndex}
+          isMultiValue={cursorContext.list !== undefined}
           onSelect={(value) => onApplySuggestion({ kind: "value", value })}
           onSuggestionCountChange={onSuggestionCountChange}
           path={cursorContext.fieldPath}
           projectId={projectId}
+          selectedValues={cursorContext.list?.values ?? []}
           valuePrefix={cursorContext.valuePrefix}
         />
       );
@@ -232,7 +235,9 @@ interface ValueSuggestionsProps {
   projectId: string;
   datasetId: string;
   fields: ReadonlyArray<TelemetryLogField>;
+  isMultiValue: boolean;
   path: ReadonlyArray<string>;
+  selectedValues: ReadonlyArray<string>;
   valuePrefix: string;
   highlightedSuggestionIndex: number | null;
   onSelect: (value: string) => void;
@@ -243,7 +248,9 @@ function ValueSuggestions({
   projectId,
   datasetId,
   fields,
+  isMultiValue,
   path,
+  selectedValues,
   valuePrefix,
   highlightedSuggestionIndex,
   onSelect,
@@ -268,11 +275,16 @@ function ValueSuggestions({
     return valuesState.values;
   }, [field, valuesState.values]);
 
+  const selectedSet = useMemo(() => new Set(selectedValues), [selectedValues]);
   const needle = valuePrefix.trim().toLowerCase();
   const filtered = useMemo(() => {
+    const exactPrefix = valuePrefix.trim();
+    if (needle.length > 0 && selectedSet.has(exactPrefix) && knownValues.includes(exactPrefix)) {
+      return knownValues;
+    }
     if (needle.length === 0) return knownValues;
     return knownValues.filter((value) => value.toLowerCase().includes(needle));
-  }, [knownValues, needle]);
+  }, [knownValues, needle, selectedSet, valuePrefix]);
 
   useEffect(() => {
     onSuggestionCountChange(field === null || knownValues.length === 0 ? 0 : filtered.length);
@@ -309,6 +321,11 @@ function ValueSuggestions({
           key={value}
           onSelect={() => onSelect(value)}
         >
+          {isMultiValue ? (
+            <span className="flex size-4 shrink-0 items-center justify-center text-primary">
+              {selectedSet.has(value) ? <CheckIcon className="size-3.5" /> : null}
+            </span>
+          ) : null}
           <span className="truncate text-foreground">{value}</span>
         </SuggestionListItem>
       ))}

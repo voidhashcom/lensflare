@@ -2,6 +2,7 @@ export {
   completeParsedPills,
   defaultOperatorTokenForKind,
   isValuelessOperator,
+  LIST_OPERATORS,
   OPERATOR_SYNTAX,
   operatorSyntaxesForKind,
   parsedToFilter,

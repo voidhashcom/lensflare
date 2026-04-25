@@ -5,19 +5,20 @@ import {
   type OperatorSyntax,
   type QueryDiagnostic,
   type QueryField,
+  type QueryListCursorContext,
   type QueryNode,
   type SourceSpan,
 } from "./ast.ts";
 import { compileQueryToFilterResult, resolveQueryField } from "./compiler.ts";
 import type { Token } from "./lexer.ts";
 import {
-  defaultOperatorTokenForKind,
   isValuelessOperator,
+  LIST_OPERATORS,
   operatorSyntaxesForKind,
   syntaxForOperatorToken,
 } from "./operators.ts";
 import { parseQuery } from "./parser.ts";
-import { literalToRawValue } from "./values.ts";
+import { literalToRawValue, parseListLiteral } from "./values.ts";
 
 export type QueryCompletionKind = "field" | "operator" | "value";
 
@@ -89,9 +90,12 @@ export function analyzeQueryLanguage(
   const pills = parse.ast === null ? [] : collectPills(parse.ast, source);
   const cursorState = getQueryCursorState(source, cursor, parse.tokens, fields);
   const lastPill = pills.at(-1);
-  const trailingStart = lastPill !== undefined && cursor >= lastPill.end
-    ? lastPill.end
-    : cursorState.expressionStart;
+  const isMissingValueContext = cursorState.context.kind === "value" &&
+    cursorState.context.valuePrefix.length === 0;
+  const trailingStart =
+    lastPill !== undefined && cursor >= lastPill.end && !isMissingValueContext
+      ? lastPill.end
+      : cursorState.expressionStart;
   const compileDiagnostics = fields.length > 0
     ? compileQueryToFilterResult(parse.ast, fields).diagnostics
     : [];
@@ -129,6 +133,7 @@ export function getQueryCursorState(
 ): QueryCursorState {
   const clamped = clamp(cursor, 0, source.length);
   const expressionStart = findCurrentExpressionStart(source, clamped, tokens, fields);
+  const expressionTokens = tokens.filter((token) => token.span.end > expressionStart);
   const segment = tokens.filter((token) =>
     token.span.end > expressionStart && token.span.start <= clamped
   );
@@ -211,7 +216,14 @@ export function getQueryCursorState(
     };
   }
 
-  const value = readValuePrefix(source, clamped, segment, operator.end);
+  const value = readValuePrefix(
+    source,
+    clamped,
+    segment,
+    expressionTokens,
+    operator.end,
+    operator.syntax.operator,
+  );
   return {
     context: {
       kind: "value",
@@ -220,6 +232,7 @@ export function getQueryCursorState(
       operatorToken: operator.tokenText,
       negated: operator.syntax.negated,
       valuePrefix: value.prefix,
+      ...(value.list === undefined ? {} : { list: value.list }),
     },
     replacementRange: value.replacementRange,
     expressionStart,
@@ -276,10 +289,8 @@ function fieldCompletions(
     : fields.filter((field) => fieldMatchesPrefix(field, needle));
 
   return matches.map((field): QueryCompletionItem => {
-    const token = defaultOperatorTokenForKind(field.kind);
     const path = field.path.join(".");
-    const needsQuotedValue = field.kind !== "number";
-    const newText = needsQuotedValue ? `${path} ${token} ""` : `${path} ${token} `;
+    const newText = `${path} `;
     return {
       kind: "field",
       label: field.label,
@@ -288,7 +299,7 @@ function fieldCompletions(
       textEdit: {
         range: cursorState.replacementRange,
         newText,
-        cursorOffset: needsQuotedValue ? newText.length - 1 : newText.length,
+        cursorOffset: newText.length,
       },
     };
   });
@@ -310,7 +321,8 @@ function operatorCompletions(
   return operatorSyntaxesForKind(kind)
     .filter((syntax) => syntax.token.toLowerCase().startsWith(prefix))
     .map((syntax): QueryCompletionItem => {
-      const newText = `${syntax.token} `;
+      const needsList = LIST_OPERATORS.includes(syntax.operator);
+      const newText = needsList ? `${syntax.token} []` : `${syntax.token} `;
       return {
         kind: "operator",
         label: syntax.token,
@@ -319,7 +331,7 @@ function operatorCompletions(
         textEdit: {
           range: cursorState.replacementRange,
           newText,
-          cursorOffset: newText.length,
+          cursorOffset: needsList ? newText.length - 1 : newText.length,
         },
       };
     });
@@ -394,6 +406,7 @@ function findCurrentExpressionStart(
     if (
       segmentEnd !== undefined &&
       segmentEnd < token.span.start &&
+      !hasUnclosedList(segmentBefore) &&
       isCompleteSegment(segmentBefore, fields)
     ) {
       expressionStart = token.span.start;
@@ -405,6 +418,15 @@ function findCurrentExpressionStart(
   }
 
   return expressionStart;
+}
+
+function hasUnclosedList(tokens: ReadonlyArray<Token>): boolean {
+  let depth = 0;
+  for (const token of tokens) {
+    if (token.kind === "lbracket") depth += 1;
+    if (token.kind === "rbracket") depth = Math.max(0, depth - 1);
+  }
+  return depth > 0;
 }
 
 function previousHardBoundary(source: string, cursor: number): number {
@@ -493,8 +515,19 @@ function readValuePrefix(
   source: string,
   cursor: number,
   segment: ReadonlyArray<Token>,
+  expressionTokens: ReadonlyArray<Token>,
   operatorEnd: number,
-): { readonly prefix: string; readonly replacementRange: SourceSpan } {
+  operator: FilterOperator,
+): {
+  readonly prefix: string;
+  readonly replacementRange: SourceSpan;
+  readonly list?: QueryListCursorContext;
+} {
+  if (LIST_OPERATORS.includes(operator)) {
+    const list = readListValuePrefix(source, cursor, segment, expressionTokens, operatorEnd);
+    if (list !== null) return list;
+  }
+
   const valueTokens = segment.filter((token) => token.span.start >= operatorEnd && token.span.start <= cursor);
   const last = valueTokens.at(-1);
   if (last === undefined || last.kind === "lbracket" || last.kind === "comma") {
@@ -519,6 +552,70 @@ function readValuePrefix(
     prefix: source.slice(start, end),
     replacementRange: { start, end },
   };
+}
+
+function readListValuePrefix(
+  source: string,
+  cursor: number,
+  segment: ReadonlyArray<Token>,
+  expressionTokens: ReadonlyArray<Token>,
+  operatorEnd: number,
+): {
+  readonly prefix: string;
+  readonly replacementRange: SourceSpan;
+  readonly list: QueryListCursorContext;
+} | null {
+  const visibleValueTokens = segment.filter((token) => token.span.start >= operatorEnd);
+  const valueTokens = expressionTokens.filter((token) => token.span.start >= operatorEnd);
+  const open = [...visibleValueTokens].reverse().find((token) =>
+    token.kind === "lbracket" && token.span.end <= cursor
+  );
+  if (open === undefined) return null;
+
+  const close = valueTokens.find((token) =>
+    token.kind === "rbracket" && token.span.start >= open.span.end
+  );
+  const contentEnd = close?.span.start ?? source.length;
+  const boundedCursor = clamp(cursor, open.span.end, contentEnd);
+  const itemRange = currentListItemRange(source, open.span.end, boundedCursor);
+  const content = source.slice(open.span.end, contentEnd);
+  return {
+    prefix: source.slice(itemRange.start, itemRange.end).replace(/^"/, "").replace(/"$/, ""),
+    replacementRange: itemRange,
+    list: {
+      range: { start: open.span.start, end: close?.span.end ?? contentEnd },
+      values: parseListLiteral(content),
+      itemRange,
+    },
+  };
+}
+
+function currentListItemRange(source: string, contentStart: number, cursor: number): SourceSpan {
+  let start = contentStart;
+  let index = contentStart;
+  let inQuote = false;
+
+  while (index < cursor) {
+    const char = source[index] ?? "";
+    if (char === "\\") {
+      index += 2;
+      continue;
+    }
+    if (char === '"') {
+      inQuote = !inQuote;
+      index += 1;
+      continue;
+    }
+    if (char === "," && !inQuote) {
+      start = index + 1;
+    }
+    index += 1;
+  }
+
+  while (start < cursor && /\s/.test(source[start] ?? "")) start += 1;
+  let end = cursor;
+  while (end > start && /\s/.test(source[end - 1] ?? "")) end -= 1;
+  return { start, end };
 }
 
 function isValueToken(token: Token): boolean {

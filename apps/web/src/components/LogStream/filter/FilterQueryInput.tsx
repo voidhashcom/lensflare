@@ -36,6 +36,7 @@ import {
   applyFieldSuggestion,
   applyOperatorSuggestion,
   applyValueSuggestion,
+  toggleListValueSuggestion,
 } from "./querySplicer";
 import {
   completeParsedPills,
@@ -586,6 +587,11 @@ function applySuggestion({
       return;
     }
     case "value": {
+      if (parsed.cursorContext.kind === "value" && parsed.cursorContext.list !== undefined) {
+        const result = toggleListValueSuggestion(source, parsed.cursorContext.list, suggestion.value);
+        commitSource(result.source, result.cursor);
+        return;
+      }
       const result = applyValueSuggestion(ctx, suggestion.value);
       if (result === null) return;
       commitSource(result.source, result.cursor);

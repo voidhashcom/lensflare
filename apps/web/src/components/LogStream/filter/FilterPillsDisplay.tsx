@@ -1,7 +1,12 @@
 import type { TelemetryLogField } from "~/data/logApi";
 import { cn } from "~/lib/utils";
 
-import { isValuelessOperator, resolvePillField, type ParsedPill } from "./syntax";
+import {
+  isValuelessOperator,
+  LIST_OPERATORS,
+  resolvePillField,
+  type ParsedPill,
+} from "./syntax";
 
 interface FilterPillsDisplayProps {
   pills: ReadonlyArray<ParsedPill>;
@@ -60,9 +65,10 @@ function FilterPillView({ pill, fields }: FilterPillViewProps) {
   const resolved = resolvePillField(pill, fields);
   const fieldText = pill.fieldPath.join(".");
   const hasValue = !isValuelessOperator(pill.operator);
-  const valueText = pill.valueWasQuoted
-    ? `"${pill.rawValue}"`
-    : pill.rawValue;
+  const rawValueText = pill.valueWasQuoted ? `"${pill.rawValue}"` : pill.rawValue;
+  const valueText = LIST_OPERATORS.includes(pill.operator)
+    ? `[${rawValueText}]`
+    : rawValueText;
   const unknownClass = resolved === null ? "filter-query-pill--unknown" : "";
 
   return (
@@ -78,6 +84,7 @@ function FilterPillView({ pill, fields }: FilterPillViewProps) {
       <span
         className={cn(
           "filter-query-pill filter-query-pill--operator",
+          "px-1",
           !hasValue && "filter-query-pill--end",
           unknownClass,
         )}

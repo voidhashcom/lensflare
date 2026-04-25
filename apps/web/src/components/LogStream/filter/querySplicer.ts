@@ -6,6 +6,7 @@ export {
   extractLeadingOperator,
   findLastWhitespace,
   quoteValueIfNeeded,
+  toggleListValueSuggestion,
   type SpliceContext,
   type SpliceResult,
 } from "@lensflare/query";

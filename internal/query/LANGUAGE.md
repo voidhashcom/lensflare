@@ -195,6 +195,20 @@ status not in ["ok", "unset"]
 Arrays may contain strings, numbers, and booleans. Nested arrays, regex values,
 and `null` inside arrays do not compile to filter values.
 
+Editor completions for `in` and `not in` insert the brackets automatically:
+
+```text
+status in [|]
+```
+
+When the cursor is inside the brackets, value suggestions are multi-select.
+Selecting an unselected value appends it to the array; selecting an already
+selected value removes it:
+
+```text
+status in [error, ok|]
+```
+
 ## Diagnostics
 
 Lexer and parser diagnostics are recoverable and include source spans. Examples:
@@ -245,12 +259,37 @@ lev|
 field completion `level` edits `lev` to:
 
 ```text
-level = "|"
+level |
 ```
+
+Field completions intentionally stop after the field path. The next cursor
+context is `operator`, so the user explicitly chooses `=`, `contains`, `in`, or
+another operator.
 
 Value completions use field catalog values when present. Dynamic server-backed
 value lookup remains a UI concern, but the context and replacement range come
 from the language service.
+
+For list operators, value contexts may include a `list` object:
+
+```ts
+{
+  kind: "value",
+  fieldPath: ["status"],
+  operator: "in",
+  operatorToken: "in",
+  negated: false,
+  valuePrefix: "ok",
+  list: {
+    range: { start: 10, end: 21 },
+    values: ["error", "ok"],
+    itemRange: { start: 18, end: 20 }
+  }
+}
+```
+
+The command dialog uses this metadata to render checked values and to toggle
+array items without reparsing source text in React.
 
 ## Edge Cases
 

@@ -180,7 +180,14 @@ export type CursorContext =
       readonly operatorToken: string;
       readonly negated: boolean;
       readonly valuePrefix: string;
+      readonly list?: QueryListCursorContext;
     };
+
+export interface QueryListCursorContext {
+  readonly range: SourceSpan;
+  readonly values: ReadonlyArray<string>;
+  readonly itemRange: SourceSpan;
+}
 
 export interface ParseResult {
   readonly ast: QueryNode | null;

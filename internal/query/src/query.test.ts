@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   analyzeQueryLanguage,
+  applyFieldSuggestion,
   applyOperatorSuggestion,
   applyQueryCompletion,
   applyValueSuggestion,
@@ -13,6 +14,7 @@ import {
   parseQueryStrict,
   parseTelemetryQuery,
   QueryLanguageError,
+  toggleListValueSuggestion,
 } from "./index.ts";
 import type { QueryField } from "./index.ts";
 
@@ -216,17 +218,32 @@ describe("language service", () => {
       kind: "field",
       textEdit: {
         range: { start: 0, end: 3 },
-        newText: 'level = ""',
-        cursorOffset: 9,
+        newText: "level ",
+        cursorOffset: 6,
       },
     });
     expect(fieldCompletion === undefined ? null : applyQueryCompletion("lev", fieldCompletion)).toEqual({
-      source: 'level = ""',
-      cursor: 9,
+      source: "level ",
+      cursor: 6,
+    });
+    expect(getEditorContext("level ", 6, fields).cursorContext).toEqual({
+      kind: "operator",
+      fieldPath: ["level"],
+      tokenPrefix: "",
     });
 
     const operatorAnalysis = analyzeQueryLanguage("durationUs !", "durationUs !".length, fields);
     expect(operatorAnalysis.completions.map((completion) => completion.label)).toContain("!=");
+
+    const listOperatorAnalysis = analyzeQueryLanguage("status i", "status i".length, fields);
+    const listOperatorCompletion = listOperatorAnalysis.completions.find((completion) => completion.label === "in");
+    expect(listOperatorCompletion).toMatchObject({
+      kind: "operator",
+      textEdit: {
+        newText: "in []",
+        cursorOffset: 4,
+      },
+    });
 
     const valueAnalysis = analyzeQueryLanguage("level = e", "level = e".length, fields);
     const valueCompletion = valueAnalysis.completions.find((completion) => completion.label === "error");
@@ -264,9 +281,49 @@ describe("language service", () => {
       ]),
     );
   });
+
+  it("tracks selected list values when the cursor is inside an array literal", () => {
+    expect(analyzeQueryLanguage("status in []", "status in [".length, fields).cursorContext).toMatchObject({
+      kind: "value",
+      fieldPath: ["status"],
+      operator: "in",
+      valuePrefix: "",
+      list: {
+        range: { start: 10, end: 12 },
+        values: [],
+      },
+    });
+
+    const result = analyzeQueryLanguage("status in [error, ok]", "status in [error, ok".length, fields);
+
+    expect(result.cursorContext).toMatchObject({
+      kind: "value",
+      fieldPath: ["status"],
+      operator: "in",
+      valuePrefix: "ok",
+      list: {
+        range: { start: 10, end: 21 },
+        values: ["error", "ok"],
+      },
+    });
+  });
 });
 
 describe("suggestion splicing", () => {
+  it("inserts only the field and leaves the cursor in operator context", () => {
+    const source = "mess";
+    const field = fields.find((entry) => entry.path.join(".") === "message");
+
+    expect(field === undefined ? null : applyFieldSuggestion({
+      source,
+      trailingStart: 0,
+      trailingText: source,
+    }, field)).toEqual({
+      source: "message ",
+      cursor: "message ".length,
+    });
+  });
+
   it("preserves the separator before a new expression when applying an operator", () => {
     const source = "serviceName = lensflare-desktop spanId";
     const parsed = parseFilterInput(source, source.length, fields);
@@ -283,6 +340,21 @@ describe("suggestion splicing", () => {
     });
   });
 
+  it("wraps list operators in brackets and places the cursor inside", () => {
+    const source = "status";
+    const parsed = parseFilterInput(source, source.length, fields);
+    const listOperator = operatorSyntaxesForKind("enum").find((syntax) => syntax.token === "in");
+
+    expect(listOperator === undefined ? null : applyOperatorSuggestion({
+      source,
+      trailingStart: parsed.trailingStart,
+      trailingText: parsed.trailingText,
+    }, listOperator)).toEqual({
+      source: "status in []",
+      cursor: "status in [".length,
+    });
+  });
+
   it("preserves the separator before a new expression when applying a value", () => {
     const source = "serviceName = lensflare-desktop level = ";
     const trailingStart = "serviceName = lensflare-desktop".length;
@@ -294,6 +366,51 @@ describe("suggestion splicing", () => {
     }, "error")).toEqual({
       source: "serviceName = lensflare-desktop level = error ",
       cursor: "serviceName = lensflare-desktop level = error ".length,
+    });
+  });
+
+  it("applies a value after an incomplete not-equals expression", () => {
+    const source = "message != ";
+    const parsed = parseFilterInput(source, source.length, fields);
+
+    expect(parsed.trailingText).toBe(source);
+    expect(applyValueSuggestion({
+      source,
+      trailingStart: parsed.trailingStart,
+      trailingText: parsed.trailingText,
+    }, "DatasetService.listDatasets")).toEqual({
+      source: "message != DatasetService.listDatasets ",
+      cursor: "message != DatasetService.listDatasets ".length,
+    });
+  });
+
+  it("wraps values for list operators when brackets are missing", () => {
+    const source = "status in ";
+    expect(applyValueSuggestion({
+      source,
+      trailingStart: 0,
+      trailingText: source,
+    }, "error")).toEqual({
+      source: "status in [error] ",
+      cursor: "status in [error] ".length,
+    });
+  });
+
+  it("toggles values inside list literals", () => {
+    const source = "status in [error]";
+    const parsed = parseFilterInput(source, "status in [error".length, fields);
+
+    if (parsed.cursorContext.kind !== "value" || parsed.cursorContext.list === undefined) {
+      throw new Error("Expected list value context.");
+    }
+
+    expect(toggleListValueSuggestion(source, parsed.cursorContext.list, "ok")).toEqual({
+      source: "status in [error, ok]",
+      cursor: "status in [error, ok".length,
+    });
+    expect(toggleListValueSuggestion(source, parsed.cursorContext.list, "error")).toEqual({
+      source: "status in []",
+      cursor: "status in [".length,
     });
   });
 });

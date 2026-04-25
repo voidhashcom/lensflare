@@ -1,6 +1,10 @@
-import type { QueryField } from "./ast.ts";
+import type { QueryField, QueryListCursorContext } from "./ast.ts";
 import type { OperatorSyntax } from "./ast.ts";
-import { defaultOperatorTokenForKind, TOKENS_BY_LENGTH } from "./operators.ts";
+import {
+  LIST_OPERATORS,
+  syntaxForOperatorToken,
+  TOKENS_BY_LENGTH,
+} from "./operators.ts";
 
 export interface SpliceResult {
   readonly source: string;
@@ -14,17 +18,14 @@ export interface SpliceContext {
 }
 
 export function applyFieldSuggestion(ctx: SpliceContext, field: QueryField): SpliceResult {
-  const token = defaultOperatorTokenForKind(field.kind);
   const pathString = field.path.join(".");
   const expressionStart = findReplacementStart(ctx.trailingText);
   const keepBefore = ctx.trailingText.slice(0, expressionStart);
   const composing = readComposingIdent(ctx.trailingText.slice(expressionStart));
-  const inserted = field.kind === "number"
-    ? `${pathString} ${token} `
-    : `${pathString} ${token} ""`;
+  const inserted = `${pathString} `;
   const nextTrailing = keepBefore + composing.leadingWhitespace + inserted;
   const nextSource = ctx.source.slice(0, ctx.trailingStart) + nextTrailing;
-  const cursorOffset = field.kind === "number" ? nextTrailing.length : nextTrailing.length - 1;
+  const cursorOffset = nextTrailing.length;
   return { source: nextSource, cursor: ctx.trailingStart + cursorOffset };
 }
 
@@ -37,9 +38,16 @@ export function applyOperatorSuggestion(
   const composing = ctx.trailingText.slice(expressionStart);
   const head = readComposingIdent(composing);
   if (head.ident.length === 0) return null;
-  const nextTrailing = `${keepBefore}${head.leadingWhitespace}${head.ident} ${syntax.token} `;
+  const inserted = LIST_OPERATORS.includes(syntax.operator)
+    ? `${syntax.token} []`
+    : `${syntax.token} `;
+  const nextTrailing = `${keepBefore}${head.leadingWhitespace}${head.ident} ${inserted}`;
   const nextSource = ctx.source.slice(0, ctx.trailingStart) + nextTrailing;
-  return { source: nextSource, cursor: ctx.trailingStart + nextTrailing.length };
+  return {
+    source: nextSource,
+    cursor: ctx.trailingStart + nextTrailing.length -
+      (LIST_OPERATORS.includes(syntax.operator) ? 1 : 0),
+  };
 }
 
 export function applyValueSuggestion(ctx: SpliceContext, value: string): SpliceResult | null {
@@ -52,9 +60,29 @@ export function applyValueSuggestion(ctx: SpliceContext, value: string): SpliceR
   const op = extractLeadingOperator(afterIdent);
   if (op === null) return null;
   const quotedValue = quoteValueIfNeeded(value);
-  const nextTrailing = `${keepBefore}${head.leadingWhitespace}${head.ident} ${op.token} ${quotedValue} `;
+  const syntax = syntaxForOperatorToken(op.token);
+  const valueSource = syntax !== undefined && LIST_OPERATORS.includes(syntax.operator)
+    ? `[${quotedValue}] `
+    : `${quotedValue} `;
+  const nextTrailing = `${keepBefore}${head.leadingWhitespace}${head.ident} ${op.token} ${valueSource}`;
   const nextSource = ctx.source.slice(0, ctx.trailingStart) + nextTrailing;
   return { source: nextSource, cursor: ctx.trailingStart + nextTrailing.length };
+}
+
+export function toggleListValueSuggestion(
+  source: string,
+  list: QueryListCursorContext,
+  value: string,
+): SpliceResult {
+  const nextValues = list.values.includes(value)
+    ? list.values.filter((item) => item !== value)
+    : [...list.values, value];
+  const listSource = `[${nextValues.map(quoteValueIfNeeded).join(", ")}]`;
+  const nextSource = source.slice(0, list.range.start) + listSource + source.slice(list.range.end);
+  return {
+    source: nextSource,
+    cursor: list.range.start + listSource.length - 1,
+  };
 }
 
 function readComposingIdent(text: string): {
