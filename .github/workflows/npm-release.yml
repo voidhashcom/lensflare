@@ -5,6 +5,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      effect_sdk_hotfix:
+        description: "Optional Lensflare-only hotfix number for @lensflare/effect, for example 1."
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -16,6 +21,8 @@ jobs:
     name: Release packages
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    env:
+      LENSFLARE_EFFECT_SDK_HOTFIX: ${{ inputs.effect_sdk_hotfix }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

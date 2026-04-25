@@ -8,6 +8,16 @@ Effect observability layer for Lensflare local logs and traces.
 pnpm add effect @lensflare/effect
 ```
 
+`@lensflare/effect` follows Effect's version. Install matching versions unless a Lensflare-only hotfix release notes says otherwise.
+
+For example:
+
+```bash
+pnpm add effect@4.0.0-beta.55 @lensflare/effect@4.0.0-beta.55
+```
+
+Lensflare-only emergency fixes use versions that still identify their target Effect release. During Effect beta releases, `4.0.0-beta.55-lensflare.1` targets `effect@4.0.0-beta.55`. For stable Effect releases, Lensflare hotfixes use the next patch version and keep the exact compatible Effect version in `peerDependencies`.
+
 ## Usage
 
 ```ts

@@ -458,14 +458,13 @@ importers:
         version: '@voidzero-dev/vite-plus-test@0.1.19(@arethetypeswrong/core@0.18.2)(@opentelemetry/api@1.9.1)(@types/node@24.12.2)(esbuild@0.27.7)(jiti@2.6.1)(publint@0.3.18)(terser@5.46.1)(tsx@4.21.0)(typescript@5.9.3)(vite@8.0.9(@types/node@24.12.2)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3))(yaml@2.8.3)'
 
   packages/effect:
-    dependencies:
-      effect:
-        specifier: 'catalog:'
-        version: 4.0.0-beta.55
     devDependencies:
       '@effect/vitest':
         specifier: 'catalog:'
         version: 4.0.0-beta.55(@voidzero-dev/vite-plus-test@0.1.19(@arethetypeswrong/core@0.18.2)(@opentelemetry/api@1.9.1)(@types/node@24.12.2)(esbuild@0.27.7)(jiti@2.6.1)(publint@0.3.18)(terser@5.46.1)(tsx@4.21.0)(typescript@5.9.3)(vite@8.0.9(@types/node@24.12.2)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3))(yaml@2.8.3))(effect@4.0.0-beta.55)
+      effect:
+        specifier: 'catalog:'
+        version: 4.0.0-beta.55
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
