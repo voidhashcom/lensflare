@@ -1,0 +1,32 @@
+---
+/**
+ * Download page — pulls the released desktop app from GitHub. The layout
+ * mirrors the Paper design 1:1
+ * (https://app.paper.design/file/01KQ1Z41FR6DQKXAPQ37VXG66J/2-0/2L-0):
+ *
+ *   header → title + version pill → macOS cards → older-versions cell → footer
+ *
+ * Sections render as full-width bands with a `1152px` inner container framed
+ * by hairline rules so the download page sits in the same editorial grid as
+ * the home page.
+ */
+import BaseLayout from "../layouts/BaseLayout.astro";
+import Header from "../components/Header.astro";
+import { DownloadHero } from "../components/DownloadHero";
+import { PlatformDownloads } from "../components/PlatformDownloads";
+import { MoreReleases } from "../components/MoreReleases";
+import { Footer } from "../components/Footer";
+---
+
+<BaseLayout
+  title="Download Lensflare — Free, open-source development observability"
+  description="Download Lensflare for macOS. Free, open-source development observability stack for humans and agents."
+>
+  <Header />
+  <main>
+    <DownloadHero />
+    <PlatformDownloads />
+    <MoreReleases />
+  </main>
+  <Footer />
+</BaseLayout>

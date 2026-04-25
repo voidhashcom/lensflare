@@ -17,8 +17,8 @@ export function Hero(): ReactNode {
             Development observability stack for humans and agents
           </h1>
           <p className="max-w-[368px] text-center text-[14px] leading-[150%] tracking-[-0.03em] text-muted-foreground">
-            You and your agent can now move beyond static code to see what
-            actually happened at runtime.
+            You and your agent can now move beyond static code to see what actually happened at
+            runtime.
           </p>
         </div>
 
@@ -32,12 +32,10 @@ export function Hero(): ReactNode {
             Download for Mac
           </a>
           <a
-            href={GITHUB_REPO_URL}
-            target="_blank"
-            rel="noreferrer noopener"
+            href={"/download"}
             className="text-[14px] leading-[150%] text-[var(--primary)] transition-colors hover:text-muted-foreground"
           >
-            Download for Mac
+            Other platforms
           </a>
         </div>
       </div>
