@@ -48,13 +48,13 @@ const sdk = new NodeSDK({
   }),
   logRecordProcessor: new BatchLogRecordProcessor(
     new OTLPLogExporter({
-      url: "{{serverOrigin}}/ingest/otlp/v1/logs/{{projectSlug}}/{{datasetSlug}}",
+      url: "{{serverOrigin}}/ingest/otlp/v1/logs/{{datasetSlug}}",
     }),
   ),
   spanProcessors: [
     new BatchSpanProcessor(
       new OTLPTraceExporter({
-        url: "{{serverOrigin}}/ingest/otlp/v1/traces/{{projectSlug}}/{{datasetSlug}}",
+        url: "{{serverOrigin}}/ingest/otlp/v1/traces/{{datasetSlug}}",
       }),
     ),
   ],

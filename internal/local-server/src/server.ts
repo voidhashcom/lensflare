@@ -29,7 +29,6 @@ import { mkdir } from "node:fs/promises";
 import { createServer } from "node:http";
 import { dirname } from "node:path";
 import { makeSqliteDatabaseLayer } from "./db/database.ts";
-import { makeDatasetTag } from "./domain/slug.ts";
 import { AxiomNativeDecoder } from "./ingest/providers/axiom/decoder.ts";
 import { axiomRouteLayer } from "./ingest/providers/axiom/route.ts";
 import { TelemetryFilterCatalogService } from "./ingest/telemetryFilterCatalogService.ts";
@@ -93,10 +92,9 @@ const otelShutdownTimeout = "250 millis";
 const defaultOtelConfig: NonNullable<StartLocalServerOptions["otel"]> = {
   enabled: false,
   projectSlug: "lensflare",
-  datasetSlug: "dev",
+  datasetSlug: "lensflare",
 };
 const defaultOtelProjectName = "Lensflare";
-const defaultOtelDatasetName = "Dev";
 
 function makeObservabilityLayer(
   origin: string,
@@ -119,7 +117,7 @@ function makeObservabilityLayer(
     resource,
     logRecordProcessor: new BatchLogRecordProcessor(
       new OTLPLogExporter({
-        url: `${origin}/ingest/otlp/v1/logs/${otel.projectSlug}/${otel.datasetSlug}`,
+        url: `${origin}/ingest/otlp/v1/logs/${otel.datasetSlug}`,
       }),
       {
         scheduledDelayMillis: 1_000,
@@ -128,7 +126,7 @@ function makeObservabilityLayer(
     ),
     spanProcessor: new BatchSpanProcessor(
       new OTLPTraceExporter({
-        url: `${origin}/ingest/otlp/v1/traces/${otel.projectSlug}/${otel.datasetSlug}`,
+        url: `${origin}/ingest/otlp/v1/traces/${otel.datasetSlug}`,
       }),
       {
         scheduledDelayMillis: 1_000,
@@ -160,26 +158,7 @@ function ensureTelemetryCatalogTarget(
           name: defaultOtelProjectName,
           slug: otel.projectSlug,
         }));
-      const datasetTag = makeDatasetTag(project.slug, otel.datasetSlug);
-      const existingDataset = (yield* datasets.listDatasets()).find(
-        (dataset) => dataset.slug === datasetTag,
-      );
-
-      if (existingDataset === undefined) {
-        yield* datasets.createDataset(project.id, {
-          name: defaultOtelDatasetName,
-          slug: otel.datasetSlug,
-        });
-        return;
-      }
-
-      if (existingDataset.projectId !== project.id) {
-        return yield* Effect.die(
-          new Error(
-            `Telemetry dataset slug "${otel.datasetSlug}" already belongs to project "${existingDataset.projectId}" and cannot be attached to "${project.id}".`,
-          ),
-        );
-      }
+      yield* datasets.ensureProjectDataset(project.id, project.name, otel.datasetSlug);
     }),
   );
 }

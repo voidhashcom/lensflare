@@ -1,4 +1,4 @@
-import { PlusIcon, SettingsIcon, Trash2Icon } from "lucide-react";
+import { SettingsIcon, Trash2Icon } from "lucide-react";
 
 import { Menu, MenuItem, MenuPopup } from "~/components/ui/menu";
 
@@ -9,7 +9,6 @@ export interface SidebarContextMenuProps {
   target: SidebarContextMenuTarget | null;
   anchor: CursorAnchor | null;
   onOpenChange: (open: boolean) => void;
-  onCreateDataset: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }
@@ -23,7 +22,6 @@ export function SidebarContextMenu({
   target,
   anchor,
   onOpenChange,
-  onCreateDataset,
   onEdit,
   onDelete,
 }: SidebarContextMenuProps) {
@@ -37,33 +35,14 @@ export function SidebarContextMenu({
           side="bottom"
           sideOffset={6}
         >
-          {target.kind === "project" ? (
-            <>
-              <MenuItem onClick={onCreateDataset}>
-                <PlusIcon className="size-4" />
-                New dataset
-              </MenuItem>
-              <MenuItem onClick={onEdit}>
-                <SettingsIcon className="size-4" />
-                Edit project
-              </MenuItem>
-              <MenuItem onClick={onDelete} variant="destructive">
-                <Trash2Icon className="size-4" />
-                Delete project
-              </MenuItem>
-            </>
-          ) : (
-            <>
-              <MenuItem onClick={onEdit}>
-                <SettingsIcon className="size-4" />
-                Edit dataset
-              </MenuItem>
-              <MenuItem onClick={onDelete} variant="destructive">
-                <Trash2Icon className="size-4" />
-                Delete dataset
-              </MenuItem>
-            </>
-          )}
+          <MenuItem onClick={onEdit}>
+            <SettingsIcon className="size-4" />
+            Edit project
+          </MenuItem>
+          <MenuItem onClick={onDelete} variant="destructive">
+            <Trash2Icon className="size-4" />
+            Delete project
+          </MenuItem>
         </MenuPopup>
       ) : null}
     </Menu>

@@ -35,7 +35,12 @@ describe("ProjectService", () => {
         expect(created.name).toBe("Lensflare");
         expect(created.slug).toBe("lensflare");
         expect(created.icon).toBe(DEFAULT_PROJECT_ICON);
-        expect(created.datasets).toEqual([]);
+        expect(created.datasets).toHaveLength(1);
+        expect(created.datasets[0]).toMatchObject({
+          name: "Lensflare",
+          projectId: created.id,
+          slug: "lensflare",
+        });
 
         const listed = yield* service.listProjects();
         expect(listed).toHaveLength(1);
@@ -78,14 +83,12 @@ describe("ProjectService", () => {
         const datasetService = yield* DatasetService;
 
         const project = yield* projectService.createProject({ name: "Lensflare" });
-        const dataset = yield* datasetService.createDataset(project.id, {
-          name: "traces",
-        });
+        const dataset = project.datasets[0];
 
         yield* projectService.deleteProject(project.id);
 
         const remaining = yield* datasetService.listDatasets();
-        expect(remaining.find((row) => row.id === dataset.id)).toBeUndefined();
+        expect(remaining.find((row) => row.id === dataset?.id)).toBeUndefined();
       }),
     ),
   );

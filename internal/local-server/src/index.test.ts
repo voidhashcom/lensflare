@@ -162,10 +162,7 @@ describe("startLocalServer", () => {
               const client = yield* RpcClient.make(CatalogRpcs);
               const createdProject = yield* client.CreateProject({ name: " Lensflare " });
               const listedProjects = yield* client.ListProjects();
-              const createdDataset = yield* client.CreateDataset({
-                projectId: createdProject.id,
-                input: { name: " traces " },
-              });
+              const createdDataset = createdProject.datasets[0];
               const fetchedProject = yield* client.GetProject({
                 projectId: createdProject.id,
               });
@@ -186,11 +183,11 @@ describe("startLocalServer", () => {
       expect(listedProjects).toHaveLength(1);
       expect(listedProjects[0]?.id).toBe(createdProject.id);
 
-      expect(createdDataset.projectId).toBe(createdProject.id);
-      expect(createdDataset.name).toBe("traces");
+      expect(createdDataset?.projectId).toBe(createdProject.id);
+      expect(createdDataset?.name).toBe("Lensflare");
 
       expect(fetchedProject.datasets).toHaveLength(1);
-      expect(fetchedProject.datasets[0]?.id).toBe(createdDataset.id);
+      expect(fetchedProject.datasets[0]?.id).toBe(createdDataset?.id);
     } finally {
       await Promise.all([
         clientRuntime.dispose(),
@@ -230,7 +227,7 @@ describe("startLocalServer", () => {
             const datasetEvents: Array<string> = [];
 
             const projectFiber = yield* client.SubscribeProjectEvents().pipe(
-              Stream.take(2),
+              Stream.take(3),
               Stream.runForEach((event) =>
                 Effect.sync(() => {
                   const valueId = "value" in event ? event.value.id : event.id;
@@ -257,15 +254,9 @@ describe("startLocalServer", () => {
             yield* Effect.sleep(Duration.millis(100));
 
             const project = yield* client.CreateProject({ name: "Lensflare" });
-            const dataset = yield* client.CreateDataset({
+            yield* client.UpdateProject({
               projectId: project.id,
-              input: { name: "traces" },
-            });
-
-            yield* client.UpdateDataset({
-              projectId: project.id,
-              datasetId: dataset.id,
-              input: { name: "spans" },
+              input: { name: "Observability", slug: "observability" },
             });
             yield* client.DeleteProject({ projectId: project.id });
             yield* Fiber.join(projectFiber);
@@ -277,6 +268,7 @@ describe("startLocalServer", () => {
       );
 
       expect(projectEvents).toEqual([
+        expect.stringMatching(/^upsert:/),
         expect.stringMatching(/^upsert:/),
         expect.stringMatching(/^delete:/),
       ]);
@@ -322,16 +314,13 @@ describe("startLocalServer", () => {
           Effect.gen(function* () {
             const client = yield* RpcClient.make(CatalogRpcs);
             const project = yield* client.CreateProject({ name: "Lensflare" });
-            const dataset = yield* client.CreateDataset({
-              projectId: project.id,
-              input: { name: "traces" },
-            });
+            const dataset = project.datasets[0];
             const events: Array<unknown> = [];
 
             const fiber = yield* client
               .SubscribeTelemetryLogEvents({
                 projectId: project.id,
-                datasetId: dataset.id,
+                datasetId: dataset?.id ?? "",
               })
               .pipe(
                 Stream.take(1),
@@ -346,7 +335,7 @@ describe("startLocalServer", () => {
             yield* Effect.sleep(Duration.millis(100));
 
             const response = yield* Effect.tryPromise(() =>
-              fetch(`${server.origin}/ingest/otlp/v1/logs/lensflare/traces`, {
+              fetch(`${server.origin}/ingest/otlp/v1/logs/lensflare`, {
                 method: "POST",
                 headers: {
                   "content-type": "application/json",

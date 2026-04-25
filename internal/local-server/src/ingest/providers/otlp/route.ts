@@ -45,10 +45,9 @@ export const otlpRouteLayer = Layer.effectDiscard(
     const logsDecoder = yield* OtlpLogsDecoder;
     const tracesDecoder = yield* OtlpTracesDecoder;
 
-    yield* router.add("POST", "/ingest/otlp/v1/logs/:projectSlug/:datasetSlug", (request) =>
+    yield* router.add("POST", "/ingest/otlp/v1/logs/:datasetSlug", (request) =>
       Effect.gen(function* () {
         const params = yield* HttpRouter.params;
-        const projectSlug = params.projectSlug ?? "";
         const datasetSlug = params.datasetSlug ?? "";
         const contentType = normalizeContentType(request.headers["content-type"]);
         const contentEncoding = normalizeContentEncoding(request.headers["content-encoding"]);
@@ -81,7 +80,6 @@ export const otlpRouteLayer = Layer.effectDiscard(
           });
           const batch = yield* logsDecoder.decode(format, body);
           const result = yield* ingest.ingest({
-            projectSlug,
             datasetSlug,
             batch,
             requestContentType: contentType,
@@ -101,7 +99,7 @@ export const otlpRouteLayer = Layer.effectDiscard(
               route: request.originalUrl,
               contentType: request.headers["content-type"] ?? null,
               contentEncoding: request.headers["content-encoding"] ?? null,
-              projectSlug,
+              projectSlug: null,
               datasetSlug,
               requestBytes: rawBody.byteLength,
               errorCategory: mapping.tag,
@@ -113,10 +111,9 @@ export const otlpRouteLayer = Layer.effectDiscard(
       }),
     );
 
-    yield* router.add("POST", "/ingest/otlp/v1/traces/:projectSlug/:datasetSlug", (request) =>
+    yield* router.add("POST", "/ingest/otlp/v1/traces/:datasetSlug", (request) =>
       Effect.gen(function* () {
         const params = yield* HttpRouter.params;
-        const projectSlug = params.projectSlug ?? "";
         const datasetSlug = params.datasetSlug ?? "";
         const contentType = normalizeContentType(request.headers["content-type"]);
         const contentEncoding = normalizeContentEncoding(request.headers["content-encoding"]);
@@ -149,7 +146,6 @@ export const otlpRouteLayer = Layer.effectDiscard(
           });
           const batch = yield* tracesDecoder.decode(format, body);
           const result = yield* ingest.ingest({
-            projectSlug,
             datasetSlug,
             batch,
             requestContentType: contentType,
@@ -170,7 +166,7 @@ export const otlpRouteLayer = Layer.effectDiscard(
               route: request.originalUrl,
               contentType: request.headers["content-type"] ?? null,
               contentEncoding: request.headers["content-encoding"] ?? null,
-              projectSlug,
+              projectSlug: null,
               datasetSlug,
               requestBytes: rawBody.byteLength,
               errorCategory: mapping.tag,

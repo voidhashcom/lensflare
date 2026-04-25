@@ -24,8 +24,8 @@ describe("@lensflare/effect", () => {
     });
 
     expect(config.enabled).toBe(true);
-    expect(config.logsUrl).toBe("http://localhost:43110/ingest/otlp/v1/logs/lensflare/api-dev");
-    expect(config.tracesUrl).toBe("http://localhost:43110/ingest/otlp/v1/traces/lensflare/api-dev");
+    expect(config.logsUrl).toBe("http://localhost:43110/ingest/otlp/v1/logs/api-dev");
+    expect(config.tracesUrl).toBe("http://localhost:43110/ingest/otlp/v1/traces/api-dev");
     expect(config.resource.serviceName).toBe("api");
     expect(config.resource.serviceVersion).toBe("1.2.3");
     expect(config.resource.attributes["lensflare.dataset_slug"]).toBe("api-dev");

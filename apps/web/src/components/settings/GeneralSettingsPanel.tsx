@@ -169,8 +169,8 @@ export function GeneralSettingsPanel() {
       >
         {datasets.length === 0 ? (
           <SettingsRow
-            description="Storage appears here after a dataset is created."
-            title="No datasets"
+            description="Storage appears here after a project is created."
+            title="No project datasets"
           />
         ) : (
           datasetGroups.map((group) => (

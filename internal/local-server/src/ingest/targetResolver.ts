@@ -1,9 +1,8 @@
 import { Context, Effect, Layer } from "effect";
 import { SqlError } from "effect/unstable/sql";
-import { makeDatasetTag } from "../domain/slug.ts";
 import { DatasetsRepository } from "../repositories/datasetsRepository.ts";
 import { ProjectsRepository } from "../repositories/projectsRepository.ts";
-import { ProjectDatasetMismatch, UnknownDatasetSlug, UnknownProjectSlug } from "./errors.ts";
+import { UnknownDatasetSlug } from "./errors.ts";
 
 export interface IngestTarget {
   readonly projectId: string;
@@ -16,12 +15,8 @@ export class IngestTargetResolver extends Context.Service<
   IngestTargetResolver,
   {
     readonly resolve: (
-      projectSlug: string,
       datasetSlug: string,
-    ) => Effect.Effect<
-      IngestTarget,
-      UnknownProjectSlug | UnknownDatasetSlug | ProjectDatasetMismatch | SqlError.SqlError
-    >;
+    ) => Effect.Effect<IngestTarget, UnknownDatasetSlug | SqlError.SqlError>;
   }
 >()("@lensflare/local-server/IngestTargetResolver") {
   static readonly layer = Layer.effect(
@@ -31,22 +26,18 @@ export class IngestTargetResolver extends Context.Service<
       const datasets = yield* DatasetsRepository;
 
       const resolve = Effect.fn("IngestTargetResolver.resolve")(function* (
-        projectSlug: string,
         datasetSlug: string,
       ) {
-        const project = yield* projects.findBySlug(projectSlug);
-        if (project === undefined) {
-          return yield* new UnknownProjectSlug({ projectSlug });
-        }
-
-        const datasetTag = makeDatasetTag(project.slug, datasetSlug);
-        const dataset = yield* datasets.findBySlug(datasetTag);
+        const dataset = yield* datasets.findBySlug(datasetSlug);
         if (dataset === undefined) {
           return yield* new UnknownDatasetSlug({ datasetSlug });
         }
 
-        if (dataset.project_id !== project.id) {
-          return yield* new ProjectDatasetMismatch({ projectSlug, datasetSlug });
+        const project = yield* projects.findById(dataset.project_id);
+        if (project === undefined) {
+          return yield* Effect.die(
+            new Error(`Dataset "${dataset.id}" references missing project "${dataset.project_id}".`),
+          );
         }
 
         return {

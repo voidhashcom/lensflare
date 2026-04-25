@@ -79,11 +79,11 @@ export function LogStreamHeader({
                   render={
                     <Button
                       aria-label="View setup guide"
-                      className="size-8 rounded-md bg-background/60 shadow-xs/5 hover:bg-accent/50 sm:size-8"
+                      className="size-8 sm:size-8"
                       size="icon-sm"
-                      variant="outline"
+                      variant="ghost"
                     >
-                      <BookOpenIcon />
+                      <BookOpenIcon className="size-3.5 text-muted-foreground" />
                     </Button>
                   }
                 />

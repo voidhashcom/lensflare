@@ -55,7 +55,7 @@ export function initTelemetry() {
     spanProcessors: [
       new BatchSpanProcessor(
         new OTLPTraceExporter({
-          url: "{{serverOrigin}}/ingest/otlp/v1/traces/{{projectSlug}}/{{datasetSlug}}",
+          url: "{{serverOrigin}}/ingest/otlp/v1/traces/{{datasetSlug}}",
         }),
       ),
     ],
@@ -66,7 +66,7 @@ export function initTelemetry() {
   loggerProvider.addLogRecordProcessor(
     new BatchLogRecordProcessor(
       new OTLPLogExporter({
-        url: "{{serverOrigin}}/ingest/otlp/v1/logs/{{projectSlug}}/{{datasetSlug}}",
+        url: "{{serverOrigin}}/ingest/otlp/v1/logs/{{datasetSlug}}",
       }),
     ),
   );

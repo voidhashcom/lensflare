@@ -1,7 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 
-import { deleteDataset } from "~/data/datasetApi";
 import { deleteProject } from "~/data/projectApi";
 
 import type { DeleteTarget } from "./types";
@@ -35,7 +34,6 @@ const initialState: DeleteDialogState = {
  */
 export function useDeleteDialog(
   activeProjectId: string | undefined,
-  activeCollectionId: string | undefined,
 ): UseDeleteDialogResult {
   const navigate = useNavigate();
   const [state, setState] = React.useState<DeleteDialogState>(initialState);
@@ -60,19 +58,9 @@ export function useDeleteDialog(
     setState((current) => ({ ...current, error: null, submitting: true }));
 
     try {
-      if (target.kind === "project") {
-        await deleteProject(target.projectId);
-        if (activeProjectId === target.projectId) {
-          await navigate({ to: "/" });
-        }
-      } else {
-        await deleteDataset(target.projectId, target.datasetId);
-        if (activeProjectId === target.projectId && activeCollectionId === target.datasetId) {
-          await navigate({
-            params: { projectId: target.projectId },
-            to: "/projects/$projectId",
-          });
-        }
+      await deleteProject(target.projectId);
+      if (activeProjectId === target.projectId) {
+        await navigate({ to: "/" });
       }
 
       setState(initialState);
@@ -83,7 +71,7 @@ export function useDeleteDialog(
         submitting: false,
       }));
     }
-  }, [activeCollectionId, activeProjectId, navigate, state.target]);
+  }, [activeProjectId, navigate, state.target]);
 
   return {
     error: state.error,

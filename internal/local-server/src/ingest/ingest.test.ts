@@ -63,25 +63,13 @@ const sqliteLayerFor = (sqliteDatabaseFile: string) =>
   );
 
 async function seedProjectAndDataset(sqliteDatabaseFile: string) {
-  return seedNamedProjectAndDataset(sqliteDatabaseFile, {
-    projectName: "Lensflare",
-    datasetName: "traces",
-  });
-}
-
-async function seedNamedProjectAndDataset(
-  sqliteDatabaseFile: string,
-  args: {
-    readonly projectName: string;
-    readonly datasetName: string;
-  },
-) {
   return Effect.gen(function* () {
     const projects = yield* ProjectService;
-    const datasets = yield* DatasetService;
-
-    const project = yield* projects.createProject({ name: args.projectName });
-    const dataset = yield* datasets.createDataset(project.id, { name: args.datasetName });
+    const project = yield* projects.createProject({ name: "Lensflare" });
+    const dataset = project.datasets[0];
+    if (dataset === undefined) {
+      return yield* Effect.die(new Error("Expected project creation to provision a dataset."));
+    }
 
     return { project, dataset };
   }).pipe(Effect.provide(sqliteLayerFor(sqliteDatabaseFile)), Effect.runPromise);
@@ -134,7 +122,7 @@ describe("HTTP ingest", () => {
     });
 
     try {
-      const response = await fetch(`${server.origin}/ingest/otlp/v1/logs/lensflare/traces`, {
+      const response = await fetch(`${server.origin}/ingest/otlp/v1/logs/lensflare`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -186,7 +174,7 @@ describe("HTTP ingest", () => {
         {
           accepted_records: 1,
           project_slug: "lensflare",
-          dataset_slug: "lensflare-traces",
+          dataset_slug: "lensflare",
         },
       ]);
 
@@ -245,7 +233,7 @@ describe("HTTP ingest", () => {
     });
 
     try {
-      const traceResponse = await fetch(`${server.origin}/ingest/otlp/v1/traces/lensflare/traces`, {
+      const traceResponse = await fetch(`${server.origin}/ingest/otlp/v1/traces/lensflare`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -329,7 +317,7 @@ describe("HTTP ingest", () => {
       });
       expect(traceResponse.status).toBe(200);
 
-      const logResponse = await fetch(`${server.origin}/ingest/otlp/v1/logs/lensflare/traces`, {
+      const logResponse = await fetch(`${server.origin}/ingest/otlp/v1/logs/lensflare`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -509,7 +497,7 @@ describe("HTTP ingest", () => {
     });
 
     try {
-      const response = await fetch(`${server.origin}/ingest/otlp/v1/logs/lensflare/traces`, {
+      const response = await fetch(`${server.origin}/ingest/otlp/v1/logs/lensflare`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -625,7 +613,7 @@ describe("HTTP ingest", () => {
         }),
       );
 
-      const response = await fetch(`${server.origin}/ingest/otlp/v1/logs/lensflare/traces`, {
+      const response = await fetch(`${server.origin}/ingest/otlp/v1/logs/lensflare`, {
         method: "POST",
         headers: {
           "content-type": "application/x-protobuf",
@@ -659,10 +647,7 @@ describe("HTTP ingest", () => {
     const duckdbDatabaseFile = join(directory, "lensflare.duckdb");
     const port = await getAvailablePort();
 
-    const { dataset } = await seedNamedProjectAndDataset(sqliteDatabaseFile, {
-      projectName: "Lensflare",
-      datasetName: "dev",
-    });
+    const { dataset } = await seedProjectAndDataset(sqliteDatabaseFile);
     const server = await startLocalServer({
       mode: "server",
       host: "127.0.0.1",
@@ -673,7 +658,7 @@ describe("HTTP ingest", () => {
     });
 
     try {
-      const selfResponse = await fetch(`${server.origin}/ingest/otlp/v1/logs/lensflare/dev`, {
+      const selfResponse = await fetch(`${server.origin}/ingest/otlp/v1/logs/lensflare`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -710,7 +695,7 @@ describe("HTTP ingest", () => {
       expect(selfResponse.status).toBe(200);
       expect(await selfResponse.json()).toEqual({});
 
-      const normalResponse = await fetch(`${server.origin}/ingest/otlp/v1/logs/lensflare/dev`, {
+      const normalResponse = await fetch(`${server.origin}/ingest/otlp/v1/logs/lensflare`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -805,10 +790,9 @@ describe("HTTP ingest", () => {
     };
 
     try {
-      const success = await fetch(`${server.origin}/ingest/axiom/v1/ingest/traces`, {
+      const success = await fetch(`${server.origin}/ingest/axiom/v1/ingest/lensflare`, {
         method: "POST",
         headers: {
-          authorization: "Bearer lensflare",
           "content-type": "application/json",
         },
         body: JSON.stringify([
@@ -831,7 +815,6 @@ describe("HTTP ingest", () => {
       const failure = await fetch(`${server.origin}/ingest/axiom/v1/ingest/unknown`, {
         method: "POST",
         headers: {
-          authorization: "Bearer lensflare",
           "content-type": "application/json",
         },
         body: JSON.stringify([{ message: "bad dataset" }]),

@@ -26,7 +26,6 @@ const shellCurl: Integration = {
       snippet: {
         lang: "bash",
         code: `curl -X POST "{{serverOrigin}}/ingest/axiom/v1/ingest/{{datasetSlug}}" \\
-  -H "Authorization: Bearer {{bearerToken}}" \\
   -H "Content-Type: application/json" \\
   -d '[
     {
@@ -44,7 +43,6 @@ const shellCurl: Integration = {
       snippet: {
         lang: "bash",
         code: `curl -X POST "{{serverOrigin}}/ingest/axiom/v1/ingest/{{datasetSlug}}" \\
-  -H "Authorization: Bearer {{bearerToken}}" \\
   -H "Content-Type: application/x-ndjson" \\
   --data-binary @- <<'EOF'
 {"level":"info","message":"Batch line 1"}

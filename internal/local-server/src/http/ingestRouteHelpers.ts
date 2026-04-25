@@ -36,23 +36,6 @@ export function normalizeContentEncoding(value: string | undefined): string | nu
 }
 
 /**
- * Extract the project slug from an HTTP `Authorization: Bearer <token>`
- * header. Used by providers (e.g. Axiom) that route the project slug
- * through the bearer token instead of the URL path.
- *
- * Returns `null` when the header is missing or doesn't match the bearer
- * scheme — the caller is responsible for turning that into a 401.
- */
-export function getProjectSlugFromAuthorization(value: string | undefined): string | null {
-  if (!value) {
-    return null;
-  }
-
-  const match = /^Bearer\s+(.+)$/i.exec(value.trim());
-  return match?.[1]?.trim() || null;
-}
-
-/**
  * Best-effort extraction of the remote client address from the request,
  * collapsing the `Option<string>` shape to a nullable string for the
  * downstream JSON-friendly logging code.

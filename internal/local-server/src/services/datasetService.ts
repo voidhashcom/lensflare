@@ -1,33 +1,16 @@
 import {
-  type CreateDatasetInput,
   type Dataset,
   type DatasetChangeEvent,
   type DatasetStorageStats,
   DatasetNotFound,
   ProjectNotFound,
-  type UpdateDatasetInput,
   ValidationError,
 } from "@lensflare/contracts";
 import { Context, Effect, Layer, PubSub, Stream } from "effect";
 import { SqlError } from "effect/unstable/sql";
-import {
-  getDatasetLocalSlug,
-  makeDatasetTag,
-  makeUniqueSlug,
-  slugify,
-} from "../domain/slug.ts";
 import { DuckDbError, TelemetryStore } from "../ingest/telemetryStore.ts";
-import {
-  type DatasetRow,
-  datasetFromRow,
-  DatasetsRepository,
-} from "../repositories/datasetsRepository.ts";
+import { datasetFromRow, DatasetsRepository } from "../repositories/datasetsRepository.ts";
 import { ProjectsRepository } from "../repositories/projectsRepository.ts";
-import {
-  normalizeOptionalName,
-  normalizeOptionalSlug,
-  normalizeRequiredName,
-} from "./validation.ts";
 
 /**
  * Domain-level façade over the datasets repository.
@@ -60,19 +43,18 @@ export class DatasetService extends Context.Service<
       projectId: string,
       datasetId: string,
     ) => Effect.Effect<Dataset, DatasetNotFound | SqlError.SqlError>;
-    readonly createDataset: (
+    readonly ensureProjectDataset: (
       projectId: string,
-      input: CreateDatasetInput,
+      datasetName: string,
+      datasetSlug: string,
+      updatedAt?: string,
     ) => Effect.Effect<Dataset, ProjectNotFound | ValidationError | SqlError.SqlError>;
-    readonly updateDataset: (
+    readonly syncProjectDataset: (
       projectId: string,
-      datasetId: string,
-      input: UpdateDatasetInput,
-    ) => Effect.Effect<Dataset, DatasetNotFound | ValidationError | SqlError.SqlError>;
-    readonly deleteDataset: (
-      projectId: string,
-      datasetId: string,
-    ) => Effect.Effect<void, DatasetNotFound | SqlError.SqlError | DuckDbError>;
+      datasetName: string,
+      datasetSlug: string,
+      updatedAt: string,
+    ) => Effect.Effect<ReadonlyArray<Dataset>, ProjectNotFound | ValidationError | SqlError.SqlError>;
     readonly listDatasetStorageStats: () => Effect.Effect<
       ReadonlyArray<DatasetStorageStats>,
       SqlError.SqlError | DuckDbError
@@ -81,12 +63,6 @@ export class DatasetService extends Context.Service<
       projectId: string,
       datasetId: string,
     ) => Effect.Effect<void, DatasetNotFound | SqlError.SqlError | DuckDbError>;
-    readonly rebaseProjectDatasetTags: (
-      projectId: string,
-      oldProjectSlug: string,
-      newProjectSlug: string,
-      updatedAt: string,
-    ) => Effect.Effect<ReadonlyArray<Dataset>, SqlError.SqlError>;
     readonly notifyCascadeDeletedDatasets: (
       datasetIds: ReadonlyArray<string>,
     ) => Effect.Effect<void, DuckDbError>;
@@ -132,14 +108,6 @@ export class DatasetService extends Context.Service<
         return rows.map((row) => datasetFromRow(row));
       });
 
-      const getDataset = Effect.fn("DatasetService.getDataset")(function* (
-        projectId: string,
-        datasetId: string,
-      ) {
-        const row = yield* requireDatasetRow(projectId, datasetId);
-        return datasetFromRow(row);
-      });
-
       const ensureDatasetSlug = Effect.fn("DatasetService.ensureDatasetSlug")(function* (
         slug: string,
         currentDatasetId?: string,
@@ -155,56 +123,39 @@ export class DatasetService extends Context.Service<
         return slug;
       });
 
-      const resolveDatasetSlug = Effect.fn("DatasetService.resolveDatasetSlug")(function* (
-        projectSlug: string,
-        name: string,
-        explicitSlug: string | undefined,
-        currentDatasetId?: string,
+      const getDataset = Effect.fn("DatasetService.getDataset")(function* (
+        projectId: string,
+        datasetId: string,
       ) {
-        const normalizedExplicit = yield* normalizeOptionalSlug("datasetSlug", explicitSlug);
-        if (normalizedExplicit !== undefined) {
-          return yield* ensureDatasetSlug(
-            makeDatasetTag(projectSlug, normalizedExplicit),
-            currentDatasetId,
-          );
-        }
-
-        const existing = yield* datasets.findAll();
-        const usedSlugs = new Set(
-          existing.filter((row) => row.id !== currentDatasetId).map((row) => row.slug),
-        );
-        return makeUniqueSlug(makeDatasetTag(projectSlug, slugify(name)), usedSlugs);
+        const row = yield* requireDatasetRow(projectId, datasetId);
+        return datasetFromRow(row);
       });
 
-      const createDataset = Effect.fn("DatasetService.createDataset")(function* (
+      const insertProjectDataset = Effect.fn("DatasetService.insertProjectDataset")(function* (
         projectId: string,
-        input: CreateDatasetInput,
+        datasetName: string,
+        datasetSlug: string,
+        createdAt: string,
       ) {
-        // Validate the parent exists ourselves rather than relying on the
-        // SQL FK error so we can return a typed `ProjectNotFound`.
-        const project = yield* requireProjectRow(projectId);
-
-        const name = yield* normalizeRequiredName("datasetName", input.name);
-        const now = new Date().toISOString();
         const id = crypto.randomUUID();
-        const slug = yield* resolveDatasetSlug(project.slug, name, input.slug);
+        const slug = yield* ensureDatasetSlug(datasetSlug);
 
         yield* datasets.insert({
           id,
           projectId,
-          name,
+          name: datasetName,
           slug,
-          createdAt: now,
-          updatedAt: now,
+          createdAt,
+          updatedAt: createdAt,
         });
 
         const dataset: Dataset = {
           id,
           projectId,
-          name,
+          name: datasetName,
           slug,
-          createdAt: now,
-          updatedAt: now,
+          createdAt,
+          updatedAt: createdAt,
         };
 
         yield* publish({
@@ -215,37 +166,34 @@ export class DatasetService extends Context.Service<
         return dataset;
       });
 
-      const updateDataset = Effect.fn("DatasetService.updateDataset")(function* (
+      const ensureProjectDataset = Effect.fn("DatasetService.ensureProjectDataset")(function* (
         projectId: string,
-        datasetId: string,
-        input: UpdateDatasetInput,
+        datasetName: string,
+        datasetSlug: string,
+        updatedAt = new Date().toISOString(),
       ) {
-        const current = yield* requireDatasetRow(projectId, datasetId);
-        const trimmed = yield* normalizeOptionalName("datasetName", input.name);
-        const nextName = trimmed ?? current.name;
-        const nextSlug =
-          input.slug === undefined
-            ? current.slug
-            : yield* Effect.gen(function* () {
-                const project = yield* projects.findById(projectId);
-                if (project === undefined) {
-                  return yield* new DatasetNotFound({ datasetId, projectId });
-                }
-                return yield* resolveDatasetSlug(project.slug, nextName, input.slug, datasetId);
-              });
-        const now = new Date().toISOString();
+        yield* requireProjectRow(projectId);
+        const managedDataset = (yield* datasets.findAll(projectId))[0];
+        if (managedDataset === undefined) {
+          return yield* insertProjectDataset(projectId, datasetName, datasetSlug, updatedAt);
+        }
 
-        yield* datasets.update(projectId, datasetId, {
-          name: nextName,
-          slug: nextSlug,
-          updatedAt: now,
+        const slug = yield* ensureDatasetSlug(datasetSlug, managedDataset.id);
+        if (managedDataset.name === datasetName && managedDataset.slug === slug) {
+          return datasetFromRow(managedDataset);
+        }
+
+        yield* datasets.update(projectId, managedDataset.id, {
+          name: datasetName,
+          slug,
+          updatedAt,
         });
 
         const dataset = datasetFromRow({
-          ...current,
-          name: nextName,
-          slug: nextSlug,
-          updated_at: now,
+          ...managedDataset,
+          name: datasetName,
+          slug,
+          updated_at: updatedAt,
         });
 
         yield* publish({
@@ -256,19 +204,15 @@ export class DatasetService extends Context.Service<
         return dataset;
       });
 
-      const deleteDataset = Effect.fn("DatasetService.deleteDataset")(function* (
+      const syncProjectDataset = Effect.fn("DatasetService.syncProjectDataset")(function* (
         projectId: string,
-        datasetId: string,
+        datasetName: string,
+        datasetSlug: string,
+        updatedAt: string,
       ) {
-        yield* requireDatasetRow(projectId, datasetId);
-
-        yield* datasets.remove(projectId, datasetId);
-        yield* telemetry.clearDataset(datasetId);
-
-        yield* publish({
-          action: "delete",
-          id: datasetId,
-        });
+        yield* ensureProjectDataset(projectId, datasetName, datasetSlug, updatedAt);
+        const rows = yield* datasets.findAll(projectId);
+        return rows.map((row) => datasetFromRow(row));
       });
 
       const listDatasetStorageStats = Effect.fn(
@@ -288,52 +232,6 @@ export class DatasetService extends Context.Service<
         yield* telemetry.clearDataset(datasetId);
       });
 
-      const rebaseProjectDatasetTags = Effect.fn("DatasetService.rebaseProjectDatasetTags")(
-        function* (
-          projectId: string,
-          oldProjectSlug: string,
-          newProjectSlug: string,
-          updatedAt: string,
-        ) {
-          const projectDatasetRows = yield* datasets.findAll(projectId);
-          if (oldProjectSlug === newProjectSlug) {
-            return projectDatasetRows.map((row) => datasetFromRow(row));
-          }
-
-          const allRows = yield* datasets.findAll();
-          const usedSlugs = new Set(
-            allRows.filter((row) => row.project_id !== projectId).map((row) => row.slug),
-          );
-          const updatedRows: Array<DatasetRow> = [];
-
-          for (const row of projectDatasetRows) {
-            const localSlug = getDatasetLocalSlug(oldProjectSlug, row.slug);
-            const slug = makeUniqueSlug(makeDatasetTag(newProjectSlug, localSlug), usedSlugs);
-            usedSlugs.add(slug);
-
-            yield* datasets.update(projectId, row.id, {
-              name: row.name,
-              slug,
-              updatedAt,
-            });
-
-            const updatedRow = {
-              ...row,
-              slug,
-              updated_at: updatedAt,
-            };
-            updatedRows.push(updatedRow);
-
-            yield* publish({
-              action: "upsert",
-              value: datasetFromRow(updatedRow),
-            });
-          }
-
-          return updatedRows.map((row) => datasetFromRow(row));
-        },
-      );
-
       const notifyCascadeDeletedDatasets = Effect.fn("DatasetService.notifyCascadeDeletedDatasets")(
         function* (datasetIds: ReadonlyArray<string>) {
           yield* Effect.forEach(datasetIds, (id) => telemetry.clearDataset(id), {
@@ -349,12 +247,10 @@ export class DatasetService extends Context.Service<
       return DatasetService.of({
         listDatasets,
         getDataset,
-        createDataset,
-        updateDataset,
-        deleteDataset,
+        ensureProjectDataset,
+        syncProjectDataset,
         listDatasetStorageStats,
         clearDatasetData,
-        rebaseProjectDatasetTags,
         notifyCascadeDeletedDatasets,
         stream,
       });

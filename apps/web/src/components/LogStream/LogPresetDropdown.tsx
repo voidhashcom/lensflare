@@ -140,9 +140,9 @@ export function LogPresetDropdown({
           render={
             <Button
               aria-label="Open filter presets"
-              className="h-8 gap-1.5 rounded-md bg-background/60 px-2.5 shadow-xs/5 hover:bg-accent/50 sm:h-8"
+              className="h-8 gap-2 px-2.5 sm:h-8"
               size="sm"
-              variant="outline"
+              variant="ghost"
             >
               <TriggerIcon className="size-3.5 text-muted-foreground/80" />
               <span className="max-w-28 truncate text-xs">{triggerLabel}</span>

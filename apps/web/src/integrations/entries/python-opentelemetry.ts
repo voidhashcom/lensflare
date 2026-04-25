@@ -50,7 +50,7 @@ resource = Resource.create({"service.name": "my-service"})
 tracer_provider = TracerProvider(resource=resource)
 tracer_provider.add_span_processor(
     BatchSpanProcessor(OTLPSpanExporter(
-        endpoint="{{serverOrigin}}/ingest/otlp/v1/traces/{{projectSlug}}/{{datasetSlug}}",
+        endpoint="{{serverOrigin}}/ingest/otlp/v1/traces/{{datasetSlug}}",
     ))
 )
 trace.set_tracer_provider(tracer_provider)
@@ -59,7 +59,7 @@ trace.set_tracer_provider(tracer_provider)
 logger_provider = LoggerProvider(resource=resource)
 logger_provider.add_log_record_processor(
     BatchLogRecordProcessor(OTLPLogExporter(
-        endpoint="{{serverOrigin}}/ingest/otlp/v1/logs/{{projectSlug}}/{{datasetSlug}}",
+        endpoint="{{serverOrigin}}/ingest/otlp/v1/logs/{{datasetSlug}}",
     ))
 )
 set_logger_provider(logger_provider)

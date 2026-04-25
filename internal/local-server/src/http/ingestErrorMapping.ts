@@ -42,9 +42,7 @@ function messageOf(error: unknown): string {
 export function resolveIngestErrorStatus(error: unknown): IngestErrorMapping {
   const tag = tagOf(error);
   switch (tag) {
-    case "UnknownProjectSlug":
     case "UnknownDatasetSlug":
-    case "ProjectDatasetMismatch":
       return {
         tag,
         httpStatus: 404,

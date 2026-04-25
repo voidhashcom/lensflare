@@ -78,7 +78,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
-              className="gap-2 px-2 py-2 text-muted-foreground text-xs hover:bg-accent hover:text-foreground"
+              className="gap-2 px-2 py-2 text-muted-foreground text-xs hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               onMouseDown={() => window.history.back()}
               size="sm"
             >

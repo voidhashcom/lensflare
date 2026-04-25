@@ -41,7 +41,7 @@ export function ProjectDialog({
   const title = isEditing ? "Edit Project" : "New Project";
   const description = isEditing
     ? "Update the project name."
-    : "Create a new project and organize its datasets from the sidebar.";
+    : "Create a new project with its telemetry dataset managed automatically.";
   const submitLabel = submitting ? "Saving..." : isEditing ? "Save Project" : "Create Project";
 
   return (

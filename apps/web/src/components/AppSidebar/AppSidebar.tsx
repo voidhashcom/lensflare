@@ -19,7 +19,6 @@ import { IconButtonTooltip } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
 
 import { BrandRow } from "./BrandRow";
-import { DatasetDialog } from "./DatasetDialog";
 import { DeleteDialog } from "./DeleteDialog";
 import { ProjectDialog } from "./ProjectDialog";
 import { ProjectRow } from "./ProjectRow";
@@ -27,9 +26,8 @@ import { SidebarUpdatePill } from "./SidebarUpdatePill";
 import { SidebarContextMenu } from "./SidebarContextMenu";
 import { ROUTE_PARAMS_OPTIONS } from "./constants";
 import { selectSidebarProjects } from "./projectsQuery";
-import { createDeleteDatasetTarget, createDeleteProjectTarget } from "./types";
+import { createDeleteProjectTarget } from "./types";
 import { detectMacDesktop } from "./useMacDesktop";
-import { useDatasetDialog } from "./useDatasetDialog";
 import { useDeleteDialog } from "./useDeleteDialog";
 import { useProjectDialog } from "./useProjectDialog";
 import { useSidebarContextMenu } from "./useSidebarContextMenu";
@@ -46,7 +44,6 @@ export function AppSidebar() {
 
   const params = useParams(ROUTE_PARAMS_OPTIONS);
   const activeProjectId = params.projectId;
-  const activeCollectionId = params.collectionId;
   const projectsQuery = useLiveQuery(selectSidebarProjects);
   const projects = (projectsQuery.data ?? []) as Project[];
   const loading = projectsQuery.isLoading;
@@ -59,8 +56,7 @@ export function AppSidebar() {
     : null;
 
   const projectDialog = useProjectDialog();
-  const datasetDialog = useDatasetDialog();
-  const deleteDialog = useDeleteDialog(activeProjectId, activeCollectionId);
+  const deleteDialog = useDeleteDialog(activeProjectId);
   const contextMenu = useSidebarContextMenu();
 
   const onContextMenuEdit = () => {
@@ -70,22 +66,7 @@ export function AppSidebar() {
     }
 
     contextMenu.close();
-
-    if (target.kind === "project") {
-      projectDialog.openEdit(target.project);
-    } else {
-      datasetDialog.openEdit(target.project, target.dataset);
-    }
-  };
-
-  const onContextMenuCreateDataset = () => {
-    const target = contextMenu.target;
-    if (target?.kind !== "project") {
-      return;
-    }
-
-    contextMenu.close();
-    datasetDialog.openCreate(target.project);
+    projectDialog.openEdit(target.project);
   };
 
   const onContextMenuDelete = () => {
@@ -95,12 +76,7 @@ export function AppSidebar() {
     }
 
     contextMenu.close();
-
-    if (target.kind === "project") {
-      deleteDialog.openFor(createDeleteProjectTarget(target.project));
-    } else {
-      deleteDialog.openFor(createDeleteDatasetTarget(target.project, target.dataset));
-    }
+    deleteDialog.openFor(createDeleteProjectTarget(target.project));
   };
 
   return (
@@ -127,7 +103,7 @@ export function AppSidebar() {
                 <IconButtonTooltip label="New project" side="right">
                   <button
                     aria-label="New project"
-                    className="desktop-no-drag inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+                    className="desktop-no-drag inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
                     disabled={projectDialog.submitting}
                     onClick={() => projectDialog.openCreate()}
                     type="button"
@@ -157,10 +133,8 @@ export function AppSidebar() {
                 ) : (
                   projects.map((project) => (
                     <ProjectRow
-                      activeCollectionId={activeCollectionId}
                       activeProjectId={activeProjectId}
                       key={project.id}
-                      onCreateDataset={(project) => datasetDialog.openCreate(project)}
                       onOpenContextMenu={(event, target) =>
                         contextMenu.handleRowContextMenu(event, target)
                       }
@@ -177,7 +151,7 @@ export function AppSidebar() {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
+                  className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                   render={<Link to="/settings" />}
                   size="sm"
                 >
@@ -201,17 +175,6 @@ export function AppSidebar() {
         submitting={projectDialog.submitting}
       />
 
-      <DatasetDialog
-        error={datasetDialog.error}
-        mode={datasetDialog.mode}
-        name={datasetDialog.name}
-        onNameChange={(value) => datasetDialog.onNameChange(value)}
-        onOpenChange={(open) => datasetDialog.onOpenChange(open)}
-        onSubmit={(event) => datasetDialog.onSubmit(event)}
-        open={datasetDialog.open}
-        submitting={datasetDialog.submitting}
-      />
-
       <DeleteDialog
         error={deleteDialog.error}
         onConfirm={() => deleteDialog.onConfirm()}
@@ -223,7 +186,6 @@ export function AppSidebar() {
 
       <SidebarContextMenu
         anchor={contextMenu.anchor}
-        onCreateDataset={onContextMenuCreateDataset}
         onDelete={onContextMenuDelete}
         onEdit={onContextMenuEdit}
         onOpenChange={(open) => contextMenu.onOpenChange(open)}

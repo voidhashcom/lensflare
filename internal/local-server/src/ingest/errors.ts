@@ -1,23 +1,8 @@
 import { Schema } from "effect";
 
-export class UnknownProjectSlug extends Schema.TaggedErrorClass<UnknownProjectSlug>()(
-  "UnknownProjectSlug",
-  {
-    projectSlug: Schema.String,
-  },
-) {}
-
 export class UnknownDatasetSlug extends Schema.TaggedErrorClass<UnknownDatasetSlug>()(
   "UnknownDatasetSlug",
   {
-    datasetSlug: Schema.String,
-  },
-) {}
-
-export class ProjectDatasetMismatch extends Schema.TaggedErrorClass<ProjectDatasetMismatch>()(
-  "ProjectDatasetMismatch",
-  {
-    projectSlug: Schema.String,
     datasetSlug: Schema.String,
   },
 ) {}

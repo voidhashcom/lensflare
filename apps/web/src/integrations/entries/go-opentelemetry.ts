@@ -68,7 +68,7 @@ func initTelemetry(ctx context.Context) (func(context.Context) error, error) {
 
 	traceExp, err := otlptracehttp.New(ctx,
 		otlptracehttp.WithEndpointURL(
-			"{{serverOrigin}}/ingest/otlp/v1/traces/{{projectSlug}}/{{datasetSlug}}",
+			"{{serverOrigin}}/ingest/otlp/v1/traces/{{datasetSlug}}",
 		),
 	)
 	if err != nil {
@@ -82,7 +82,7 @@ func initTelemetry(ctx context.Context) (func(context.Context) error, error) {
 
 	logExp, err := otlploghttp.New(ctx,
 		otlploghttp.WithEndpointURL(
-			"{{serverOrigin}}/ingest/otlp/v1/logs/{{projectSlug}}/{{datasetSlug}}",
+			"{{serverOrigin}}/ingest/otlp/v1/logs/{{datasetSlug}}",
 		),
 	)
 	if err != nil {

@@ -637,33 +637,6 @@ class GetDataset extends Rpc.make("GetDataset", {
   error: DatasetNotFound,
 }) {}
 
-class CreateDataset extends Rpc.make("CreateDataset", {
-  payload: {
-    projectId: Schema.String,
-    input: CreateDatasetInputSchema,
-  },
-  success: DatasetSchema,
-  error: Schema.Union([ProjectNotFound, ValidationError]),
-}) {}
-
-class UpdateDataset extends Rpc.make("UpdateDataset", {
-  payload: {
-    projectId: Schema.String,
-    datasetId: Schema.String,
-    input: UpdateDatasetInputSchema,
-  },
-  success: DatasetSchema,
-  error: Schema.Union([DatasetNotFound, ValidationError]),
-}) {}
-
-class DeleteDataset extends Rpc.make("DeleteDataset", {
-  payload: {
-    projectId: Schema.String,
-    datasetId: Schema.String,
-  },
-  error: DatasetNotFound,
-}) {}
-
 class ListDatasetStorageStats extends Rpc.make("ListDatasetStorageStats", {
   success: Schema.Array(DatasetStorageStatsSchema),
 }) {}
@@ -684,9 +657,6 @@ class SubscribeDatasetEvents extends Rpc.make("SubscribeDatasetEvents", {
 export const DatasetRpcGroup = RpcGroup.make(
   ListDatasets,
   GetDataset,
-  CreateDataset,
-  UpdateDataset,
-  DeleteDataset,
   ListDatasetStorageStats,
   ClearDatasetData,
   SubscribeDatasetEvents,

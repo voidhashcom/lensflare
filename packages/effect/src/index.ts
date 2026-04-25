@@ -4,7 +4,6 @@ import { FetchHttpClient } from "effect/unstable/http";
 import { OtlpLogger, OtlpSerialization, OtlpTracer } from "effect/unstable/observability";
 
 const defaultServerOrigin = "http://127.0.0.1:43110";
-const defaultProjectSlug = "lensflare";
 const defaultServiceName = "app";
 
 export interface LensflareLayerOptions {
@@ -12,7 +11,6 @@ export interface LensflareLayerOptions {
   readonly env?: Record<string, string | undefined>;
   readonly environment?: string;
   readonly serverOrigin?: string;
-  readonly projectSlug?: string;
   readonly serviceName?: string;
   readonly serviceVersion?: string;
   readonly resourceAttributes?: Record<string, unknown>;
@@ -104,19 +102,17 @@ export function resolveLayerConfig(
       env.LENSFLARE_SERVER_ORIGIN ??
       defaultServerOrigin,
   );
-  const projectSlug = options.projectSlug ?? env.LENSFLARE_PROJECT_SLUG ?? defaultProjectSlug;
   const serviceName = options.serviceName ?? env.OTEL_SERVICE_NAME ?? defaultServiceName;
   const serviceVersion = options.serviceVersion ?? env.OTEL_SERVICE_VERSION;
   const attributes = {
-    "lensflare.project_slug": projectSlug,
     "lensflare.dataset_slug": datasetSlug,
     ...options.resourceAttributes,
   };
 
   return {
     enabled: isEnabled({ ...options, env }),
-    logsUrl: `${serverOrigin}/ingest/otlp/v1/logs/${pathSegment(projectSlug)}/${pathSegment(datasetSlug)}`,
-    tracesUrl: `${serverOrigin}/ingest/otlp/v1/traces/${pathSegment(projectSlug)}/${pathSegment(datasetSlug)}`,
+    logsUrl: `${serverOrigin}/ingest/otlp/v1/logs/${pathSegment(datasetSlug)}`,
+    tracesUrl: `${serverOrigin}/ingest/otlp/v1/traces/${pathSegment(datasetSlug)}`,
     resource: {
       serviceName,
       ...(serviceVersion ? { serviceVersion } : {}),

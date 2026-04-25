@@ -1,14 +1,10 @@
-import type { Dataset, Project } from "@lensflare/contracts";
+import type { Project } from "@lensflare/contracts";
 
-/** Target of the sidebar's right-click context menu (project row or dataset row). */
-export type SidebarContextMenuTarget =
-  | { kind: "project"; project: Project }
-  | { kind: "dataset"; project: Project; dataset: Dataset };
+/** Target of the sidebar's right-click context menu. */
+export type SidebarContextMenuTarget = { kind: "project"; project: Project };
 
 /** Subject of the delete confirmation dialog. */
-export type DeleteTarget =
-  | { kind: "project"; projectId: string; name: string }
-  | { kind: "dataset"; datasetId: string; name: string; projectId: string };
+export type DeleteTarget = { kind: "project"; projectId: string; name: string };
 
 /**
  * Virtual anchor with a cursor-derived bounding rect, used to position the
@@ -22,26 +18,10 @@ export function createProjectContextMenuTarget(project: Project): SidebarContext
   return { kind: "project", project };
 }
 
-export function createDatasetContextMenuTarget(
-  project: Project,
-  dataset: Dataset,
-): SidebarContextMenuTarget {
-  return { dataset, kind: "dataset", project };
-}
-
 export function createDeleteProjectTarget(project: Project): DeleteTarget {
   return {
     kind: "project",
     name: project.name,
-    projectId: project.id,
-  };
-}
-
-export function createDeleteDatasetTarget(project: Project, dataset: Dataset): DeleteTarget {
-  return {
-    datasetId: dataset.id,
-    kind: "dataset",
-    name: dataset.name,
     projectId: project.id,
   };
 }

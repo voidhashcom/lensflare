@@ -142,8 +142,17 @@ export class ProjectService extends Context.Service<
         slug: string,
         currentProjectId?: string,
       ) {
-        const existing = yield* projects.findBySlug(slug);
-        if (existing !== undefined && existing.id !== currentProjectId) {
+        const [existingProject, existingDataset] = yield* Effect.all([
+          projects.findBySlug(slug),
+          datasets.findBySlug(slug),
+        ]);
+        if (existingProject !== undefined && existingProject.id !== currentProjectId) {
+          return yield* new ValidationError({
+            field: "projectSlug",
+            message: "Slug is already in use.",
+          });
+        }
+        if (existingDataset !== undefined && existingDataset.project_id !== currentProjectId) {
           return yield* new ValidationError({
             field: "projectSlug",
             message: "Slug is already in use.",
@@ -163,9 +172,19 @@ export class ProjectService extends Context.Service<
           return yield* ensureProjectSlug(normalizedExplicit, currentProjectId);
         }
 
-        const existing = yield* projects.findAll();
+        const [existingProjects, existingDatasets] = yield* Effect.all([
+          projects.findAll(),
+          datasets.findAll(),
+        ]);
         const usedSlugs = new Set(
-          existing.filter((row) => row.id !== currentProjectId).map((row) => row.slug),
+          [
+            ...existingProjects
+              .filter((row) => row.id !== currentProjectId)
+              .map((row) => row.slug),
+            ...existingDatasets
+              .filter((row) => row.project_id !== currentProjectId)
+              .map((row) => row.slug),
+          ],
         );
         return makeUniqueSlug(slugify(name), usedSlugs);
       });
@@ -187,6 +206,9 @@ export class ProjectService extends Context.Service<
           createdAt: now,
           updatedAt: now,
         });
+        const dataset = yield* datasetService
+          .ensureProjectDataset(id, name, slug, now)
+          .pipe(Effect.catchTag("ProjectNotFound", Effect.die));
 
         const project: Project = {
           id,
@@ -195,7 +217,7 @@ export class ProjectService extends Context.Service<
           icon,
           createdAt: now,
           updatedAt: now,
-          datasets: [],
+          datasets: [dataset],
         };
 
         yield* publish({
@@ -241,19 +263,10 @@ export class ProjectService extends Context.Service<
           icon: nextIcon,
           updated_at: now,
         };
-        const updatedDatasets =
-          nextSlug === current.slug
-            ? undefined
-            : yield* datasetService.rebaseProjectDatasetTags(
-                projectId,
-                current.slug,
-                nextSlug,
-                now,
-              );
-        const updated =
-          updatedDatasets === undefined
-            ? yield* assembleProject(updatedProjectRow)
-            : projectFromRow(updatedProjectRow, updatedDatasets);
+        const updatedDatasets = yield* datasetService
+          .syncProjectDataset(projectId, nextName, nextSlug, now)
+          .pipe(Effect.catchTag("ProjectNotFound", Effect.die));
+        const updated = projectFromRow(updatedProjectRow, updatedDatasets);
 
         yield* publish({
           action: "upsert",

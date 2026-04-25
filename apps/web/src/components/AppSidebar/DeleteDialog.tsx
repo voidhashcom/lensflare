@@ -33,7 +33,7 @@ export function DeleteDialog({
   onOpenChange,
   onConfirm,
 }: DeleteDialogProps) {
-  const title = target?.kind === "dataset" ? "Delete Dataset" : "Delete Project";
+  const title = "Delete Project";
   const description = target
     ? `This will permanently delete "${target.name}".`
     : "This will permanently delete the selected item.";

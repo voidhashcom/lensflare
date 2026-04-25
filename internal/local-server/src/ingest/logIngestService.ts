@@ -1,6 +1,6 @@
 import { Context, Effect, Layer } from "effect";
 import { SqlError } from "effect/unstable/sql";
-import { ProjectDatasetMismatch, UnknownDatasetSlug, UnknownProjectSlug } from "./errors.ts";
+import { UnknownDatasetSlug } from "./errors.ts";
 import { IngestTargetResolver } from "./targetResolver.ts";
 import { TelemetryFilterCatalogService } from "./telemetryFilterCatalogService.ts";
 import { TelemetryLogEventService } from "./telemetryLogEventService.ts";
@@ -19,7 +19,6 @@ import type { NormalizedIngestBatch } from "./types.ts";
  * persistence — neither of which is provider-specific.
  */
 export interface IngestInput {
-  readonly projectSlug: string;
   readonly datasetSlug: string;
   readonly batch: NormalizedIngestBatch;
   readonly requestContentType: string;
@@ -51,11 +50,7 @@ export class LogIngestService extends Context.Service<
       input: IngestInput,
     ) => Effect.Effect<
       IngestResult,
-      | UnknownProjectSlug
-      | UnknownDatasetSlug
-      | ProjectDatasetMismatch
-      | SqlError.SqlError
-      | DuckDbError
+      UnknownDatasetSlug | SqlError.SqlError | DuckDbError
     >;
   }
 >()("@lensflare/local-server/LogIngestService") {
@@ -69,7 +64,7 @@ export class LogIngestService extends Context.Service<
       const filterCatalog = yield* TelemetryFilterCatalogService;
 
       const ingest = Effect.fn("LogIngestService.ingest")(function* (input: IngestInput) {
-        const target = yield* resolver.resolve(input.projectSlug, input.datasetSlug);
+        const target = yield* resolver.resolve(input.datasetSlug);
         const baseRequest = {
           providerKind: input.batch.providerKind,
           signal: input.batch.signal,

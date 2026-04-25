@@ -7,14 +7,7 @@ import { Plugin } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { SearchIcon, XIcon } from "lucide-react";
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import {
   CommandDialog,
@@ -28,10 +21,7 @@ import type { TelemetryLogField } from "~/data/logApi";
 import { cn } from "~/lib/utils";
 
 import { FilterPillsDisplay } from "./FilterPillsDisplay";
-import {
-  FilterSuggestionsPanel,
-  type FilterSuggestion,
-} from "./FilterSuggestionsPanel";
+import { FilterSuggestionsPanel, type FilterSuggestion } from "./FilterSuggestionsPanel";
 import {
   applyFieldSuggestion,
   applyOperatorSuggestion,
@@ -69,8 +59,7 @@ const FilterPillDecorations = Extension.create<FilterPillDecorationOptions>({
 
             for (const pill of completeParsedPills(parsed)) {
               const field = resolvePillField(pill, fields);
-              const unknownClass =
-                field === null ? "filter-query-pill--unknown" : "";
+              const unknownClass = field === null ? "filter-query-pill--unknown" : "";
               const kind = field?.kind ?? "unknown";
               // Compute sub-part offsets inside `source`. Each part becomes its
               // own inline decoration so the field/operator/value text can be
@@ -89,9 +78,8 @@ const FilterPillDecorations = Extension.create<FilterPillDecorationOptions>({
               const valueEnd = pill.valueSpan?.end ?? pill.end;
               const hasValue = !isValuelessOperator(pill.operator);
               const fieldDecorationEnd = operatorStart > fieldEnd ? operatorStart : fieldEnd;
-              const operatorDecorationEnd = hasValue && valueStart > operatorEnd
-                ? valueStart
-                : operatorEnd;
+              const operatorDecorationEnd =
+                hasValue && valueStart > operatorEnd ? valueStart : operatorEnd;
 
               decorations.push(
                 Decoration.inline(fieldStart + 1, fieldDecorationEnd + 1, {
@@ -182,10 +170,7 @@ export function FilterQueryInput({
     () => parseFilterInput(appliedSource, appliedSource.length, fields),
     [appliedSource, fields],
   );
-  const appliedDisplayPills = useMemo(
-    () => completeParsedPills(appliedParsed),
-    [appliedParsed],
-  );
+  const appliedDisplayPills = useMemo(() => completeParsedPills(appliedParsed), [appliedParsed]);
   const parsed = useMemo(
     () => parseFilterInput(draftSource, cursor, fields),
     [cursor, draftSource, fields],
@@ -194,78 +179,81 @@ export function FilterQueryInput({
     () => cursorContextToKey(parsed.cursorContext),
     [parsed.cursorContext],
   );
-  const editor = useEditor({
-    extensions: [
-      PlainTextDocument,
-      Paragraph,
-      Text,
-      FilterPillDecorations.configure({
-        getFields: () => fieldsRef.current,
-      }),
-    ],
-    content: textToDoc(""),
-    editorProps: {
-      attributes: {
-        "aria-controls": suggestionsId,
-        "aria-label": "Filter telemetry",
-        class:
-          "min-h-8 max-h-24 overflow-y-auto outline-none whitespace-pre-wrap break-words px-0 py-1.5 text-sm leading-6",
-        id: editorId,
-        spellcheck: "false",
-      },
-      transformPastedText(text) {
-        return text.replace(/\s+/g, " ");
-      },
-      handleKeyDown(_view, event) {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          cancelAndClose();
-          return true;
-        }
-
-        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-          const count = suggestionCountRef.current;
-          if (count <= 0) return false;
-          event.preventDefault();
-          setHighlightedSuggestionIndex((index) => {
-            if (index === null) {
-              return event.key === "ArrowDown" ? 0 : count - 1;
-            }
-
-            const nextIndex = event.key === "ArrowDown" ? index + 1 : index - 1;
-            return nextIndex < 0 || nextIndex >= count ? null : nextIndex;
-          });
-          return true;
-        }
-
-        if (event.key === "Enter") {
-          event.preventDefault();
-          if (suggestionCountRef.current > 0) {
-            const active = document
-              .getElementById(suggestionsId)
-              ?.querySelector<HTMLButtonElement>("[data-filter-suggestion-active='true']");
-            if (active) {
-              active.click();
-              return true;
-            }
+  const editor = useEditor(
+    {
+      extensions: [
+        PlainTextDocument,
+        Paragraph,
+        Text,
+        FilterPillDecorations.configure({
+          getFields: () => fieldsRef.current,
+        }),
+      ],
+      content: textToDoc(""),
+      editorProps: {
+        attributes: {
+          "aria-controls": suggestionsId,
+          "aria-label": "Filter telemetry",
+          class:
+            "min-h-8 max-h-24 overflow-y-auto outline-none whitespace-pre-wrap break-words px-0 py-1.5 text-sm leading-6",
+          id: editorId,
+          spellcheck: "false",
+        },
+        transformPastedText(text) {
+          return text.replace(/\s+/g, " ");
+        },
+        handleKeyDown(_view, event) {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            cancelAndClose();
+            return true;
           }
-          applyAndClose();
-          return true;
-        }
 
-        return false;
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            const count = suggestionCountRef.current;
+            if (count <= 0) return false;
+            event.preventDefault();
+            setHighlightedSuggestionIndex((index) => {
+              if (index === null) {
+                return event.key === "ArrowDown" ? 0 : count - 1;
+              }
+
+              const nextIndex = event.key === "ArrowDown" ? index + 1 : index - 1;
+              return nextIndex < 0 || nextIndex >= count ? null : nextIndex;
+            });
+            return true;
+          }
+
+          if (event.key === "Enter") {
+            event.preventDefault();
+            if (suggestionCountRef.current > 0) {
+              const active = document
+                .getElementById(suggestionsId)
+                ?.querySelector<HTMLButtonElement>("[data-filter-suggestion-active='true']");
+              if (active) {
+                active.click();
+                return true;
+              }
+            }
+            applyAndClose();
+            return true;
+          }
+
+          return false;
+        },
+      },
+      immediatelyRender: false,
+      onSelectionUpdate({ editor: nextEditor }) {
+        setCursor(getEditorTextOffset(nextEditor));
+      },
+      onUpdate({ editor: nextEditor }) {
+        const nextSource = nextEditor.getText({ blockSeparator: " " });
+        setDraftSource(nextSource);
+        setCursor(getEditorTextOffset(nextEditor));
       },
     },
-    immediatelyRender: false,
-    onSelectionUpdate({ editor: nextEditor }) {
-      setCursor(getEditorTextOffset(nextEditor));
-    },
-    onUpdate({ editor: nextEditor }) {
-      const nextSource = nextEditor.getText({ blockSeparator: " " });
-      setDraftSource(nextSource);
-      setCursor(getEditorTextOffset(nextEditor));
-    },
-  }, [editorId, suggestionsId]);
+    [editorId, suggestionsId],
+  );
   const editorRef = useRef<Editor | null>(null);
   editorRef.current = editor ?? null;
 
@@ -282,20 +270,17 @@ export function FilterQueryInput({
     setHighlightedSuggestionIndex(null);
   }, [cursorContextKey]);
 
-  const syncDraftFromApplied = useCallback(
-    (nextCursor = appliedSourceRef.current.length) => {
-      const nextAppliedSource = appliedSourceRef.current;
-      const safeCursor = clampTextOffset(nextCursor, nextAppliedSource);
-      setDraftSource(nextAppliedSource);
-      setCursor(safeCursor);
-      const currentEditor = editorRef.current;
-      if (currentEditor) {
-        currentEditor.commands.setContent(textToDoc(nextAppliedSource), { emitUpdate: false });
-        currentEditor.commands.setTextSelection(safeCursor + 1);
-      }
-    },
-    [],
-  );
+  const syncDraftFromApplied = useCallback((nextCursor = appliedSourceRef.current.length) => {
+    const nextAppliedSource = appliedSourceRef.current;
+    const safeCursor = clampTextOffset(nextCursor, nextAppliedSource);
+    setDraftSource(nextAppliedSource);
+    setCursor(safeCursor);
+    const currentEditor = editorRef.current;
+    if (currentEditor) {
+      currentEditor.commands.setContent(textToDoc(nextAppliedSource), { emitUpdate: false });
+      currentEditor.commands.setTextSelection(safeCursor + 1);
+    }
+  }, []);
 
   useEffect(() => {
     if (isOpen) return;
@@ -329,17 +314,20 @@ export function FilterQueryInput({
     setIsOpen(false);
   }, [onAppliedSourceChange]);
 
-  const handleDialogOpenChange = useCallback((nextOpen: boolean) => {
-    if (nextOpen) {
-      openEditor();
-      return;
-    }
-    if (suppressNextCloseResetRef.current) {
-      suppressNextCloseResetRef.current = false;
-      return;
-    }
-    cancelAndClose();
-  }, [cancelAndClose, openEditor]);
+  const handleDialogOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      if (nextOpen) {
+        openEditor();
+        return;
+      }
+      if (suppressNextCloseResetRef.current) {
+        suppressNextCloseResetRef.current = false;
+        return;
+      }
+      cancelAndClose();
+    },
+    [cancelAndClose, openEditor],
+  );
 
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -424,7 +412,7 @@ export function FilterQueryInput({
         <button
           aria-label="Open telemetry filter"
           className={cn(
-            "inline-flex h-8 min-w-0 w-full cursor-pointer items-center gap-2 rounded-md border border-input bg-background/60 px-2.5 text-left text-sm text-foreground/80 shadow-xs/5 hover:bg-accent/50",
+            "inline-flex h-8 min-w-0 w-full cursor-pointer items-center gap-2 rounded-md  bg-card px-2.5 text-left text-sm text-foreground/80 shadow-xs/5 hover:bg-accent/50",
             hasAppliedContent ? "pr-9" : "pr-2.5",
             "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/24",
           )}
@@ -495,10 +483,7 @@ export function FilterQueryInput({
                   Filter telemetry — try kind = "span" status = "error"
                 </label>
               ) : null}
-              <EditorContent
-                className="min-w-0 [&_.ProseMirror_p]:m-0"
-                editor={editor}
-              />
+              <EditorContent className="min-w-0 [&_.ProseMirror_p]:m-0" editor={editor} />
             </div>
             {hasDraftContent ? (
               <IconButtonTooltip label="Clear filters">
@@ -562,12 +547,7 @@ interface ApplySuggestionArgs {
  * `./querySplicer` so they can be unit-tested without mounting the
  * component; this function just routes by `suggestion.kind`.
  */
-function applySuggestion({
-  suggestion,
-  source,
-  parsed,
-  commitSource,
-}: ApplySuggestionArgs): void {
+function applySuggestion({ suggestion, source, parsed, commitSource }: ApplySuggestionArgs): void {
   const ctx = {
     source,
     trailingStart: parsed.trailingStart,
@@ -588,7 +568,11 @@ function applySuggestion({
     }
     case "value": {
       if (parsed.cursorContext.kind === "value" && parsed.cursorContext.list !== undefined) {
-        const result = toggleListValueSuggestion(source, parsed.cursorContext.list, suggestion.value);
+        const result = toggleListValueSuggestion(
+          source,
+          parsed.cursorContext.list,
+          suggestion.value,
+        );
         commitSource(result.source, result.cursor);
         return;
       }

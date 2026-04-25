@@ -39,22 +39,22 @@ export async function getDataset(projectId: string, datasetId: string): Promise<
 }
 
 export async function createDataset(
-  projectId: string,
-  input: CreateDatasetInput,
-): Promise<Dataset> {
-  return runDatasetRpc((client) => client.CreateDataset({ projectId, input }));
+  _projectId: string,
+  _input: CreateDatasetInput,
+): Promise<never> {
+  throw new Error("Datasets are managed automatically per project.");
 }
 
 export async function updateDataset(
-  projectId: string,
-  datasetId: string,
-  input: UpdateDatasetInput,
-): Promise<Dataset> {
-  return runDatasetRpc((client) => client.UpdateDataset({ projectId, datasetId, input }));
+  _projectId: string,
+  _datasetId: string,
+  _input: UpdateDatasetInput,
+): Promise<never> {
+  throw new Error("Datasets are managed automatically per project.");
 }
 
-export async function deleteDataset(projectId: string, datasetId: string): Promise<void> {
-  await runDatasetRpc((client) => client.DeleteDataset({ projectId, datasetId }));
+export async function deleteDataset(_projectId: string, _datasetId: string): Promise<never> {
+  throw new Error("Datasets are managed automatically per project.");
 }
 
 export async function listDatasetStorageStats(): Promise<Array<DatasetStorageStats>> {

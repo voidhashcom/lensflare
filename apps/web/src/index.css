@@ -174,7 +174,7 @@
   --sidebar-primary-foreground: var(--primary-foreground);
   --sidebar-accent: var(--accent);
   --sidebar-accent-foreground: var(--accent-foreground);
-  --sidebar-border: var(--border);
+  --sidebar-border: oklch(0.931 0.001 288);
   --sidebar-ring: var(--ring);
 }
 
@@ -203,6 +203,7 @@
   --input: oklch(1 0 0 / 12%);
   --ring: oklch(0.5 0.005 285);
   --sidebar: oklch(0.145 0 0 / 0%);
+  --sidebar-border: oklch(1 0 0 / 8%);
 }
 
 html[data-runtime="electron"] {
@@ -211,22 +212,17 @@ html[data-runtime="electron"] {
 
 html[data-runtime="electron"]:not(.dark) {
   --sidebar: oklch(0.995 0.002 285 / 82%);
-  --sidebar-accent: oklch(0.92 0.004 285 / 82%);
-  --sidebar-border: oklch(0.58 0.01 285 / 24%);
-  --sidebar-edge-border: oklch(1 0 0 / 88%);
+  /* Hover/active for sidebar items: a low-alpha tint composited over the
+     translucent sidebar surface, so it reads as a subtle highlight rather
+     than a solid block that fights the backdrop blur. */
+  --sidebar-accent: oklch(0.22 0.006 285 / 8%);
   --muted-foreground: oklch(0.38 0.012 285);
   --border: oklch(0.22 0.006 285 / 10%);
 }
 
-html[data-runtime="electron"]:not(.dark) [data-slot="sidebar-container"] {
-  border-color: var(--sidebar-edge-border) !important;
-}
-
 html[data-runtime="electron"].dark {
   --sidebar: oklch(0.145 0 0 / 58%);
-  --sidebar-accent: var(--accent);
-  --sidebar-border: var(--border);
-  --sidebar-edge-border: var(--border);
+  --sidebar-accent: oklch(1 0 0 / 8%);
   --border: oklch(1 0 0 / 10%);
 }
 
