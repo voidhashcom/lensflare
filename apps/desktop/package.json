@@ -11,7 +11,7 @@
     "dev:bundle:preload": "vp pack src/preload.ts --out-dir dist/preload --watch",
     "dev:desktop": "pnpm run dev",
     "dev:electron": "wait-on tcp:127.0.0.1:5173 dist/main/index.cjs dist/preload/preload.cjs && env -u ELECTRON_RUN_AS_NODE LENSFLARE_DESKTOP_DEV=1 electronmon .",
-    "build": "pnpm run build:bundle && env -u ELECTRON_RUN_AS_NODE electron-builder",
+    "build": "pnpm run build:bundle && env -u ELECTRON_RUN_AS_NODE CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder",
     "build:bundle": "vp pack src/main/index.ts --out-dir dist/main && vp pack src/preload.ts --out-dir dist/preload",
     "start": "env -u ELECTRON_RUN_AS_NODE electron .",
     "typecheck": "tsc --noEmit",

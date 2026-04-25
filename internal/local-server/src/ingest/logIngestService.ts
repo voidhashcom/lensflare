@@ -48,10 +48,7 @@ export class LogIngestService extends Context.Service<
   {
     readonly ingest: (
       input: IngestInput,
-    ) => Effect.Effect<
-      IngestResult,
-      UnknownDatasetSlug | SqlError.SqlError | DuckDbError
-    >;
+    ) => Effect.Effect<IngestResult, UnknownDatasetSlug | SqlError.SqlError | DuckDbError>;
   }
 >()("@lensflare/local-server/LogIngestService") {
   static readonly layer = Layer.effect(

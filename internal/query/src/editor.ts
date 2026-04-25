@@ -105,7 +105,11 @@ export function parsedPillToDraft(
   };
 }
 
-export function editPillSource(source: string, pill: ParsedPill, mutation: ParsedPill): {
+export function editPillSource(
+  source: string,
+  pill: ParsedPill,
+  mutation: ParsedPill,
+): {
   readonly source: string;
   readonly cursor: number;
 } {

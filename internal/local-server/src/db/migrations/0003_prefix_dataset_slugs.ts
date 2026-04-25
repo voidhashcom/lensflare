@@ -1,10 +1,6 @@
 import { Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";
-import {
-  getDatasetLocalSlug,
-  makeDatasetTag,
-  makeUniqueSlug,
-} from "../../domain/slug.ts";
+import { getDatasetLocalSlug, makeDatasetTag, makeUniqueSlug } from "../../domain/slug.ts";
 
 interface DatasetSlugRow {
   readonly id: string;

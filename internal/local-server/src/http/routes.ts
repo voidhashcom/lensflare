@@ -13,10 +13,7 @@ import {
   TelemetryLogQueryService,
   type TelemetryLogPageDirection,
 } from "../ingest/telemetryLogQueryService.ts";
-import {
-  decodeTelemetryCursor,
-  TelemetryQueryService,
-} from "../ingest/telemetryQueryService.ts";
+import { decodeTelemetryCursor, TelemetryQueryService } from "../ingest/telemetryQueryService.ts";
 import { renderFallbackApp, serveStaticFile } from "./static.ts";
 
 export interface HttpRoutesOptions {
@@ -215,11 +212,7 @@ export function makeHttpRoutesLayer(options: HttpRoutesOptions) {
         }),
       );
 
-      const runLogsQuery = (
-        projectId: string,
-        datasetId: string,
-        req: LogQueryRequest,
-      ) =>
+      const runLogsQuery = (projectId: string, datasetId: string, req: LogQueryRequest) =>
         Effect.gen(function* () {
           const logs = yield* TelemetryLogQueryService;
           const parsedCursor = req.cursor ? decodeTelemetryLogCursor(req.cursor) : undefined;
@@ -256,11 +249,7 @@ export function makeHttpRoutesLayer(options: HttpRoutesOptions) {
           Effect.catchTag("DuckDbError", Effect.die),
         );
 
-      const runTelemetryQuery = (
-        projectId: string,
-        datasetId: string,
-        req: LogQueryRequest,
-      ) =>
+      const runTelemetryQuery = (projectId: string, datasetId: string, req: LogQueryRequest) =>
         Effect.gen(function* () {
           const telemetry = yield* TelemetryQueryService;
           const parsedCursor = req.cursor ? decodeTelemetryCursor(req.cursor) : undefined;
@@ -379,7 +368,9 @@ export function makeHttpRoutesLayer(options: HttpRoutesOptions) {
                 ? typed.cursor.trim()
                 : undefined;
             const direction =
-              typed.direction === "older" || typed.direction === "newer" ? typed.direction : undefined;
+              typed.direction === "older" || typed.direction === "newer"
+                ? typed.direction
+                : undefined;
 
             const filterParse = parseFilterPayload(typed.filter);
             if (!filterParse.ok) {
@@ -396,42 +387,45 @@ export function makeHttpRoutesLayer(options: HttpRoutesOptions) {
           }),
       );
 
-      yield* router.add("GET", "/api/projects/:projectId/datasets/:datasetId/telemetry", (request) =>
-        Effect.gen(function* () {
-          const params = yield* HttpRouter.params;
-          const url = new URL(request.url, options.origin);
-          const search = url.searchParams.get("search")?.trim() || undefined;
-          const rawLimit = Number.parseInt(url.searchParams.get("limit") ?? "", 10);
-          const limit = Number.isInteger(rawLimit) ? rawLimit : undefined;
-          const rawCursor = url.searchParams.get("cursor")?.trim() || undefined;
-          const rawDirection = url.searchParams.get("direction");
-          const direction = parseLogPageDirection(rawDirection);
+      yield* router.add(
+        "GET",
+        "/api/projects/:projectId/datasets/:datasetId/telemetry",
+        (request) =>
+          Effect.gen(function* () {
+            const params = yield* HttpRouter.params;
+            const url = new URL(request.url, options.origin);
+            const search = url.searchParams.get("search")?.trim() || undefined;
+            const rawLimit = Number.parseInt(url.searchParams.get("limit") ?? "", 10);
+            const limit = Number.isInteger(rawLimit) ? rawLimit : undefined;
+            const rawCursor = url.searchParams.get("cursor")?.trim() || undefined;
+            const rawDirection = url.searchParams.get("direction");
+            const direction = parseLogPageDirection(rawDirection);
 
-          if (rawDirection !== null && direction === undefined) {
-            return HttpServerResponse.jsonUnsafe(
-              {
-                error: {
-                  tag: "InvalidDirection",
-                  message: "Telemetry page direction must be either older or newer.",
+            if (rawDirection !== null && direction === undefined) {
+              return HttpServerResponse.jsonUnsafe(
+                {
+                  error: {
+                    tag: "InvalidDirection",
+                    message: "Telemetry page direction must be either older or newer.",
+                  },
                 },
-              },
-              { status: 400 },
-            );
-          }
+                { status: 400 },
+              );
+            }
 
-          const filterParse = parseFilterPayload(url.searchParams.get("filter"));
-          if (!filterParse.ok) {
-            return invalidFilterResponse(filterParse.message);
-          }
+            const filterParse = parseFilterPayload(url.searchParams.get("filter"));
+            if (!filterParse.ok) {
+              return invalidFilterResponse(filterParse.message);
+            }
 
-          return yield* runTelemetryQuery(params.projectId ?? "", params.datasetId ?? "", {
-            search,
-            limit,
-            cursor: rawCursor,
-            direction,
-            filter: filterParse.filter,
-          });
-        }),
+            return yield* runTelemetryQuery(params.projectId ?? "", params.datasetId ?? "", {
+              search,
+              limit,
+              cursor: rawCursor,
+              direction,
+              filter: filterParse.filter,
+            });
+          }),
       );
 
       yield* router.add(
@@ -476,7 +470,9 @@ export function makeHttpRoutesLayer(options: HttpRoutesOptions) {
                 ? typed.cursor.trim()
                 : undefined;
             const direction =
-              typed.direction === "older" || typed.direction === "newer" ? typed.direction : undefined;
+              typed.direction === "older" || typed.direction === "newer"
+                ? typed.direction
+                : undefined;
 
             const filterParse = parseFilterPayload(typed.filter);
             if (!filterParse.ok) {
@@ -501,12 +497,10 @@ export function makeHttpRoutesLayer(options: HttpRoutesOptions) {
             const telemetry = yield* TelemetryQueryService;
             const params = yield* HttpRouter.params;
 
-            return yield* telemetry
-              .listFields(params.projectId ?? "", params.datasetId ?? "")
-              .pipe(
-                Effect.map((fields) => HttpServerResponse.jsonUnsafe({ fields })),
-                Effect.catchTag("DatasetNotFound", () => Effect.succeed(datasetNotFoundResponse())),
-              );
+            return yield* telemetry.listFields(params.projectId ?? "", params.datasetId ?? "").pipe(
+              Effect.map((fields) => HttpServerResponse.jsonUnsafe({ fields })),
+              Effect.catchTag("DatasetNotFound", () => Effect.succeed(datasetNotFoundResponse())),
+            );
           }).pipe(
             Effect.catchTag("SqlError", Effect.die),
             Effect.catchTag("DuckDbError", Effect.die),
@@ -527,7 +521,11 @@ export function makeHttpRoutesLayer(options: HttpRoutesOptions) {
             }
 
             return yield* telemetry
-              .listFieldValues(params.projectId ?? "", params.datasetId ?? "", fieldParam.split("."))
+              .listFieldValues(
+                params.projectId ?? "",
+                params.datasetId ?? "",
+                fieldParam.split("."),
+              )
               .pipe(
                 Effect.map((values) => HttpServerResponse.jsonUnsafe({ values })),
                 Effect.catchTag("DatasetNotFound", () => Effect.succeed(datasetNotFoundResponse())),
@@ -541,24 +539,19 @@ export function makeHttpRoutesLayer(options: HttpRoutesOptions) {
           ),
       );
 
-      yield* router.add(
-        "GET",
-        "/api/projects/:projectId/datasets/:datasetId/logs/fields",
-        () =>
-          Effect.gen(function* () {
-            const logs = yield* TelemetryLogQueryService;
-            const params = yield* HttpRouter.params;
+      yield* router.add("GET", "/api/projects/:projectId/datasets/:datasetId/logs/fields", () =>
+        Effect.gen(function* () {
+          const logs = yield* TelemetryLogQueryService;
+          const params = yield* HttpRouter.params;
 
-            return yield* logs
-              .listFields(params.projectId ?? "", params.datasetId ?? "")
-              .pipe(
-                Effect.map((fields) => HttpServerResponse.jsonUnsafe({ fields })),
-                Effect.catchTag("DatasetNotFound", () => Effect.succeed(datasetNotFoundResponse())),
-              );
-          }).pipe(
-            Effect.catchTag("SqlError", Effect.die),
-            Effect.catchTag("DuckDbError", Effect.die),
-          ),
+          return yield* logs.listFields(params.projectId ?? "", params.datasetId ?? "").pipe(
+            Effect.map((fields) => HttpServerResponse.jsonUnsafe({ fields })),
+            Effect.catchTag("DatasetNotFound", () => Effect.succeed(datasetNotFoundResponse())),
+          );
+        }).pipe(
+          Effect.catchTag("SqlError", Effect.die),
+          Effect.catchTag("DuckDbError", Effect.die),
+        ),
       );
 
       yield* router.add(

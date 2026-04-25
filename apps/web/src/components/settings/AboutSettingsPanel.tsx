@@ -54,7 +54,7 @@ export function AboutSettingsPanel() {
           control={
             <Button
               onClick={() =>
-                window.open("https://github.com/TheSpaceCompany/lensflare", "_blank", "noopener")
+                window.open("https://github.com/voidhashcom/lensflare", "_blank", "noopener")
               }
               size="xs"
               variant="outline"

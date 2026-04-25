@@ -25,8 +25,7 @@ function DatasetLogStreamRoute() {
   const datasetQuery = useLiveQuery(selectDataset(collectionId));
   const projectQuery = useLiveQuery(selectProject(projectId));
   const dataset = (datasetQuery.data?.[0] as Dataset | undefined) ?? undefined;
-  const project =
-    (projectQuery.data?.[0] as ProjectEntity | undefined) ?? undefined;
+  const project = (projectQuery.data?.[0] as ProjectEntity | undefined) ?? undefined;
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

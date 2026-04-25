@@ -133,37 +133,29 @@ describe("evaluateFilter - numeric comparisons", () => {
     expect(evaluateFilter(Filter.cmp(["severityNumber"], "gt", Filter.numberValue(17)), base)).toBe(
       false,
     );
-    expect(evaluateFilter(Filter.cmp(["severityNumber"], "gte", Filter.numberValue(17)), base)).toBe(
-      true,
-    );
+    expect(
+      evaluateFilter(Filter.cmp(["severityNumber"], "gte", Filter.numberValue(17)), base),
+    ).toBe(true);
     expect(evaluateFilter(Filter.cmp(["severityNumber"], "lt", Filter.numberValue(20)), base)).toBe(
       true,
     );
     expect(evaluateFilter(Filter.cmp(["severityNumber"], "lt", Filter.numberValue(17)), base)).toBe(
       false,
     );
-    expect(evaluateFilter(Filter.cmp(["severityNumber"], "lte", Filter.numberValue(17)), base)).toBe(
-      true,
-    );
+    expect(
+      evaluateFilter(Filter.cmp(["severityNumber"], "lte", Filter.numberValue(17)), base),
+    ).toBe(true);
   });
 
   it("coerces numeric strings in attributes when ordering", () => {
     const withAttr = entry({ attributes: { "http.status_code": "503" } });
-    const ast = Filter.cmp(
-      ["attributes", "http.status_code"],
-      "gte",
-      Filter.numberValue(500),
-    );
+    const ast = Filter.cmp(["attributes", "http.status_code"], "gte", Filter.numberValue(500));
     expect(evaluateFilter(ast, withAttr)).toBe(true);
   });
 
   it("returns false when the field cannot be coerced to a number", () => {
     const bogus = entry({ attributes: { "http.status_code": "not-a-number" } });
-    const ast = Filter.cmp(
-      ["attributes", "http.status_code"],
-      "gt",
-      Filter.numberValue(100),
-    );
+    const ast = Filter.cmp(["attributes", "http.status_code"], "gt", Filter.numberValue(100));
     expect(evaluateFilter(ast, bogus)).toBe(false);
   });
 });
@@ -231,9 +223,7 @@ describe("evaluateFilter - exists / notExists", () => {
   it("treats a missing attribute path as not existing", () => {
     const ast = Filter.cmp(["attributes", "http", "status_code"], "exists");
     expect(evaluateFilter(ast, entry({ attributes: {} }))).toBe(false);
-    expect(
-      evaluateFilter(ast, entry({ attributes: { http: { status_code: 500 } } })),
-    ).toBe(true);
+    expect(evaluateFilter(ast, entry({ attributes: { http: { status_code: 500 } } }))).toBe(true);
   });
 
   it("returns false for cmp on an absent path with a non-existence op", () => {
@@ -259,11 +249,7 @@ describe("evaluateFilter - attribute path traversal", () => {
   });
 
   it("walks nested object paths", () => {
-    const ast = Filter.cmp(
-      ["attributes", "http", "method"],
-      "eq",
-      Filter.stringValue("POST"),
-    );
+    const ast = Filter.cmp(["attributes", "http", "method"], "eq", Filter.stringValue("POST"));
     expect(evaluateFilter(ast, nested)).toBe(true);
   });
 
@@ -277,11 +263,7 @@ describe("evaluateFilter - attribute path traversal", () => {
   });
 
   it("returns undefined (and thus false) when a segment misses", () => {
-    const ast = Filter.cmp(
-      ["attributes", "http", "body", "size"],
-      "gt",
-      Filter.numberValue(0),
-    );
+    const ast = Filter.cmp(["attributes", "http", "body", "size"], "gt", Filter.numberValue(0));
     expect(evaluateFilter(ast, nested)).toBe(false);
   });
 });
@@ -351,11 +333,7 @@ describe("evaluateFilter - boolean composition", () => {
       Filter.text("http"),
       Filter.or([
         Filter.cmp(["level"], "in", Filter.listValue(["error", "fatal"])),
-        Filter.cmp(
-          ["attributes", "http.status_code"],
-          "gte",
-          Filter.numberValue(500),
-        ),
+        Filter.cmp(["attributes", "http.status_code"], "gte", Filter.numberValue(500)),
       ]),
       Filter.not(Filter.cmp(["traceId"], "notExists")),
     ]);

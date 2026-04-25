@@ -4,12 +4,15 @@ import Header from "../components/Header.astro";
 import { Hero } from "../components/Hero";
 import { AppShowcase } from "../components/AppShowcase";
 import { Footer } from "../components/Footer";
+import { getLatestReleaseDownloads } from "../lib/releases";
+
+const release = await getLatestReleaseDownloads();
 ---
 
 <BaseLayout>
   <Header />
   <main>
-    <Hero />
+    <Hero release={release} />
     <!--
       The AppShowcase renders a WebGL fluted-glass shader, so it must hydrate
       on the client. `client:load` is fine here because it's the visual focal

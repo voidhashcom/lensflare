@@ -1,12 +1,7 @@
 import { XIcon } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
-import {
-  Select,
-  SelectButton,
-  SelectItem,
-  SelectPopup,
-} from "~/components/ui/select";
+import { Select, SelectButton, SelectItem, SelectPopup } from "~/components/ui/select";
 import { IconButtonTooltip } from "~/components/ui/tooltip";
 import type { TelemetryLogField } from "~/data/logApi";
 import { cn } from "~/lib/utils";
@@ -42,12 +37,7 @@ interface FilterPillChipProps {
  * string, and mutations are emitted as typed events. This keeps the chip
  * renderable from any tokeniser output without a draft-copy layer.
  */
-export function FilterPillChip({
-  pill,
-  field,
-  onChangeOperator,
-  onRemove,
-}: FilterPillChipProps) {
+export function FilterPillChip({ pill, field, onChangeOperator, onRemove }: FilterPillChipProps) {
   const fieldLabel = field?.label ?? pill.fieldPath.join(".");
   const kind = field?.kind ?? "string";
   const operatorOptions = operatorSyntaxesForKind(kind);
@@ -69,9 +59,7 @@ export function FilterPillChip({
       }}
     >
       <FieldTypeBadge className="-ms-0.5 min-w-6 px-1 py-0" kind={kind} />
-      <span className="max-w-[8rem] truncate font-medium text-foreground">
-        {fieldLabel}
-      </span>
+      <span className="max-w-[8rem] truncate font-medium text-foreground">{fieldLabel}</span>
       <Select
         onValueChange={(next: unknown) => {
           const syntax = OPERATOR_SYNTAX.find((entry) => entry.token === next);
@@ -89,9 +77,7 @@ export function FilterPillChip({
           {operatorOptions.map((entry) => (
             <SelectItem key={entry.token} value={entry.token}>
               <span className="flex items-center gap-2">
-                <span className="font-mono text-xs text-foreground">
-                  {entry.token}
-                </span>
+                <span className="font-mono text-xs text-foreground">{entry.token}</span>
                 <span className="text-muted-foreground">{entry.label}</span>
               </span>
             </SelectItem>

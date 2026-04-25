@@ -7,9 +7,7 @@ import { reportRpcConnectionFailure } from "~/data/rpcConnectionManager";
 
 const rpcConnectionManagerMock = vi.hoisted(() => {
   const state: {
-    factory:
-      | ((client: unknown) => Effect.Effect<unknown, unknown>)
-      | undefined;
+    factory: ((client: unknown) => Effect.Effect<unknown, unknown>) | undefined;
   } = {
     factory: undefined,
   };
@@ -17,12 +15,10 @@ const rpcConnectionManagerMock = vi.hoisted(() => {
   return {
     state,
     reportRpcConnectionFailure: vi.fn(),
-    runRpcCallback: vi.fn(
-      (factory: (client: unknown) => Effect.Effect<unknown, unknown>) => {
-        state.factory = factory;
-        return vi.fn();
-      },
-    ),
+    runRpcCallback: vi.fn((factory: (client: unknown) => Effect.Effect<unknown, unknown>) => {
+      state.factory = factory;
+      return vi.fn();
+    }),
   };
 });
 

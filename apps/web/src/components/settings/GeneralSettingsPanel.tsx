@@ -108,10 +108,7 @@ export function GeneralSettingsPanel() {
     [projects],
   );
   const datasetGroups = useMemo(() => {
-    const groups = new Map<
-      string,
-      { project: ProjectEntity | null; datasets: Array<Dataset> }
-    >();
+    const groups = new Map<string, { project: ProjectEntity | null; datasets: Array<Dataset> }>();
 
     for (const dataset of datasets) {
       const group = groups.get(dataset.projectId) ?? {

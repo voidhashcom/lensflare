@@ -85,7 +85,10 @@ function assertAttributeSegments(segments: ReadonlyArray<string>): void {
   }
 }
 
-function attributeStringExpr(segments: ReadonlyArray<string>, column = "telemetry.attributes_json"): string {
+function attributeStringExpr(
+  segments: ReadonlyArray<string>,
+  column = "telemetry.attributes_json",
+): string {
   const exactKey = segments.join(".");
   return `COALESCE(${column}['${exactKey}'], ${column}['${segments.at(-1) ?? ""}'])`;
 }
@@ -184,7 +187,9 @@ function compileCmpAgainstExpr(
     case "lt":
     case "lte": {
       if (value._tag === "list" || value._tag === "null" || value._tag === "boolean") {
-        throw new InvalidFilterError({ reason: `operator '${op}' requires a string or number value` });
+        throw new InvalidFilterError({
+          reason: `operator '${op}' requires a string or number value`,
+        });
       }
       const placeholder = bindParam(builder, filterValueToDuckDbValue(value));
       const sqlOp = op === "gt" ? ">" : op === "gte" ? ">=" : op === "lt" ? "<" : "<=";

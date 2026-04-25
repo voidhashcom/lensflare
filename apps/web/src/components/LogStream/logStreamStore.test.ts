@@ -1,10 +1,7 @@
 import { Filter, type TelemetryRecord, type TelemetryRecordPage } from "@lensflare/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  listDatasetTelemetry,
-  subscribeDatasetTelemetryEntries,
-} from "~/data/logApi";
+import { listDatasetTelemetry, subscribeDatasetTelemetryEntries } from "~/data/logApi";
 
 import {
   activateDatasetStream,
@@ -177,10 +174,7 @@ describe("logStreamStore", () => {
     activateDatasetStream(baseInput());
     await flushStream("p", "d");
 
-    await Promise.all([
-      loadOlderDatasetTelemetry("p", "d"),
-      loadOlderDatasetTelemetry("p", "d"),
-    ]);
+    await Promise.all([loadOlderDatasetTelemetry("p", "d"), loadOlderDatasetTelemetry("p", "d")]);
 
     expect(listTelemetry).toHaveBeenCalledTimes(2);
     expect(getDatasetStreamSnapshot("p", "d").logs.map((log) => log.id)).toEqual(["old", "new"]);
@@ -324,7 +318,11 @@ describe("logStreamStore", () => {
     });
     activateDatasetStream(baseInput());
     await flushStream("p", "d");
-    fakes.emit("p", "d", logRecord("same", "from websocket", "info", "2026-01-01T00:00:00.000000100Z"));
+    fakes.emit(
+      "p",
+      "d",
+      logRecord("same", "from websocket", "info", "2026-01-01T00:00:00.000000100Z"),
+    );
 
     await refreshDatasetTelemetry("p", "d");
 
@@ -400,7 +398,9 @@ describe("logStreamStore", () => {
   });
 
   it("invalidates a dataset and cancels its subscription", async () => {
-    const fakes = installFakes({ pages: [page([logRecord("a", "a")]), page([logRecord("b", "b")])] });
+    const fakes = installFakes({
+      pages: [page([logRecord("a", "a")]), page([logRecord("b", "b")])],
+    });
     activateDatasetStream(baseInput({ viewId: "telemetry:1" }));
     activateDatasetStream(baseInput({ viewId: "telemetry:2" }));
     await flushStream("p", "d", "telemetry:1");

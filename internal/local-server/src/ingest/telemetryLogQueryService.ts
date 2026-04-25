@@ -417,9 +417,9 @@ function compareTraceSpans(
 }
 
 function encodeTelemetryLogCursor(row: TelemetryLogRow): string {
-  return Buffer.from(JSON.stringify({ timestamp: toTimestamp(row.timestamp), id: row.id })).toString(
-    "base64url",
-  );
+  return Buffer.from(
+    JSON.stringify({ timestamp: toTimestamp(row.timestamp), id: row.id }),
+  ).toString("base64url");
 }
 
 export function decodeTelemetryLogCursor(input: string): TelemetryLogCursor | null {
@@ -529,7 +529,10 @@ export class TelemetryLogQueryService extends Context.Service<
       datasetId: string,
       traceId: string,
       currentSpanId?: string | undefined,
-    ) => Effect.Effect<TelemetryTraceContext | null, DatasetNotFound | DuckDbError | SqlError.SqlError>;
+    ) => Effect.Effect<
+      TelemetryTraceContext | null,
+      DatasetNotFound | DuckDbError | SqlError.SqlError
+    >;
   }
 >()("@lensflare/local-server/TelemetryLogQueryService") {
   static readonly layer = Layer.effect(
@@ -655,7 +658,9 @@ export class TelemetryLogQueryService extends Context.Service<
 
         return rows
           .map((row) => row.value)
-          .filter((value): value is string | number | boolean => value !== null && value !== undefined)
+          .filter(
+            (value): value is string | number | boolean => value !== null && value !== undefined,
+          )
           .map((value) => String(value));
       });
 

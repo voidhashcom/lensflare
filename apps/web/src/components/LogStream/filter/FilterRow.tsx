@@ -55,13 +55,7 @@ function fieldLabel(field: TelemetryLogField): string {
  * popover. The field is fixed to the parsed pill; changing the operator or
  * value rewrites that pill back into the source query.
  */
-export function FilterRow({
-  projectId,
-  datasetId,
-  draft,
-  onChange,
-  onRemove,
-}: FilterRowProps) {
+export function FilterRow({ projectId, datasetId, draft, onChange, onRemove }: FilterRowProps) {
   const field = draft.field;
   const operators = field === null ? [] : operatorsForField(field.kind);
   const isUnary = UNARY_OPERATORS.includes(draft.operator);
@@ -73,13 +67,8 @@ export function FilterRow({
   // value catalog.
   const shouldFetchValues =
     field !== null && field.kind === "enum" && (!field.values || field.values.length === 0);
-  const valuesState = useFieldValues(
-    projectId,
-    datasetId,
-    shouldFetchValues ? field.path : null,
-  );
-  const knownValues =
-    field?.values && field.values.length > 0 ? field.values : valuesState.values;
+  const valuesState = useFieldValues(projectId, datasetId, shouldFetchValues ? field.path : null);
+  const knownValues = field?.values && field.values.length > 0 ? field.values : valuesState.values;
 
   const handleOperatorChange = (next: FilterOperator) => {
     const nextUnary = UNARY_OPERATORS.includes(next);
@@ -177,12 +166,7 @@ export function FilterRow({
       </div>
 
       <IconButtonTooltip label="Remove filter">
-        <Button
-          aria-label="Remove filter"
-          onClick={onRemove}
-          size="icon"
-          variant="ghost"
-        >
+        <Button aria-label="Remove filter" onClick={onRemove} size="icon" variant="ghost">
           <TrashIcon />
         </Button>
       </IconButtonTooltip>

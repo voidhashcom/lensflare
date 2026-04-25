@@ -56,8 +56,7 @@ export function loadHighlighter(): Promise<CodeHighlighter> {
         langs: [...HIGHLIGHTER_LANGS],
       });
       const highlighter: CodeHighlighter = {
-        highlight: (code, lang, theme) =>
-          shiki.codeToHtml(code, { lang, theme }),
+        highlight: (code, lang, theme) => shiki.codeToHtml(code, { lang, theme }),
       };
       return highlighter;
     })().catch((error) => {

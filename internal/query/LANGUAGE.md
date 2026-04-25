@@ -115,22 +115,22 @@ render an unknown pill and surface a diagnostic.
 
 Operators are field-kind aware.
 
-| Token | AST operator | Kinds | Value |
-| --- | --- | --- | --- |
-| `=` | `eq` | string, number, enum | required |
-| `!=` | `ne` | string, number, enum | required |
-| `>` | `gt` | number | required |
-| `>=` | `gte` | number | required |
-| `<` | `lt` | number | required |
-| `<=` | `lte` | number | required |
-| `contains` | `contains` | string | required |
-| `startsWith` | `startsWith` | string | required |
-| `endsWith` | `endsWith` | string | required |
-| `~=` | `matchesRegex` | string | required |
-| `in` | `in` | string, number, enum | array required |
-| `not in` | `notIn` | string, number, enum | array required |
-| `exists` | `exists` | string, number, enum | none |
-| `missing` | `notExists` | string, number, enum | none |
+| Token        | AST operator   | Kinds                | Value          |
+| ------------ | -------------- | -------------------- | -------------- |
+| `=`          | `eq`           | string, number, enum | required       |
+| `!=`         | `ne`           | string, number, enum | required       |
+| `>`          | `gt`           | number               | required       |
+| `>=`         | `gte`          | number               | required       |
+| `<`          | `lt`           | number               | required       |
+| `<=`         | `lte`          | number               | required       |
+| `contains`   | `contains`     | string               | required       |
+| `startsWith` | `startsWith`   | string               | required       |
+| `endsWith`   | `endsWith`     | string               | required       |
+| `~=`         | `matchesRegex` | string               | required       |
+| `in`         | `in`           | string, number, enum | array required |
+| `not in`     | `notIn`        | string, number, enum | array required |
+| `exists`     | `exists`       | string, number, enum | none           |
+| `missing`    | `notExists`    | string, number, enum | none           |
 
 Word operators are parsed case-insensitively where needed. The formatter and
 pill serializer emit canonical forms such as `startsWith` and `endsWith`.

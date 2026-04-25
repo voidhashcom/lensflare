@@ -24,17 +24,11 @@ const statusField: TelemetryLogField = {
   kind: "number",
 };
 
-const catalog: ReadonlyArray<TelemetryLogField> = [
-  levelField,
-  messageField,
-  statusField,
-];
+const catalog: ReadonlyArray<TelemetryLogField> = [levelField, messageField, statusField];
 
 const noop = () => {};
 
-function render(
-  props: Partial<Parameters<typeof FilterQueryInput>[0]> = {},
-): string {
+function render(props: Partial<Parameters<typeof FilterQueryInput>[0]> = {}): string {
   const defaults: Parameters<typeof FilterQueryInput>[0] = {
     projectId: "p",
     datasetId: "d",

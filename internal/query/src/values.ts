@@ -235,7 +235,9 @@ function escapeQuoted(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-export function draftToFilterNode(draft: FilterRowDraft): import("@lensflare/contracts").FilterNode | null {
+export function draftToFilterNode(
+  draft: FilterRowDraft,
+): import("@lensflare/contracts").FilterNode | null {
   if (draft.field === null) return null;
   const path = [...draft.field.path];
   if (path.length === 0) return null;
@@ -259,14 +261,15 @@ export function draftToFilterNode(draft: FilterRowDraft): import("@lensflare/con
   };
 }
 
-export function draftToFilter(draft: FilterDraftState): import("@lensflare/contracts").FilterNode | null {
+export function draftToFilter(
+  draft: FilterDraftState,
+): import("@lensflare/contracts").FilterNode | null {
   const rowNodes = draft.rows
     .map((row) => draftToFilterNode(row))
     .filter((node): node is import("@lensflare/contracts").FilterNode => node !== null);
   const text = draft.text.trim();
-  const children: Array<import("@lensflare/contracts").FilterNode> = text.length > 0
-    ? [{ _tag: "text", query: text }, ...rowNodes]
-    : rowNodes;
+  const children: Array<import("@lensflare/contracts").FilterNode> =
+    text.length > 0 ? [{ _tag: "text", query: text }, ...rowNodes] : rowNodes;
   if (children.length === 0) return null;
   if (children.length === 1) return children[0] ?? null;
   return { _tag: "and", children };

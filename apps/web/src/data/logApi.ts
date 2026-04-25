@@ -160,9 +160,7 @@ async function issuePostRequest(
   datasetId: string,
   options: ListDatasetLogsOptions,
 ): Promise<Response> {
-  const url = resolveBackendHttpUrl(
-    `/api/projects/${projectId}/datasets/${datasetId}/logs/query`,
-  );
+  const url = resolveBackendHttpUrl(`/api/projects/${projectId}/datasets/${datasetId}/logs/query`);
 
   const body: Record<string, unknown> = {};
   if (options.search) {
@@ -420,9 +418,7 @@ export function subscribeDatasetLogEntries(
     (client) =>
       client
         .SubscribeTelemetryLogEvents(
-          filter === undefined
-            ? { projectId, datasetId }
-            : { projectId, datasetId, filter },
+          filter === undefined ? { projectId, datasetId } : { projectId, datasetId, filter },
         )
         .pipe(
           Stream.runForEach((entry) =>
@@ -450,9 +446,7 @@ export function subscribeDatasetTelemetryEntries(
     (client) =>
       client
         .SubscribeTelemetryEvents(
-          filter === undefined
-            ? { projectId, datasetId }
-            : { projectId, datasetId, filter },
+          filter === undefined ? { projectId, datasetId } : { projectId, datasetId, filter },
         )
         .pipe(
           Stream.runForEach((entry) =>

@@ -172,7 +172,11 @@ export interface ParsedPill {
 
 export type CursorContext =
   | { readonly kind: "field"; readonly prefix: string }
-  | { readonly kind: "operator"; readonly fieldPath: ReadonlyArray<string>; readonly tokenPrefix: string }
+  | {
+      readonly kind: "operator";
+      readonly fieldPath: ReadonlyArray<string>;
+      readonly tokenPrefix: string;
+    }
   | {
       readonly kind: "value";
       readonly fieldPath: ReadonlyArray<string>;

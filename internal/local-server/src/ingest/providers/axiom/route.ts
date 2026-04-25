@@ -2,10 +2,7 @@ import { Effect, Layer } from "effect";
 import { HttpRouter } from "effect/unstable/http";
 import { resolveIngestErrorStatus } from "../../../http/ingestErrorMapping.ts";
 import { logIngestFailure } from "../../../http/ingestLogging.ts";
-import {
-  getRemoteAddress,
-  normalizeContentType,
-} from "../../../http/ingestRouteHelpers.ts";
+import { getRemoteAddress, normalizeContentType } from "../../../http/ingestRouteHelpers.ts";
 import { UnsupportedContentType } from "../../errors.ts";
 import { LogIngestService } from "../../logIngestService.ts";
 import { AxiomNativeDecoder } from "./decoder.ts";

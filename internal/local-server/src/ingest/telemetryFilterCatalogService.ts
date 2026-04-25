@@ -325,12 +325,12 @@ export class TelemetryFilterCatalogService extends Context.Service<
                 datasetId,
                 path: item.path,
                 label: fieldLabel(item.path),
-              kind: item.kind,
-              values: new Set(),
-              frequency: 0,
-              highCardinality: false,
-              updatedAt: now,
-            };
+                kind: item.kind,
+                values: new Set(),
+                frequency: 0,
+                highCardinality: false,
+                updatedAt: now,
+              };
               fields.set(id, entry);
               changed.add(entry);
             }

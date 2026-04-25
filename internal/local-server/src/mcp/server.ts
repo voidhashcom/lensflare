@@ -1,14 +1,8 @@
-import {
-  type TelemetryRecordPage,
-  type TelemetryTraceContext,
-} from "@lensflare/contracts";
+import { type TelemetryRecordPage, type TelemetryTraceContext } from "@lensflare/contracts";
 import { Effect, Layer, Schema } from "effect";
 import { McpServer, Tool, Toolkit } from "effect/unstable/ai";
 import { TelemetryLogQueryService } from "../ingest/telemetryLogQueryService.ts";
-import {
-  decodeTelemetryCursor,
-  TelemetryQueryService,
-} from "../ingest/telemetryQueryService.ts";
+import { decodeTelemetryCursor, TelemetryQueryService } from "../ingest/telemetryQueryService.ts";
 import { DatasetService } from "../services/datasetService.ts";
 import { parseTelemetryQuery, QueryLanguageError } from "@lensflare/query";
 
@@ -16,15 +10,13 @@ const JsonResult = Schema.Any;
 const ToolFailure = Schema.Any;
 
 const Limit = Schema.optional(
-  Schema.Number.check(
-    Schema.isInt(),
-    Schema.isBetween({ minimum: 1, maximum: 500 }),
-  ).annotate({ description: "Maximum number of records to return." }),
+  Schema.Number.check(Schema.isInt(), Schema.isBetween({ minimum: 1, maximum: 500 })).annotate({
+    description: "Maximum number of records to return.",
+  }),
 );
 
 const DatasetId = Schema.String.annotate({
-  description:
-    "Dataset id. Get this from listDatasets; projectId is resolved by the server.",
+  description: "Dataset id. Get this from listDatasets; projectId is resolved by the server.",
 });
 
 const TELEMETRY_QUERY_LANGUAGE = `Telemetry query language:
@@ -40,11 +32,11 @@ const TELEMETRY_QUERY_LANGUAGE = `Telemetry query language:
 - Error examples: (level in ["error", "fatal"]) or status = "error"; serviceName = "api" and ((level in ["error", "fatal"]) or status = "error"); message ~= /timeout|ECONNRESET/.`;
 
 const readOnlyLocalTool = <T extends Tool.Any>(tool: T, title: string): T =>
-  (tool
+  tool
     .annotate(Tool.Title, title)
     .annotate(Tool.Readonly, true)
     .annotate(Tool.Destructive, false)
-    .annotate(Tool.OpenWorld, false) as T);
+    .annotate(Tool.OpenWorld, false) as T;
 
 const ListDatasets = readOnlyLocalTool(
   Tool.make("listDatasets", {
@@ -64,7 +56,8 @@ const QueryTelemetry = readOnlyLocalTool(
       datasetId: DatasetId,
       query: Schema.optional(
         Schema.String.annotate({
-          description: "Unified telemetry query string. See the tool description for the full language.",
+          description:
+            "Unified telemetry query string. See the tool description for the full language.",
         }),
       ),
       limit: Limit,
@@ -100,11 +93,7 @@ const GetTrace = readOnlyLocalTool(
   "Get Trace",
 );
 
-const LensflareMcpToolkit = Toolkit.make(
-  ListDatasets,
-  QueryTelemetry,
-  GetTrace,
-);
+const LensflareMcpToolkit = Toolkit.make(ListDatasets, QueryTelemetry, GetTrace);
 
 function pageSummary(page: TelemetryRecordPage) {
   return {
@@ -172,9 +161,7 @@ export const LensflareMcpToolsLayer = Layer.effectDiscard(
           const filter = yield* Effect.try({
             try: () => parseTelemetryQuery(query, fields),
             catch: (error) =>
-              error instanceof QueryLanguageError
-                ? error.message
-                : "Invalid telemetry query.",
+              error instanceof QueryLanguageError ? error.message : "Invalid telemetry query.",
           });
           const page = yield* telemetry.listDatasetTelemetry(projectId, datasetId, {
             filter: filter ?? undefined,

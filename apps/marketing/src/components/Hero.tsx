@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { GITHUB_LATEST_RELEASE_URL, GITHUB_REPO_URL } from "../lib/links";
+import type { LatestReleaseDownloads } from "../lib/releases";
 
 /**
  * The main pitch — a centered headline + subhead + two download links —
@@ -8,7 +8,7 @@ import { GITHUB_LATEST_RELEASE_URL, GITHUB_REPO_URL } from "../lib/links";
  * so the layout reads as one column of editorial cells. Matches the Paper
  * design (https://app.paper.design/file/01KQ1Z41FR6DQKXAPQ37VXG66J/2-0).
  */
-export function Hero(): ReactNode {
+export function Hero({ release }: { release: LatestReleaseDownloads }): ReactNode {
   return (
     <section className="w-full border-b border-border">
       <div className="mx-auto flex max-w-[1152px] flex-col items-center gap-[42px] border-x border-border px-8 py-20">
@@ -24,7 +24,7 @@ export function Hero(): ReactNode {
 
         <div className="flex items-center justify-center gap-4">
           <a
-            href={GITHUB_LATEST_RELEASE_URL}
+            href={release.downloads.macArm64.href}
             target="_blank"
             rel="noreferrer noopener"
             className="inline-flex items-center rounded-lg bg-[var(--primary)] px-3 py-2 text-[14px] leading-[150%] text-[var(--primary-foreground)] transition-opacity hover:opacity-90"

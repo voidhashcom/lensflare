@@ -19,8 +19,8 @@ export function MoreReleases(): ReactNode {
       <div className="mx-auto flex max-w-[1152px] border-x border-border">
         <div className="flex grow basis-0 flex-col items-start justify-center gap-3 px-10 py-12">
           <p className="max-w-[360px] text-[14px] leading-[22px] text-[#6B6B6B]">
-            Looking for older versions? Every release with full changelogs and
-            signed checksums lives on GitHub.
+            Looking for older versions? Every release with full changelogs and signed checksums
+            lives on GitHub.
           </p>
           <a
             href={GITHUB_RELEASES_URL}
@@ -28,9 +28,7 @@ export function MoreReleases(): ReactNode {
             rel="noreferrer noopener"
             className="inline-flex items-center gap-1.5 pt-1.5 text-foreground transition-opacity hover:opacity-70"
           >
-            <span className="text-[14px] font-medium leading-[20px]">
-              {repoLabel}
-            </span>
+            <span className="text-[14px] font-medium leading-[20px]">{repoLabel}</span>
             <span aria-hidden="true" className="text-[14px] leading-[20px]">
               ↗
             </span>

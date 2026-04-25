@@ -1,13 +1,6 @@
 #!/usr/bin/env node
 
-import {
-  copyFileSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -313,8 +306,14 @@ function nativeDependencyFileExclusions(platform: BuildPlatform, arch: BuildArch
 function applyWebIconAssets(webDistDir: string, iconAssets: DesktopBuildIconAssets): void {
   mkdirSync(webDistDir, { recursive: true });
   copyFileSync(resolve(repoRoot, iconAssets.webFaviconIco), join(webDistDir, "favicon.ico"));
-  copyFileSync(resolve(repoRoot, iconAssets.webFavicon16Png), join(webDistDir, "favicon-16x16.png"));
-  copyFileSync(resolve(repoRoot, iconAssets.webFavicon32Png), join(webDistDir, "favicon-32x32.png"));
+  copyFileSync(
+    resolve(repoRoot, iconAssets.webFavicon16Png),
+    join(webDistDir, "favicon-16x16.png"),
+  );
+  copyFileSync(
+    resolve(repoRoot, iconAssets.webFavicon32Png),
+    join(webDistDir, "favicon-32x32.png"),
+  );
   copyFileSync(
     resolve(repoRoot, iconAssets.webAppleTouchIconPng),
     join(webDistDir, "apple-touch-icon.png"),

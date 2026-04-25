@@ -156,7 +156,12 @@ const telemetryUnionSql = `
 
 const STATIC_FIELDS: ReadonlyArray<TelemetryField> = [
   { path: ["kind"], label: "kind", kind: "enum", values: ["log", "span", "spanEvent"] },
-  { path: ["level"], label: "level", kind: "enum", values: ["trace", "debug", "info", "warn", "error", "fatal"] },
+  {
+    path: ["level"],
+    label: "level",
+    kind: "enum",
+    values: ["trace", "debug", "info", "warn", "error", "fatal"],
+  },
   { path: ["status"], label: "status", kind: "enum", values: ["ok", "error", "unset"] },
   { path: ["message"], label: "message", kind: "string" },
   { path: ["name"], label: "name", kind: "string" },
@@ -335,9 +340,9 @@ function mapRows(
 }
 
 function encodeTelemetryCursor(row: TelemetryRow): string {
-  return Buffer.from(JSON.stringify({ timestamp: toTimestamp(row.timestamp), id: row.id })).toString(
-    "base64url",
-  );
+  return Buffer.from(
+    JSON.stringify({ timestamp: toTimestamp(row.timestamp), id: row.id }),
+  ).toString("base64url");
 }
 
 export function decodeTelemetryCursor(input: string): TelemetryCursor | null {
@@ -488,7 +493,10 @@ export class TelemetryQueryService extends Context.Service<
     readonly listFields: (
       projectId: string,
       datasetId: string,
-    ) => Effect.Effect<ReadonlyArray<TelemetryField>, DatasetNotFound | DuckDbError | SqlError.SqlError>;
+    ) => Effect.Effect<
+      ReadonlyArray<TelemetryField>,
+      DatasetNotFound | DuckDbError | SqlError.SqlError
+    >;
     readonly listFieldValues: (
       projectId: string,
       datasetId: string,
@@ -506,32 +514,29 @@ export class TelemetryQueryService extends Context.Service<
       const datasets = yield* DatasetsRepository;
       const telemetry = yield* TelemetryStore;
 
-      const listDatasetTelemetry = Effect.fn("TelemetryQueryService.listDatasetTelemetry")(function* (
-        projectId: string,
-        datasetId: string,
-        options?: ListDatasetTelemetryOptions,
-      ) {
-        const dataset = yield* datasets.findById(projectId, datasetId);
-        if (dataset === undefined) {
-          return yield* new DatasetNotFound({ datasetId, projectId });
-        }
+      const listDatasetTelemetry = Effect.fn("TelemetryQueryService.listDatasetTelemetry")(
+        function* (projectId: string, datasetId: string, options?: ListDatasetTelemetryOptions) {
+          const dataset = yield* datasets.findById(projectId, datasetId);
+          if (dataset === undefined) {
+            return yield* new DatasetNotFound({ datasetId, projectId });
+          }
 
-        const direction = options?.cursor ? (options.direction ?? "older") : "older";
-        const limit = Math.max(1, Math.min(options?.limit ?? 100, 500));
-        const effectiveFilter = combineFilter(options?.filter, options?.search);
-        const fragment = effectiveFilter
-          ? yield* Effect.try({
-              try: () => compileTelemetryFilterToSql(effectiveFilter),
-              catch: (error) =>
-                error instanceof InvalidFilterError
-                  ? error
-                  : new InvalidFilterError({
-                      reason: error instanceof Error ? error.message : "filter compile failed",
-                    }),
-            })
-          : null;
+          const direction = options?.cursor ? (options.direction ?? "older") : "older";
+          const limit = Math.max(1, Math.min(options?.limit ?? 100, 500));
+          const effectiveFilter = combineFilter(options?.filter, options?.search);
+          const fragment = effectiveFilter
+            ? yield* Effect.try({
+                try: () => compileTelemetryFilterToSql(effectiveFilter),
+                catch: (error) =>
+                  error instanceof InvalidFilterError
+                    ? error
+                    : new InvalidFilterError({
+                        reason: error instanceof Error ? error.message : "filter compile failed",
+                      }),
+              })
+            : null;
 
-        const sql = `
+          const sql = `
           WITH telemetry AS (${telemetryUnionSql})
           SELECT
             id,
@@ -578,23 +583,27 @@ export class TelemetryQueryService extends Context.Service<
           LIMIT $limit
         `;
 
-        const params: Record<string, DuckDBValue> = {
-          cursor_timestamp: options?.cursor?.timestamp ?? null,
-          cursor_id: options?.cursor?.id ?? null,
-          direction,
-          limit: limit + 1,
-          ...(fragment?.params ?? {}),
-        };
+          const params: Record<string, DuckDBValue> = {
+            cursor_timestamp: options?.cursor?.timestamp ?? null,
+            cursor_id: options?.cursor?.id ?? null,
+            direction,
+            limit: limit + 1,
+            ...(fragment?.params ?? {}),
+          };
 
-        const rawRows = yield* telemetry.queryRows<Record<string, unknown>>(datasetId, sql, params);
-        const rows = rawRows.map((row) => decodeTelemetryRow(row));
-        const spanRows = rows.filter((row) => row.kind === "span" && row.traceId && row.spanId);
-        const eventRows =
-          spanRows.length === 0
-            ? []
-            : yield* telemetry.queryRows<Record<string, unknown>>(
-                datasetId,
-                `
+          const rawRows = yield* telemetry.queryRows<Record<string, unknown>>(
+            datasetId,
+            sql,
+            params,
+          );
+          const rows = rawRows.map((row) => decodeTelemetryRow(row));
+          const spanRows = rows.filter((row) => row.kind === "span" && row.traceId && row.spanId);
+          const eventRows =
+            spanRows.length === 0
+              ? []
+              : yield* telemetry.queryRows<Record<string, unknown>>(
+                  datasetId,
+                  `
                 SELECT
                   LensflareRecordId || ':event:' || CAST(event_index.i - 1 AS VARCHAR) AS id,
                   TraceId AS trace_id,
@@ -607,17 +616,22 @@ export class TelemetryQueryService extends Context.Service<
                   AND SpanId IN (${spanRows.map((_, index) => `$span_${index}`).join(", ")})
                 ORDER BY timestamp ASC, id ASC
               `,
-                {
-                  ...Object.fromEntries(spanRows.map((row, index) => [`trace_${index}`, row.traceId ?? ""])),
-                  ...Object.fromEntries(spanRows.map((row, index) => [`span_${index}`, row.spanId ?? ""])),
-                },
-              );
+                  {
+                    ...Object.fromEntries(
+                      spanRows.map((row, index) => [`trace_${index}`, row.traceId ?? ""]),
+                    ),
+                    ...Object.fromEntries(
+                      spanRows.map((row, index) => [`span_${index}`, row.spanId ?? ""]),
+                    ),
+                  },
+                );
 
-        return toRecordPage(rows, buildEventsBySpan(eventRows.map(decodeSpanEventRow)), {
-          direction,
-          limit,
-        });
-      });
+          return toRecordPage(rows, buildEventsBySpan(eventRows.map(decodeSpanEventRow)), {
+            direction,
+            limit,
+          });
+        },
+      );
 
       const listFields = Effect.fn("TelemetryQueryService.listFields")(function* (
         projectId: string,
@@ -653,7 +667,9 @@ export class TelemetryQueryService extends Context.Service<
             prefix: String(row.prefix ?? ""),
           }))
           .filter((row) => row.key.length > 0 && row.prefix.length > 0)
-          .sort((left, right) => `${left.prefix}.${left.key}`.localeCompare(`${right.prefix}.${right.key}`))
+          .sort((left, right) =>
+            `${left.prefix}.${left.key}`.localeCompare(`${right.prefix}.${right.key}`),
+          )
           .map((row) => ({
             path: [...row.prefix.split("."), row.key],
             label: `${row.prefix}.${row.key}`,
@@ -718,7 +734,9 @@ export class TelemetryQueryService extends Context.Service<
 
         return rows
           .map((row) => row.value)
-          .filter((value): value is string | number | boolean => value !== null && value !== undefined)
+          .filter(
+            (value): value is string | number | boolean => value !== null && value !== undefined,
+          )
           .map((value) => String(value));
       });
 

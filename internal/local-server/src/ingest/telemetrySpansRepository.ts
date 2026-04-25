@@ -7,11 +7,7 @@ import {
   stringArrayLiteral,
   timestampArrayLiteral,
 } from "./telemetrySql.ts";
-import type {
-  NormalizedSpanRecord,
-  SpanIngestWriteRequest,
-  WrittenSpanRecord,
-} from "./types.ts";
+import type { NormalizedSpanRecord, SpanIngestWriteRequest, WrittenSpanRecord } from "./types.ts";
 
 function insertSpanRecordSql(recordId: string, record: NormalizedSpanRecord) {
   const resourceAttributes = mapLiteral("resource_attributes", record.resourceAttributes);
@@ -132,9 +128,7 @@ function insertSpanRecordSql(recordId: string, record: NormalizedSpanRecord) {
 export class TelemetrySpansRepository extends Context.Service<
   TelemetrySpansRepository,
   {
-    readonly writeBatch: (
-      request: SpanIngestWriteRequest,
-    ) => Effect.Effect<
+    readonly writeBatch: (request: SpanIngestWriteRequest) => Effect.Effect<
       {
         readonly batchId: string;
         readonly records: ReadonlyArray<WrittenSpanRecord>;

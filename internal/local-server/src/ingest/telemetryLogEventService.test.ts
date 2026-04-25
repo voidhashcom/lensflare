@@ -37,7 +37,8 @@ describe("TelemetryLogEventService", () => {
           flushIntervalMs: 5,
         }),
       ),
-    ));
+    ),
+  );
 });
 
 function timestampAtMs(ms: number): string {

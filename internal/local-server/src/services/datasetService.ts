@@ -54,7 +54,10 @@ export class DatasetService extends Context.Service<
       datasetName: string,
       datasetSlug: string,
       updatedAt: string,
-    ) => Effect.Effect<ReadonlyArray<Dataset>, ProjectNotFound | ValidationError | SqlError.SqlError>;
+    ) => Effect.Effect<
+      ReadonlyArray<Dataset>,
+      ProjectNotFound | ValidationError | SqlError.SqlError
+    >;
     readonly listDatasetStorageStats: () => Effect.Effect<
       ReadonlyArray<DatasetStorageStats>,
       SqlError.SqlError | DuckDbError
@@ -215,14 +218,14 @@ export class DatasetService extends Context.Service<
         return rows.map((row) => datasetFromRow(row));
       });
 
-      const listDatasetStorageStats = Effect.fn(
-        "DatasetService.listDatasetStorageStats",
-      )(function* () {
-        const rows = yield* datasets.findAll();
-        return yield* Effect.forEach(rows, (row) => telemetry.getStorageStats(row.id), {
-          concurrency: 8,
-        });
-      });
+      const listDatasetStorageStats = Effect.fn("DatasetService.listDatasetStorageStats")(
+        function* () {
+          const rows = yield* datasets.findAll();
+          return yield* Effect.forEach(rows, (row) => telemetry.getStorageStats(row.id), {
+            concurrency: 8,
+          });
+        },
+      );
 
       const clearDatasetData = Effect.fn("DatasetService.clearDatasetData")(function* (
         projectId: string,

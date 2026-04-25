@@ -1,6 +1,16 @@
 {
   "name": "lensflare",
   "private": true,
+  "description": "Local observability workspace for logs and traces.",
+  "homepage": "https://github.com/voidhashcom/lensflare#readme",
+  "bugs": {
+    "url": "https://github.com/voidhashcom/lensflare/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/voidhashcom/lensflare.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "vp run --filter @lensflare/server --filter @lensflare/web dev",
@@ -19,15 +29,22 @@
     "release:smoke": "tsx scripts/release-smoke.ts",
     "mock:update-server": "tsx scripts/mock-update-server.ts",
     "prepare": "effect-language-service patch",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release-packages": "pnpm --filter @lensflare/effect build && changeset publish",
+    "pack:effect": "pnpm --filter @lensflare/effect pack --pack-destination ../../dist/npm",
     "check": "vp check",
     "typecheck": "vp run -r typecheck",
     "test": "vp test --dir scripts --passWithNoTests && vp run -r test",
     "clean": "vp run -r clean && rm -rf node_modules apps/*/node_modules internal/*/node_modules packages/*/node_modules apps/*/dist apps/*/artifacts"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.2",
+    "@changesets/cli": "^2.31.0",
     "@effect/language-service": "^0.85.1",
     "@types/node": "catalog:",
     "effect-solutions": "^0.5.2",
+    "publint": "^0.3.18",
     "tsx": "^4.21.0",
     "typescript": "catalog:",
     "vite-plus": "catalog:",

@@ -17,18 +17,18 @@ function renderSidebarButton(className?: string) {
 }
 
 describe("sidebar interactive cursors", () => {
-  it("uses a pointer cursor for menu buttons by default", () => {
+  it("uses the default cursor for menu buttons by default", () => {
     const html = renderSidebarButton();
 
     expect(html).toContain('data-slot="sidebar-menu-button"');
-    expect(html).toContain("");
+    expect(html).toContain("cursor-default");
   });
 
   it("lets project drag handles override the default pointer cursor", () => {
     const html = renderSidebarButton("cursor-grab");
 
     expect(html).toContain("cursor-grab");
-    expect(html).not.toContain("");
+    expect(html).not.toContain("cursor-default");
   });
 
   it("uses a pointer cursor for menu actions", () => {

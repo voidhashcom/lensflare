@@ -220,7 +220,11 @@ function readRegex(
   };
 }
 
-function validateRegex(pattern: string, flags: string, span: SourceSpan): ReadonlyArray<QueryDiagnostic> {
+function validateRegex(
+  pattern: string,
+  flags: string,
+  span: SourceSpan,
+): ReadonlyArray<QueryDiagnostic> {
   try {
     new RegExp(pattern, flags);
     return [];

@@ -1,12 +1,7 @@
 import type { TelemetryLogField } from "~/data/logApi";
 import { cn } from "~/lib/utils";
 
-import {
-  isValuelessOperator,
-  LIST_OPERATORS,
-  resolvePillField,
-  type ParsedPill,
-} from "./syntax";
+import { isValuelessOperator, LIST_OPERATORS, resolvePillField, type ParsedPill } from "./syntax";
 
 interface FilterPillsDisplayProps {
   pills: ReadonlyArray<ParsedPill>;
@@ -34,18 +29,9 @@ export function FilterPillsDisplay({
   const trimmedTrailing = trailingText?.trim() ?? "";
 
   return (
-    <span
-      className={cn(
-        "flex min-w-0 items-center gap-1.5 overflow-hidden",
-        className,
-      )}
-    >
+    <span className={cn("flex min-w-0 items-center gap-1.5 overflow-hidden", className)}>
       {pills.map((pill, index) => (
-        <FilterPillView
-          fields={fields}
-          key={`${index}:${pill.start}`}
-          pill={pill}
-        />
+        <FilterPillView fields={fields} key={`${index}:${pill.start}`} pill={pill} />
       ))}
       {trimmedTrailing.length > 0 ? (
         <span className="min-w-0 shrink truncate text-muted-foreground italic">
@@ -66,9 +52,7 @@ function FilterPillView({ pill, fields }: FilterPillViewProps) {
   const fieldText = pill.fieldPath.join(".");
   const hasValue = !isValuelessOperator(pill.operator);
   const rawValueText = pill.valueWasQuoted ? `"${pill.rawValue}"` : pill.rawValue;
-  const valueText = LIST_OPERATORS.includes(pill.operator)
-    ? `[${rawValueText}]`
-    : rawValueText;
+  const valueText = LIST_OPERATORS.includes(pill.operator) ? `[${rawValueText}]` : rawValueText;
   const unknownClass = resolved === null ? "filter-query-pill--unknown" : "";
 
   return (

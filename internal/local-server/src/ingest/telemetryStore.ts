@@ -24,7 +24,10 @@ export function datasetDuckDbDatabaseFile(duckdbDatabaseFile: string, datasetId:
   return join(parsed.dir, `${parsed.name}.datasets`, `${safeDatasetFileStem(datasetId)}.duckdb`);
 }
 
-function datasetDuckDbStorageFiles(duckdbDatabaseFile: string, datasetId: string): ReadonlyArray<string> {
+function datasetDuckDbStorageFiles(
+  duckdbDatabaseFile: string,
+  datasetId: string,
+): ReadonlyArray<string> {
   const databaseFile = datasetDuckDbDatabaseFile(duckdbDatabaseFile, datasetId);
   return [databaseFile, `${databaseFile}.wal`];
 }
@@ -57,7 +60,9 @@ export class TelemetryStore extends Context.Service<
       TelemetryStore,
       Effect.gen(function* () {
         const instances = new Map<string, duckdb.DuckDBInstance>();
-        const datasetDirectory = dirname(datasetDuckDbDatabaseFile(duckdbDatabaseFile, "placeholder"));
+        const datasetDirectory = dirname(
+          datasetDuckDbDatabaseFile(duckdbDatabaseFile, "placeholder"),
+        );
 
         yield* Effect.tryPromise({
           try: () => mkdir(datasetDirectory, { recursive: true }),

@@ -94,7 +94,10 @@ describe("parser", () => {
       value: { kind: "regex", pattern: "timeout|ECONNRESET" },
     });
     expect(parseQueryStrict("traceId exists")).toMatchObject({ kind: "exists", present: true });
-    expect(parseQueryStrict("parentSpanId missing")).toMatchObject({ kind: "exists", present: false });
+    expect(parseQueryStrict("parentSpanId missing")).toMatchObject({
+      kind: "exists",
+      present: false,
+    });
   });
 
   it("returns diagnostics for malformed input", () => {
@@ -105,13 +108,17 @@ describe("parser", () => {
 
   it("returns diagnostics for invalid regex literals", () => {
     const result = parseQuery("message ~= /(/");
-    expect(result.diagnostics.some((diagnostic) => diagnostic.message.includes("Invalid"))).toBe(true);
+    expect(result.diagnostics.some((diagnostic) => diagnostic.message.includes("Invalid"))).toBe(
+      true,
+    );
   });
 });
 
 describe("compiler", () => {
   it("compiles to the existing FilterNode AST", () => {
-    expect(parseTelemetryQuery('(level in ["error", "fatal"]) or status = "error"', fields)).toEqual({
+    expect(
+      parseTelemetryQuery('(level in ["error", "fatal"]) or status = "error"', fields),
+    ).toEqual({
       _tag: "or",
       children: [
         {
@@ -131,7 +138,9 @@ describe("compiler", () => {
   });
 
   it("resolves attributes, attr shorthand, and related events", () => {
-    expect(parseTelemetryQuery("attr.http.status_code >= 500 relatedEvents.name = exception", fields)).toEqual({
+    expect(
+      parseTelemetryQuery("attr.http.status_code >= 500 relatedEvents.name = exception", fields),
+    ).toEqual({
       _tag: "and",
       children: [
         {
@@ -183,7 +192,9 @@ describe("editor context", () => {
   });
 
   it("resets to field suggestions after whitespace following a complete filter", () => {
-    expect(getEditorContext('kind = "span" ', 'kind = "span" '.length, fields).cursorContext).toEqual({
+    expect(
+      getEditorContext('kind = "span" ', 'kind = "span" '.length, fields).cursorContext,
+    ).toEqual({
       kind: "field",
       prefix: "",
     });
@@ -199,11 +210,15 @@ describe("editor context", () => {
   });
 
   it("starts a new field context after complete expressions", () => {
-    expect(getEditorContext("traceId exists serv", "traceId exists serv".length, fields).cursorContext).toEqual({
+    expect(
+      getEditorContext("traceId exists serv", "traceId exists serv".length, fields).cursorContext,
+    ).toEqual({
       kind: "field",
       prefix: "serv",
     });
-    expect(getEditorContext("level = error sta", "level = error sta".length, fields).cursorContext).toEqual({
+    expect(
+      getEditorContext("level = error sta", "level = error sta".length, fields).cursorContext,
+    ).toEqual({
       kind: "field",
       prefix: "sta",
     });
@@ -213,7 +228,9 @@ describe("editor context", () => {
 describe("language service", () => {
   it("returns LSP-style completions with text edits", () => {
     const fieldAnalysis = analyzeQueryLanguage("lev", 3, fields);
-    const fieldCompletion = fieldAnalysis.completions.find((completion) => completion.label === "level");
+    const fieldCompletion = fieldAnalysis.completions.find(
+      (completion) => completion.label === "level",
+    );
     expect(fieldCompletion).toMatchObject({
       kind: "field",
       textEdit: {
@@ -222,7 +239,9 @@ describe("language service", () => {
         cursorOffset: 6,
       },
     });
-    expect(fieldCompletion === undefined ? null : applyQueryCompletion("lev", fieldCompletion)).toEqual({
+    expect(
+      fieldCompletion === undefined ? null : applyQueryCompletion("lev", fieldCompletion),
+    ).toEqual({
       source: "level ",
       cursor: 6,
     });
@@ -236,7 +255,9 @@ describe("language service", () => {
     expect(operatorAnalysis.completions.map((completion) => completion.label)).toContain("!=");
 
     const listOperatorAnalysis = analyzeQueryLanguage("status i", "status i".length, fields);
-    const listOperatorCompletion = listOperatorAnalysis.completions.find((completion) => completion.label === "in");
+    const listOperatorCompletion = listOperatorAnalysis.completions.find(
+      (completion) => completion.label === "in",
+    );
     expect(listOperatorCompletion).toMatchObject({
       kind: "operator",
       textEdit: {
@@ -246,7 +267,9 @@ describe("language service", () => {
     });
 
     const valueAnalysis = analyzeQueryLanguage("level = e", "level = e".length, fields);
-    const valueCompletion = valueAnalysis.completions.find((completion) => completion.label === "error");
+    const valueCompletion = valueAnalysis.completions.find(
+      (completion) => completion.label === "error",
+    );
     expect(valueCompletion).toMatchObject({
       kind: "value",
       textEdit: {
@@ -257,7 +280,9 @@ describe("language service", () => {
     });
 
     const quotedValueAnalysis = analyzeQueryLanguage('level = "er"', 'level = "er'.length, fields);
-    const quotedValueCompletion = quotedValueAnalysis.completions.find((completion) => completion.label === "error");
+    const quotedValueCompletion = quotedValueAnalysis.completions.find(
+      (completion) => completion.label === "error",
+    );
     expect(quotedValueCompletion).toMatchObject({
       kind: "value",
       textEdit: {
@@ -283,7 +308,9 @@ describe("language service", () => {
   });
 
   it("tracks selected list values when the cursor is inside an array literal", () => {
-    expect(analyzeQueryLanguage("status in []", "status in [".length, fields).cursorContext).toMatchObject({
+    expect(
+      analyzeQueryLanguage("status in []", "status in [".length, fields).cursorContext,
+    ).toMatchObject({
       kind: "value",
       fieldPath: ["status"],
       operator: "in",
@@ -294,7 +321,11 @@ describe("language service", () => {
       },
     });
 
-    const result = analyzeQueryLanguage("status in [error, ok]", "status in [error, ok".length, fields);
+    const result = analyzeQueryLanguage(
+      "status in [error, ok]",
+      "status in [error, ok".length,
+      fields,
+    );
 
     expect(result.cursorContext).toMatchObject({
       kind: "value",
@@ -314,11 +345,18 @@ describe("suggestion splicing", () => {
     const source = "mess";
     const field = fields.find((entry) => entry.path.join(".") === "message");
 
-    expect(field === undefined ? null : applyFieldSuggestion({
-      source,
-      trailingStart: 0,
-      trailingText: source,
-    }, field)).toEqual({
+    expect(
+      field === undefined
+        ? null
+        : applyFieldSuggestion(
+            {
+              source,
+              trailingStart: 0,
+              trailingText: source,
+            },
+            field,
+          ),
+    ).toEqual({
       source: "message ",
       cursor: "message ".length,
     });
@@ -327,14 +365,23 @@ describe("suggestion splicing", () => {
   it("preserves the separator before a new expression when applying an operator", () => {
     const source = "serviceName = lensflare-desktop spanId";
     const parsed = parseFilterInput(source, source.length, fields);
-    const startsWith = operatorSyntaxesForKind("string").find((syntax) => syntax.token === "startsWith");
+    const startsWith = operatorSyntaxesForKind("string").find(
+      (syntax) => syntax.token === "startsWith",
+    );
 
     expect(parsed.trailingText).toBe(" spanId");
-    expect(startsWith === undefined ? null : applyOperatorSuggestion({
-      source,
-      trailingStart: parsed.trailingStart,
-      trailingText: parsed.trailingText,
-    }, startsWith)).toEqual({
+    expect(
+      startsWith === undefined
+        ? null
+        : applyOperatorSuggestion(
+            {
+              source,
+              trailingStart: parsed.trailingStart,
+              trailingText: parsed.trailingText,
+            },
+            startsWith,
+          ),
+    ).toEqual({
       source: "serviceName = lensflare-desktop spanId startsWith ",
       cursor: "serviceName = lensflare-desktop spanId startsWith ".length,
     });
@@ -345,11 +392,18 @@ describe("suggestion splicing", () => {
     const parsed = parseFilterInput(source, source.length, fields);
     const listOperator = operatorSyntaxesForKind("enum").find((syntax) => syntax.token === "in");
 
-    expect(listOperator === undefined ? null : applyOperatorSuggestion({
-      source,
-      trailingStart: parsed.trailingStart,
-      trailingText: parsed.trailingText,
-    }, listOperator)).toEqual({
+    expect(
+      listOperator === undefined
+        ? null
+        : applyOperatorSuggestion(
+            {
+              source,
+              trailingStart: parsed.trailingStart,
+              trailingText: parsed.trailingText,
+            },
+            listOperator,
+          ),
+    ).toEqual({
       source: "status in []",
       cursor: "status in [".length,
     });
@@ -359,11 +413,16 @@ describe("suggestion splicing", () => {
     const source = "serviceName = lensflare-desktop level = ";
     const trailingStart = "serviceName = lensflare-desktop".length;
 
-    expect(applyValueSuggestion({
-      source,
-      trailingStart,
-      trailingText: source.slice(trailingStart),
-    }, "error")).toEqual({
+    expect(
+      applyValueSuggestion(
+        {
+          source,
+          trailingStart,
+          trailingText: source.slice(trailingStart),
+        },
+        "error",
+      ),
+    ).toEqual({
       source: "serviceName = lensflare-desktop level = error ",
       cursor: "serviceName = lensflare-desktop level = error ".length,
     });
@@ -374,11 +433,16 @@ describe("suggestion splicing", () => {
     const parsed = parseFilterInput(source, source.length, fields);
 
     expect(parsed.trailingText).toBe(source);
-    expect(applyValueSuggestion({
-      source,
-      trailingStart: parsed.trailingStart,
-      trailingText: parsed.trailingText,
-    }, "DatasetService.listDatasets")).toEqual({
+    expect(
+      applyValueSuggestion(
+        {
+          source,
+          trailingStart: parsed.trailingStart,
+          trailingText: parsed.trailingText,
+        },
+        "DatasetService.listDatasets",
+      ),
+    ).toEqual({
       source: "message != DatasetService.listDatasets ",
       cursor: "message != DatasetService.listDatasets ".length,
     });
@@ -386,11 +450,16 @@ describe("suggestion splicing", () => {
 
   it("wraps values for list operators when brackets are missing", () => {
     const source = "status in ";
-    expect(applyValueSuggestion({
-      source,
-      trailingStart: 0,
-      trailingText: source,
-    }, "error")).toEqual({
+    expect(
+      applyValueSuggestion(
+        {
+          source,
+          trailingStart: 0,
+          trailingText: source,
+        },
+        "error",
+      ),
+    ).toEqual({
       source: "status in [error] ",
       cursor: "status in [error] ".length,
     });

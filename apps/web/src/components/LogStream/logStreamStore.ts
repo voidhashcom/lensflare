@@ -257,11 +257,7 @@ export async function loadOlderDatasetTelemetry(
       }
 
       const entries = page.entries.map((entry) =>
-        toTelemetryEntry(
-          entry,
-          session.metadata.datasetName,
-          session.metadata.datasetIcon ?? "js",
-        ),
+        toTelemetryEntry(entry, session.metadata.datasetName, session.metadata.datasetIcon ?? "js"),
       );
       const latestPageInfo = view.pageInfo;
       view.logs = mergeUniqueLogs(entries, view.logs);
@@ -274,8 +270,7 @@ export async function loadOlderDatasetTelemetry(
       view.errorMessage = null;
     })
     .catch((error: unknown) => {
-      view.errorMessage =
-        error instanceof Error ? error.message : "Failed to load telemetry.";
+      view.errorMessage = error instanceof Error ? error.message : "Failed to load telemetry.";
     })
     .finally(() => {
       view.isLoadingOlder = false;
@@ -448,8 +443,7 @@ function loadInitialDatasetTelemetry(
       view.errorMessage = null;
     })
     .catch((error: unknown) => {
-      view.errorMessage =
-        error instanceof Error ? error.message : "Failed to load telemetry.";
+      view.errorMessage = error instanceof Error ? error.message : "Failed to load telemetry.";
     })
     .finally(() => {
       const queuedInitialLoad = view.queuedInitialLoad;
@@ -515,10 +509,7 @@ function ensureSubscription(session: DatasetStreamSession): void {
   );
 }
 
-function queueLiveTelemetryRecord(
-  session: DatasetStreamSession,
-  entry: TelemetryRecord,
-): void {
+function queueLiveTelemetryRecord(session: DatasetStreamSession, entry: TelemetryRecord): void {
   session.pendingLiveRecords = mergeUniqueRecords(session.pendingLiveRecords, [entry]);
   for (const view of session.views.values()) {
     view.errorMessage = null;
@@ -634,7 +625,7 @@ function createSnapshot(
   const selectedLog =
     view.selectedLogId === null
       ? null
-      : view.logs.find((log) => log.id === view.selectedLogId) ?? null;
+      : (view.logs.find((log) => log.id === view.selectedLogId) ?? null);
   return {
     projectId: session.projectId,
     datasetId: session.datasetId,

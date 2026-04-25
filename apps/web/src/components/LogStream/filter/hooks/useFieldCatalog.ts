@@ -21,10 +21,7 @@ interface FieldCatalogState {
  * here: the catalog is cheap to refetch whenever the dataset changes and its
  * lifecycle is tied 1:1 to the log viewer mount.
  */
-export function useFieldCatalog(
-  projectId: string,
-  datasetId: string,
-): FieldCatalogState {
+export function useFieldCatalog(projectId: string, datasetId: string): FieldCatalogState {
   const collection = useMemo(
     () => createTelemetryFilterCatalogCollection(projectId, datasetId),
     [projectId, datasetId],
@@ -48,9 +45,6 @@ export function useFieldCatalog(
   return {
     fields,
     isLoading: query.isLoading,
-    error:
-      collection.utils.lastError instanceof Error
-        ? collection.utils.lastError
-        : null,
+    error: collection.utils.lastError instanceof Error ? collection.utils.lastError : null,
   };
 }

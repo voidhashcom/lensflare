@@ -42,10 +42,7 @@ class Parser {
   readonly diagnostics: Array<QueryDiagnostic>;
   private readonly tokens: ReadonlyArray<Token>;
 
-  constructor(
-    tokens: ReadonlyArray<Token>,
-    initialDiagnostics: ReadonlyArray<QueryDiagnostic>,
-  ) {
+  constructor(tokens: ReadonlyArray<Token>, initialDiagnostics: ReadonlyArray<QueryDiagnostic>) {
     this.tokens = tokens;
     this.diagnostics = [...initialDiagnostics];
   }
@@ -65,7 +62,9 @@ class Parser {
     while (this.consumeWord("or")) {
       children.push(this.parseAnd());
     }
-    return children.length === 1 ? children[0]! : { kind: "or", children, span: spanFromNodes(children) };
+    return children.length === 1
+      ? children[0]!
+      : { kind: "or", children, span: spanFromNodes(children) };
   }
 
   private parseAnd(): QueryNode {
@@ -74,7 +73,9 @@ class Parser {
       this.consumeWord("and");
       children.push(this.parseNot());
     }
-    return children.length === 1 ? children[0]! : { kind: "and", children, span: spanFromNodes(children) };
+    return children.length === 1
+      ? children[0]!
+      : { kind: "and", children, span: spanFromNodes(children) };
   }
 
   private parseNot(): QueryNode {
@@ -126,12 +127,20 @@ class Parser {
 
     const value = this.parseLiteral();
     if (value === null) {
-      this.error("Expected a comparison value.", this.peek()?.span ?? { start: operator.end, end: operator.end });
+      this.error(
+        "Expected a comparison value.",
+        this.peek()?.span ?? { start: operator.end, end: operator.end },
+      );
       return {
         kind: "comparison",
         field,
         operator: operator.operator,
-        value: { kind: "string", value: "", quoted: false, span: { start: operator.end, end: operator.end } },
+        value: {
+          kind: "string",
+          value: "",
+          quoted: false,
+          span: { start: operator.end, end: operator.end },
+        },
         span: { start: field.span.start, end: operator.end },
       };
     }
@@ -256,7 +265,10 @@ class Parser {
     return {
       kind: "array",
       values,
-      span: { start: start?.span.start ?? 0, end: previous?.kind === "rbracket" ? previous.span.end : end },
+      span: {
+        start: start?.span.start ?? 0,
+        end: previous?.kind === "rbracket" ? previous.span.end : end,
+      },
     };
   }
 
@@ -267,7 +279,11 @@ class Parser {
       return { kind: "text", value: "", span: { start: end, end } };
     }
     this.index += 1;
-    if (token.kind === "word" && (BOOLEAN_KEYWORDS.has(token.text.toLowerCase()) || WORD_OPERATORS.has(token.text.toLowerCase()))) {
+    if (
+      token.kind === "word" &&
+      (BOOLEAN_KEYWORDS.has(token.text.toLowerCase()) ||
+        WORD_OPERATORS.has(token.text.toLowerCase()))
+    ) {
       this.error(`Unexpected keyword '${token.raw}'.`, token.span);
     }
     if (token.kind === "operator") {
@@ -303,7 +319,13 @@ class Parser {
       this.index += 1;
       return token;
     }
-    this.error(message, token?.span ?? { start: this.tokens.at(-1)?.span.end ?? 0, end: this.tokens.at(-1)?.span.end ?? 0 });
+    this.error(
+      message,
+      token?.span ?? {
+        start: this.tokens.at(-1)?.span.end ?? 0,
+        end: this.tokens.at(-1)?.span.end ?? 0,
+      },
+    );
     return null;
   }
 

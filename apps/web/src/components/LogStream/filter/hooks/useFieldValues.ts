@@ -44,9 +44,6 @@ export function useFieldValues(
   return {
     values: field && !field.highCardinality ? field.values : [],
     isLoading: query.isLoading,
-    error:
-      collection.utils.lastError instanceof Error
-        ? collection.utils.lastError
-        : null,
+    error: collection.utils.lastError instanceof Error ? collection.utils.lastError : null,
   };
 }

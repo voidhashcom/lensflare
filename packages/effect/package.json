@@ -1,14 +1,48 @@
 {
   "name": "@lensflare/effect",
   "version": "0.1.0",
+  "description": "Effect observability layer for Lensflare local logs and traces.",
+  "keywords": [
+    "effect",
+    "lensflare",
+    "logs",
+    "observability",
+    "opentelemetry",
+    "otlp",
+    "traces"
+  ],
+  "homepage": "https://github.com/voidhashcom/lensflare/tree/main/packages/effect#readme",
+  "bugs": {
+    "url": "https://github.com/voidhashcom/lensflare/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/voidhashcom/lensflare.git",
+    "directory": "packages/effect"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "type": "module",
+  "sideEffects": false,
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
-    "build": "tsc --noEmit",
+    "build": "vp pack",
     "typecheck": "tsc --noEmit",
-    "test": "vp test"
+    "test": "vp test",
+    "prepublishOnly": "pnpm run build && pnpm run test"
   },
   "dependencies": {
     "effect": "catalog:"

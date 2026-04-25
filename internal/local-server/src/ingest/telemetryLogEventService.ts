@@ -84,7 +84,9 @@ function toLevel(record: NormalizedLogRecord): TelemetryLogLevel {
  * should keep flowing even if an upstream producer sends weird payloads — the
  * caller can still filter on non-attribute fields.
  */
-function toApiAttributes(attributes: Readonly<Record<string, string>>): Readonly<Record<string, unknown>> {
+function toApiAttributes(
+  attributes: Readonly<Record<string, string>>,
+): Readonly<Record<string, unknown>> {
   return attributes;
 }
 
@@ -92,7 +94,10 @@ function nullableId(value: string): string | null {
   return value.length === 0 ? null : value;
 }
 
-function toTelemetryLogEntry(request: IngestWriteRequest, written: WrittenLogRecord): TelemetryLogEntry {
+function toTelemetryLogEntry(
+  request: IngestWriteRequest,
+  written: WrittenLogRecord,
+): TelemetryLogEntry {
   const record = written.record;
 
   return {
@@ -110,7 +115,10 @@ function toTelemetryLogEntry(request: IngestWriteRequest, written: WrittenLogRec
   };
 }
 
-function toTelemetryLogRecord(request: IngestWriteRequest, written: WrittenLogRecord): TelemetryRecord {
+function toTelemetryLogRecord(
+  request: IngestWriteRequest,
+  written: WrittenLogRecord,
+): TelemetryRecord {
   return {
     kind: "log",
     ...toTelemetryLogEntry(request, written),
@@ -293,38 +301,40 @@ export class TelemetryLogEventService extends Context.Service<
           );
         });
 
-        const flushReadyEvents = Effect.fn("TelemetryLogEventService.flushReadyEvents")(function* () {
-          const nowMs = yield* Clock.currentTimeMillis;
-          const cutoffMs = nowMs - cooldownMs;
-          const readyEvents = yield* Effect.sync(() => {
-            const ready: Array<BufferedTelemetryEvent> = [];
-            const pending: Array<BufferedTelemetryEvent> = [];
+        const flushReadyEvents = Effect.fn("TelemetryLogEventService.flushReadyEvents")(
+          function* () {
+            const nowMs = yield* Clock.currentTimeMillis;
+            const cutoffMs = nowMs - cooldownMs;
+            const readyEvents = yield* Effect.sync(() => {
+              const ready: Array<BufferedTelemetryEvent> = [];
+              const pending: Array<BufferedTelemetryEvent> = [];
 
-            for (const event of bufferedEvents) {
-              if (telemetryEventTimeMs(event) <= cutoffMs) {
-                ready.push(event);
-              } else {
-                pending.push(event);
+              for (const event of bufferedEvents) {
+                if (telemetryEventTimeMs(event) <= cutoffMs) {
+                  ready.push(event);
+                } else {
+                  pending.push(event);
+                }
               }
+
+              bufferedEvents = pending;
+              return ready.sort(compareBufferedTelemetryEvents);
+            });
+
+            if (readyEvents.length === 0) {
+              return;
             }
 
-            bufferedEvents = pending;
-            return ready.sort(compareBufferedTelemetryEvents);
-          });
-
-          if (readyEvents.length === 0) {
-            return;
-          }
-
-          yield* PubSub.publishAll(
-            pubsub,
-            readyEvents.map((event) => ({
-              projectId: event.projectId,
-              datasetId: event.datasetId,
-              entry: event.entry,
-            })),
-          ).pipe(Effect.asVoid);
-        });
+            yield* PubSub.publishAll(
+              pubsub,
+              readyEvents.map((event) => ({
+                projectId: event.projectId,
+                datasetId: event.datasetId,
+                entry: event.entry,
+              })),
+            ).pipe(Effect.asVoid);
+          },
+        );
 
         yield* flushReadyEvents().pipe(
           Effect.repeat(Schedule.spaced(Duration.millis(flushIntervalMs))),
@@ -349,52 +359,55 @@ export class TelemetryLogEventService extends Context.Service<
           records: ReadonlyArray<WrittenSpanRecord>,
         ) {
           const spanEvents = records.flatMap((record) =>
-            record.record.events.map((_, index) => toTelemetrySpanEventRecord(request, record, index)),
+            record.record.events.map((_, index) =>
+              toTelemetrySpanEventRecord(request, record, index),
+            ),
           );
           yield* enqueueEvents(
-            [
-              ...records.map((record) => toTelemetrySpanRecord(request, record)),
-              ...spanEvents,
-            ].map((entry) => ({
-              projectId: request.projectId,
-              datasetId: request.datasetId,
-              entry,
-            })),
+            [...records.map((record) => toTelemetrySpanRecord(request, record)), ...spanEvents].map(
+              (entry) => ({
+                projectId: request.projectId,
+                datasetId: request.datasetId,
+                entry,
+              }),
+            ),
           );
         });
 
-      const streamDatasetLogs = (
-        projectId: string,
-        datasetId: string,
-        filter?: FilterNode | undefined,
-      ) => {
-        const byDataset = stream.pipe(
-          Stream.filter(
-            (event) => event.projectId === projectId && event.datasetId === datasetId,
-          ),
-          Stream.map((event) => event.entry),
-          Stream.filter((entry): entry is TelemetryRecord & { readonly kind: "log" } => entry.kind === "log"),
-        );
-        return filter === undefined
-          ? byDataset
-          : byDataset.pipe(Stream.filter((entry) => evaluateFilter(filter, entry)));
-      };
+        const streamDatasetLogs = (
+          projectId: string,
+          datasetId: string,
+          filter?: FilterNode | undefined,
+        ) => {
+          const byDataset = stream.pipe(
+            Stream.filter(
+              (event) => event.projectId === projectId && event.datasetId === datasetId,
+            ),
+            Stream.map((event) => event.entry),
+            Stream.filter(
+              (entry): entry is TelemetryRecord & { readonly kind: "log" } => entry.kind === "log",
+            ),
+          );
+          return filter === undefined
+            ? byDataset
+            : byDataset.pipe(Stream.filter((entry) => evaluateFilter(filter, entry)));
+        };
 
-      const streamDatasetTelemetry = (
-        projectId: string,
-        datasetId: string,
-        filter?: FilterNode | undefined,
-      ) => {
-        const byDataset = stream.pipe(
-          Stream.filter(
-            (event) => event.projectId === projectId && event.datasetId === datasetId,
-          ),
-          Stream.map((event) => event.entry),
-        );
-        return filter === undefined
-          ? byDataset
-          : byDataset.pipe(Stream.filter((entry) => evaluateFilter(filter, entry)));
-      };
+        const streamDatasetTelemetry = (
+          projectId: string,
+          datasetId: string,
+          filter?: FilterNode | undefined,
+        ) => {
+          const byDataset = stream.pipe(
+            Stream.filter(
+              (event) => event.projectId === projectId && event.datasetId === datasetId,
+            ),
+            Stream.map((event) => event.entry),
+          );
+          return filter === undefined
+            ? byDataset
+            : byDataset.pipe(Stream.filter((entry) => evaluateFilter(filter, entry)));
+        };
 
         return TelemetryLogEventService.of({
           publishBatch,

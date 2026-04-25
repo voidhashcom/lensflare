@@ -8,11 +8,7 @@ import { useTheme } from "~/hooks/useTheme";
 
 import { Button } from "../ui/button";
 import { IconButtonTooltip } from "../ui/tooltip";
-import {
-  loadHighlighter,
-  SHIKI_DARK_THEME,
-  SHIKI_LIGHT_THEME,
-} from "./shiki";
+import { loadHighlighter, SHIKI_DARK_THEME, SHIKI_LIGHT_THEME } from "./shiki";
 
 interface CodeBlockProps {
   snippet: Snippet;
@@ -109,9 +105,7 @@ export function CodeBlock({ snippet, variables, className }: CodeBlockProps) {
       {snippet.filename ? (
         <div className="flex items-center justify-between border-b border-border/60 bg-muted/60 px-3 py-1.5 font-mono text-[10.5px] text-muted-foreground">
           <span className="truncate">{snippet.filename}</span>
-          <span className="uppercase tracking-wide text-muted-foreground/70">
-            {snippet.lang}
-          </span>
+          <span className="uppercase tracking-wide text-muted-foreground/70">{snippet.lang}</span>
         </div>
       ) : null}
 

@@ -1,10 +1,6 @@
 import type { QueryField, QueryListCursorContext } from "./ast.ts";
 import type { OperatorSyntax } from "./ast.ts";
-import {
-  LIST_OPERATORS,
-  syntaxForOperatorToken,
-  TOKENS_BY_LENGTH,
-} from "./operators.ts";
+import { LIST_OPERATORS, syntaxForOperatorToken, TOKENS_BY_LENGTH } from "./operators.ts";
 
 export interface SpliceResult {
   readonly source: string;
@@ -45,8 +41,8 @@ export function applyOperatorSuggestion(
   const nextSource = ctx.source.slice(0, ctx.trailingStart) + nextTrailing;
   return {
     source: nextSource,
-    cursor: ctx.trailingStart + nextTrailing.length -
-      (LIST_OPERATORS.includes(syntax.operator) ? 1 : 0),
+    cursor:
+      ctx.trailingStart + nextTrailing.length - (LIST_OPERATORS.includes(syntax.operator) ? 1 : 0),
   };
 }
 
@@ -61,9 +57,10 @@ export function applyValueSuggestion(ctx: SpliceContext, value: string): SpliceR
   if (op === null) return null;
   const quotedValue = quoteValueIfNeeded(value);
   const syntax = syntaxForOperatorToken(op.token);
-  const valueSource = syntax !== undefined && LIST_OPERATORS.includes(syntax.operator)
-    ? `[${quotedValue}] `
-    : `${quotedValue} `;
+  const valueSource =
+    syntax !== undefined && LIST_OPERATORS.includes(syntax.operator)
+      ? `[${quotedValue}] `
+      : `${quotedValue} `;
   const nextTrailing = `${keepBefore}${head.leadingWhitespace}${head.ident} ${op.token} ${valueSource}`;
   const nextSource = ctx.source.slice(0, ctx.trailingStart) + nextTrailing;
   return { source: nextSource, cursor: ctx.trailingStart + nextTrailing.length };
@@ -94,10 +91,10 @@ function readComposingIdent(text: string): {
   return match === null
     ? { leadingWhitespace: /^\s*/.exec(text)?.[0] ?? "", ident: "", afterIdent: "" }
     : {
-      leadingWhitespace: match[1] ?? "",
-      ident: match[2] ?? "",
-      afterIdent: match[3] ?? "",
-    };
+        leadingWhitespace: match[1] ?? "",
+        ident: match[2] ?? "",
+        afterIdent: match[3] ?? "",
+      };
 }
 
 function findReplacementStart(text: string): number {

@@ -92,9 +92,7 @@ export function LogDetailsPanel({
       (trace) => {
         if (!cancelled) {
           setTraceLoadState(
-            trace !== null
-              ? { status: "ready", trace }
-              : { status: "unavailable", traceId },
+            trace !== null ? { status: "ready", trace } : { status: "unavailable", traceId },
           );
         }
       },
@@ -129,11 +127,12 @@ export function LogDetailsPanel({
         ? rootSpan.name
         : shortenTraceId(traceContext.traceId);
 
-    const openTrace = () => openTraceTab(datasetId, {
-      traceId: traceContext.traceId,
-      title,
-      ...(log.spanId ? { initialSpanId: log.spanId } : {}),
-    });
+    const openTrace = () =>
+      openTraceTab(datasetId, {
+        traceId: traceContext.traceId,
+        title,
+        ...(log.spanId ? { initialSpanId: log.spanId } : {}),
+      });
 
     if (variant === "sheet") {
       onClose();
@@ -179,10 +178,7 @@ export function LogDetailsPanel({
       />
 
       {tab === "properties" ? (
-        <EventPropertiesTab
-          log={log}
-          showNullValues={showNullValues}
-        />
+        <EventPropertiesTab log={log} showNullValues={showNullValues} />
       ) : (
         <RawDataTab log={log} />
       )}
@@ -257,22 +253,15 @@ function TraceSkeletonRow({ row }: { row: (typeof TRACE_SKELETON_ROWS)[number] }
   );
 }
 
-function LogDetailsHeader({
-  log,
-  onClose,
-}: {
-  log: TelemetryEntry;
-  onClose: () => void;
-}) {
+function LogDetailsHeader({ log, onClose }: { log: TelemetryEntry; onClose: () => void }) {
   const title = log.kind === "log" ? log.message : log.name;
   return (
     <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-4">
-      <span className="font-mono text-muted-foreground/80 text-sm">{detailKindLabel(log.kind)}</span>
+      <span className="font-mono text-muted-foreground/80 text-sm">
+        {detailKindLabel(log.kind)}
+      </span>
       <span className="text-muted-foreground/50">—</span>
-      <span
-        className="min-w-0 flex-1 truncate font-mono text-foreground text-sm"
-        title={title}
-      >
+      <span className="min-w-0 flex-1 truncate font-mono text-foreground text-sm" title={title}>
         {title}
       </span>
       <IconButtonTooltip label="Close log details">
@@ -308,12 +297,7 @@ interface TabBarProps {
   onToggleShowNullValues: (next: boolean) => void;
 }
 
-function TabBar({
-  activeTab,
-  onSelect,
-  showNullValues,
-  onToggleShowNullValues,
-}: TabBarProps) {
+function TabBar({ activeTab, onSelect, showNullValues, onToggleShowNullValues }: TabBarProps) {
   return (
     <TopTabsList aria-label="Log detail tabs">
       <TopTabsItem active={activeTab === "properties"}>
@@ -349,10 +333,7 @@ interface EventPropertiesTabProps {
   showNullValues: boolean;
 }
 
-function EventPropertiesTab({
-  log,
-  showNullValues,
-}: EventPropertiesTabProps) {
+function EventPropertiesTab({ log, showNullValues }: EventPropertiesTabProps) {
   const entries = useMemo(() => buildLogDetailEntries(log), [log]);
   const visibleEntries = useMemo(
     () => (showNullValues ? entries : entries.filter((entry) => !isNullLike(entry.value))),
@@ -372,10 +353,7 @@ function EventPropertiesTab({
           <tbody>
             {visibleEntries.length === 0 ? (
               <tr>
-                <td
-                  className="px-4 py-6 text-center text-muted-foreground/60 text-xs"
-                  colSpan={2}
-                >
+                <td className="px-4 py-6 text-center text-muted-foreground/60 text-xs" colSpan={2}>
                   No properties to display.
                 </td>
               </tr>

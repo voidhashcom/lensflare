@@ -90,15 +90,14 @@ export function analyzeQueryLanguage(
   const pills = parse.ast === null ? [] : collectPills(parse.ast, source);
   const cursorState = getQueryCursorState(source, cursor, parse.tokens, fields);
   const lastPill = pills.at(-1);
-  const isMissingValueContext = cursorState.context.kind === "value" &&
-    cursorState.context.valuePrefix.length === 0;
+  const isMissingValueContext =
+    cursorState.context.kind === "value" && cursorState.context.valuePrefix.length === 0;
   const trailingStart =
     lastPill !== undefined && cursor >= lastPill.end && !isMissingValueContext
       ? lastPill.end
       : cursorState.expressionStart;
-  const compileDiagnostics = fields.length > 0
-    ? compileQueryToFilterResult(parse.ast, fields).diagnostics
-    : [];
+  const compileDiagnostics =
+    fields.length > 0 ? compileQueryToFilterResult(parse.ast, fields).diagnostics : [];
 
   return {
     ast: parse.ast,
@@ -134,8 +133,8 @@ export function getQueryCursorState(
   const clamped = clamp(cursor, 0, source.length);
   const expressionStart = findCurrentExpressionStart(source, clamped, tokens, fields);
   const expressionTokens = tokens.filter((token) => token.span.end > expressionStart);
-  const segment = tokens.filter((token) =>
-    token.span.end > expressionStart && token.span.start <= clamped
+  const segment = tokens.filter(
+    (token) => token.span.end > expressionStart && token.span.start <= clamped,
   );
   const fallbackRange = { start: clamped, end: clamped };
 
@@ -175,9 +174,7 @@ export function getQueryCursorState(
   const operator = readOperator(segment);
   if (operator === null) {
     const second = segment[1];
-    const range = second === undefined
-      ? fallbackRange
-      : { start: second.span.start, end: clamped };
+    const range = second === undefined ? fallbackRange : { start: second.span.start, end: clamped };
     return {
       context: {
         kind: "operator",
@@ -259,11 +256,13 @@ export function getQuerySemanticTokens(
   tokens: ReadonlyArray<Token>,
   ast: QueryNode | null,
 ): ReadonlyArray<QuerySemanticToken> {
-  const semanticTokens = tokens.map((token): QuerySemanticToken => ({
-    kind: semanticKindForToken(token),
-    start: token.span.start,
-    end: token.span.end,
-  }));
+  const semanticTokens = tokens.map(
+    (token): QuerySemanticToken => ({
+      kind: semanticKindForToken(token),
+      start: token.span.start,
+      end: token.span.end,
+    }),
+  );
 
   if (ast !== null) {
     appendAstSemanticTokens(source, ast, semanticTokens);
@@ -284,9 +283,8 @@ function fieldCompletions(
 ): ReadonlyArray<QueryCompletionItem> {
   if (cursorState.context.kind !== "field") return [];
   const needle = cursorState.context.prefix.trim().toLowerCase();
-  const matches = needle.length === 0
-    ? fields
-    : fields.filter((field) => fieldMatchesPrefix(field, needle));
+  const matches =
+    needle.length === 0 ? fields : fields.filter((field) => fieldMatchesPrefix(field, needle));
 
   return matches.map((field): QueryCompletionItem => {
     const path = field.path.join(".");
@@ -378,9 +376,11 @@ function quoteCompletionValue(value: string): string {
 }
 
 function fieldMatchesPrefix(field: QueryField, needle: string): boolean {
-  return field.label.toLowerCase().includes(needle) ||
+  return (
+    field.label.toLowerCase().includes(needle) ||
     field.path.join(".").toLowerCase().includes(needle) ||
-    field.id?.toLowerCase().includes(needle) === true;
+    field.id?.toLowerCase().includes(needle) === true
+  );
 }
 
 function findCurrentExpressionStart(
@@ -399,8 +399,8 @@ function findCurrentExpressionStart(
       expressionStart = token.span.end;
       continue;
     }
-    const segmentBefore = tokens.filter((candidate) =>
-      candidate.span.end > expressionStart && candidate.span.end <= token.span.start
+    const segmentBefore = tokens.filter(
+      (candidate) => candidate.span.end > expressionStart && candidate.span.end <= token.span.start,
     );
     const segmentEnd = segmentBefore.at(-1)?.span.end;
     if (
@@ -449,8 +449,8 @@ function isLogicalBoundary(
   if (token?.kind !== "word") return false;
   const lower = token.text.toLowerCase();
   if (lower !== "and" && lower !== "or") return false;
-  const segment = tokens.filter((candidate) =>
-    candidate.span.end > expressionStart && candidate.span.end <= token.span.start
+  const segment = tokens.filter(
+    (candidate) => candidate.span.end > expressionStart && candidate.span.end <= token.span.start,
   );
   return isCompleteSegment(segment, fields);
 }
@@ -462,14 +462,15 @@ function isCompleteSegment(
   const first = segment[0];
   if (first === undefined) return false;
   if (segment.length === 1) {
-    return first.kind !== "word" ||
-      resolveQueryField(first.text, fields, first.span) === null;
+    return first.kind !== "word" || resolveQueryField(first.text, fields, first.span) === null;
   }
   if (first.kind !== "word") return true;
   const operator = readOperator(segment);
   if (operator === null) return true;
-  return isValuelessOperator(operator.syntax.operator) ||
-    segment.some((token) => token.span.start >= operator.end && isValueToken(token));
+  return (
+    isValuelessOperator(operator.syntax.operator) ||
+    segment.some((token) => token.span.start >= operator.end && isValueToken(token))
+  );
 }
 
 function readOperator(segment: ReadonlyArray<Token>): OperatorRead | null {
@@ -528,7 +529,9 @@ function readValuePrefix(
     if (list !== null) return list;
   }
 
-  const valueTokens = segment.filter((token) => token.span.start >= operatorEnd && token.span.start <= cursor);
+  const valueTokens = segment.filter(
+    (token) => token.span.start >= operatorEnd && token.span.start <= cursor,
+  );
   const last = valueTokens.at(-1);
   if (last === undefined || last.kind === "lbracket" || last.kind === "comma") {
     return { prefix: "", replacementRange: { start: cursor, end: cursor } };
@@ -567,13 +570,13 @@ function readListValuePrefix(
 } | null {
   const visibleValueTokens = segment.filter((token) => token.span.start >= operatorEnd);
   const valueTokens = expressionTokens.filter((token) => token.span.start >= operatorEnd);
-  const open = [...visibleValueTokens].reverse().find((token) =>
-    token.kind === "lbracket" && token.span.end <= cursor
-  );
+  const open = [...visibleValueTokens]
+    .reverse()
+    .find((token) => token.kind === "lbracket" && token.span.end <= cursor);
   if (open === undefined) return null;
 
-  const close = valueTokens.find((token) =>
-    token.kind === "rbracket" && token.span.start >= open.span.end
+  const close = valueTokens.find(
+    (token) => token.kind === "rbracket" && token.span.start >= open.span.end,
   );
   const contentEnd = close?.span.start ?? source.length;
   const boundedCursor = clamp(cursor, open.span.end, contentEnd);
@@ -619,11 +622,13 @@ function currentListItemRange(source: string, contentStart: number, cursor: numb
 }
 
 function isValueToken(token: Token): boolean {
-  return token.kind === "word" ||
+  return (
+    token.kind === "word" ||
     token.kind === "string" ||
     token.kind === "number" ||
     token.kind === "regex" ||
-    token.kind === "lbracket";
+    token.kind === "lbracket"
+  );
 }
 
 function isCursorAfterWhitespace(source: string, cursor: number): boolean {
@@ -759,9 +764,7 @@ function semanticKindForToken(token: Token): QuerySemanticTokenKind {
       return "punctuation";
     case "word": {
       const lower = token.text.toLowerCase();
-      return lower === "and" || lower === "or" || lower === "not"
-        ? "keyword"
-        : "text";
+      return lower === "and" || lower === "or" || lower === "not" ? "keyword" : "text";
     }
   }
 }
@@ -773,17 +776,29 @@ function appendAstSemanticTokens(
 ): void {
   switch (node.kind) {
     case "comparison": {
-      semanticTokens.push({ kind: "field", start: node.field.span.start, end: node.field.span.end });
+      semanticTokens.push({
+        kind: "field",
+        start: node.field.span.start,
+        end: node.field.span.end,
+      });
       const operatorSpan = trimSpan(source, {
         start: node.field.span.end,
         end: node.value.span.start,
       });
       semanticTokens.push({ kind: "operator", start: operatorSpan.start, end: operatorSpan.end });
-      semanticTokens.push({ kind: "value", start: node.value.span.start, end: node.value.span.end });
+      semanticTokens.push({
+        kind: "value",
+        start: node.value.span.start,
+        end: node.value.span.end,
+      });
       return;
     }
     case "exists": {
-      semanticTokens.push({ kind: "field", start: node.field.span.start, end: node.field.span.end });
+      semanticTokens.push({
+        kind: "field",
+        start: node.field.span.start,
+        end: node.field.span.end,
+      });
       const operatorSpan = trimSpan(source, {
         start: node.field.span.end,
         end: node.span.end,

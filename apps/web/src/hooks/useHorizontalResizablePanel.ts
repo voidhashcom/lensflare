@@ -119,9 +119,7 @@ export function useHorizontalResizablePanel<TElement extends HTMLElement>({
 
       event.preventDefault();
       const delta =
-        edge === "left"
-          ? resizeState.startX - event.clientX
-          : event.clientX - resizeState.startX;
+        edge === "left" ? resizeState.startX - event.clientX : event.clientX - resizeState.startX;
       const nextWidth = clampWidth(resizeState.startWidth + delta);
       resizeState.pendingWidth = nextWidth;
 

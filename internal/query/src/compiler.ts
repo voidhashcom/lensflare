@@ -190,11 +190,13 @@ export function resolveQueryField(
     const attributeTail = normalized.startsWith("attr.")
       ? `attributes.${raw.slice("attr.".length)}`.toLowerCase()
       : normalized;
-    return path.toLowerCase() === normalized ||
+    return (
+      path.toLowerCase() === normalized ||
       path.toLowerCase() === attributeTail ||
       field.label.toLowerCase() === normalized ||
       field.label.toLowerCase() === raw.slice(raw.indexOf(".") + 1).toLowerCase() ||
-      field.id?.toLowerCase() === normalized;
+      field.id?.toLowerCase() === normalized
+    );
   });
   if (known !== undefined) return known;
 
@@ -220,7 +222,11 @@ function fallbackField(raw: string): QueryField | null {
     return { path: ["attributes", ...tail.split(".").filter(Boolean)], label: raw, kind: "string" };
   }
   if (normalized.startsWith("relatedevents.")) {
-    return { path: ["relatedEvents", ...raw.split(".").slice(1).filter(Boolean)], label: raw, kind: "string" };
+    return {
+      path: ["relatedEvents", ...raw.split(".").slice(1).filter(Boolean)],
+      label: raw,
+      kind: "string",
+    };
   }
   if (TOP_LEVEL_FIELDS.has(raw)) {
     const kind = raw === "durationUs" || raw === "severityNumber" ? "number" : "string";

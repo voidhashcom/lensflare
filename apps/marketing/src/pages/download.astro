@@ -16,6 +16,9 @@ import { DownloadHero } from "../components/DownloadHero";
 import { PlatformDownloads } from "../components/PlatformDownloads";
 import { MoreReleases } from "../components/MoreReleases";
 import { Footer } from "../components/Footer";
+import { getLatestReleaseDownloads } from "../lib/releases";
+
+const release = await getLatestReleaseDownloads();
 ---
 
 <BaseLayout
@@ -24,8 +27,8 @@ import { Footer } from "../components/Footer";
 >
   <Header />
   <main>
-    <DownloadHero />
-    <PlatformDownloads />
+    <DownloadHero release={release} />
+    <PlatformDownloads release={release} />
     <MoreReleases />
   </main>
   <Footer />

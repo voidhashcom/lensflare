@@ -46,9 +46,7 @@ describe("datasetTabsStore", () => {
 
   it("closes a trace tab and falls back to the previous tab", () => {
     openTraceTab("dataset-a", { traceId: "abc", title: "root" });
-    expect(getDatasetTabState(getDatasetTabsSnapshot(), "dataset-a").activeTabId).toBe(
-      "trace:abc",
-    );
+    expect(getDatasetTabState(getDatasetTabsSnapshot(), "dataset-a").activeTabId).toBe("trace:abc");
 
     const result = closeDatasetTab("dataset-a", "trace:abc");
 

@@ -176,16 +176,12 @@ export class ProjectService extends Context.Service<
           projects.findAll(),
           datasets.findAll(),
         ]);
-        const usedSlugs = new Set(
-          [
-            ...existingProjects
-              .filter((row) => row.id !== currentProjectId)
-              .map((row) => row.slug),
-            ...existingDatasets
-              .filter((row) => row.project_id !== currentProjectId)
-              .map((row) => row.slug),
-          ],
-        );
+        const usedSlugs = new Set([
+          ...existingProjects.filter((row) => row.id !== currentProjectId).map((row) => row.slug),
+          ...existingDatasets
+            .filter((row) => row.project_id !== currentProjectId)
+            .map((row) => row.slug),
+        ]);
         return makeUniqueSlug(slugify(name), usedSlugs);
       });
 

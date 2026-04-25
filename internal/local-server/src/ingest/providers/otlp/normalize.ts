@@ -273,7 +273,9 @@ function normalizeSpanEvents(
   return events;
 }
 
-function normalizeSpanLinks(span: Record<string, unknown>): ReadonlyArray<NormalizedSpanLinkRecord> {
+function normalizeSpanLinks(
+  span: Record<string, unknown>,
+): ReadonlyArray<NormalizedSpanLinkRecord> {
   const links: Array<NormalizedSpanLinkRecord> = [];
   for (const link of toObjectArray(getRecordValue(span, "links"))) {
     const traceId = optionalHex(getRecordValue(link, "traceId", "trace_id"));
@@ -347,7 +349,8 @@ export function normalizeOtlpDocument(document: Record<string, unknown>): Normal
     const resource = toObjectRecord(getRecordValue(resourceLog, "resource"));
     const resourceAttributes = otelAttributeMap(getRecordValue(resource ?? {}, "attributes"));
     const serviceName = attributeString(resourceAttributes, "service.name");
-    const resourceSchemaUrl = stringOrNull(getRecordValue(resourceLog, "schemaUrl", "schema_url")) ?? "";
+    const resourceSchemaUrl =
+      stringOrNull(getRecordValue(resourceLog, "schemaUrl", "schema_url")) ?? "";
 
     const scopeLogs = toObjectArray(getRecordValue(resourceLog, "scopeLogs", "scope_logs"));
     for (const scopeLog of scopeLogs) {
@@ -355,7 +358,8 @@ export function normalizeOtlpDocument(document: Record<string, unknown>): Normal
       const scopeAttributes = otelAttributeMap(getRecordValue(scope ?? {}, "attributes"));
       const scopeName = stringOrNull(getRecordValue(scope ?? {}, "name")) ?? "";
       const scopeVersion = stringOrNull(getRecordValue(scope ?? {}, "version")) ?? "";
-      const scopeSchemaUrl = stringOrNull(getRecordValue(scopeLog, "schemaUrl", "schema_url")) ?? "";
+      const scopeSchemaUrl =
+        stringOrNull(getRecordValue(scopeLog, "schemaUrl", "schema_url")) ?? "";
 
       const logRecords = toObjectArray(getRecordValue(scopeLog, "logRecords", "log_records"));
       for (const logRecord of logRecords) {
@@ -375,10 +379,10 @@ export function normalizeOtlpDocument(document: Record<string, unknown>): Normal
           traceId,
           spanId,
           traceFlags: integerOrNull(getRecordValue(logRecord, "flags")) ?? 0,
-          severityNumber: numberOrNull(
-            getRecordValue(logRecord, "severityNumber", "severity_number"),
-          ) ?? 0,
-          severityText: stringOrNull(getRecordValue(logRecord, "severityText", "severity_text")) ?? "",
+          severityNumber:
+            numberOrNull(getRecordValue(logRecord, "severityNumber", "severity_number")) ?? 0,
+          severityText:
+            stringOrNull(getRecordValue(logRecord, "severityText", "severity_text")) ?? "",
           serviceName,
           resourceSchemaUrl,
           resourceAttributes,
@@ -402,7 +406,9 @@ export function normalizeOtlpDocument(document: Record<string, unknown>): Normal
   };
 }
 
-export function normalizeOtlpTraceDocument(document: Record<string, unknown>): NormalizedIngestBatch {
+export function normalizeOtlpTraceDocument(
+  document: Record<string, unknown>,
+): NormalizedIngestBatch {
   const spans: Array<NormalizedSpanRecord> = [];
   const warnings: Array<string> = [];
   let droppedRecords = 0;
@@ -452,7 +458,8 @@ export function normalizeOtlpTraceDocument(document: Record<string, unknown>): N
           scopeName,
           scopeVersion,
           spanAttributes: otelAttributeMap(getRecordValue(span, "attributes")),
-          durationNs: durationNsFromNanos(startValue, endValue) ?? durationNsFromIso(startTime, endTime),
+          durationNs:
+            durationNsFromNanos(startValue, endValue) ?? durationNsFromIso(startTime, endTime),
           events: normalizeSpanEvents(span, {
             traceId,
             spanId,

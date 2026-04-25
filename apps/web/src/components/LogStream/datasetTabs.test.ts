@@ -94,11 +94,7 @@ describe("dataset tabs", () => {
       },
     };
 
-    const result = closeDatasetTab(
-      tabsByDataset,
-      "dataset-a",
-      DEFAULT_TELEMETRY_DATASET_TAB_ID,
-    );
+    const result = closeDatasetTab(tabsByDataset, "dataset-a", DEFAULT_TELEMETRY_DATASET_TAB_ID);
 
     expect(result.closedLast).toBe(true);
     expect(result.tabsByDataset).toEqual({});
@@ -190,10 +186,6 @@ describe("dataset tabs", () => {
     const state = getDatasetTabState(withTelemetry, "dataset-a");
 
     expect(state.activeTabId).toBe("telemetry:2");
-    expect(state.tabs.map((tab) => tab.id)).toEqual([
-      "telemetry:1",
-      "trace:abc123",
-      "telemetry:2",
-    ]);
+    expect(state.tabs.map((tab) => tab.id)).toEqual(["telemetry:1", "trace:abc123", "telemetry:2"]);
   });
 });

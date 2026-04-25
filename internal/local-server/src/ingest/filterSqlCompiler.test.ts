@@ -63,11 +63,7 @@ describe("compileFilterToSql", () => {
     });
 
     it("emits regexp_matches for matchesRegex", () => {
-      const ast = Filter.cmp(
-        ["message"],
-        "matchesRegex",
-        Filter.stringValue("^\\[fatal\\]"),
-      );
+      const ast = Filter.cmp(["message"], "matchesRegex", Filter.stringValue("^\\[fatal\\]"));
       const result = compileFilterToSql(ast);
 
       expect(result.whereClause).toContain("regexp_matches");
@@ -94,9 +90,7 @@ describe("compileFilterToSql", () => {
       const emptyIn = compileFilterToSql(Filter.cmp(["level"], "in", Filter.listValue([])));
       expect(emptyIn.whereClause).toBe("(FALSE)");
 
-      const emptyNotIn = compileFilterToSql(
-        Filter.cmp(["level"], "notIn", Filter.listValue([])),
-      );
+      const emptyNotIn = compileFilterToSql(Filter.cmp(["level"], "notIn", Filter.listValue([])));
       expect(emptyNotIn.whereClause).toBe("(TRUE)");
     });
   });
@@ -133,9 +127,7 @@ describe("compileFilterToSql", () => {
           Filter.cmp(["level"], "eq", Filter.stringValue("error")),
           Filter.cmp(["level"], "eq", Filter.stringValue("fatal")),
         ]),
-        Filter.not(
-          Filter.cmp(["serviceName"], "eq", Filter.stringValue("debug-client")),
-        ),
+        Filter.not(Filter.cmp(["serviceName"], "eq", Filter.stringValue("debug-client"))),
       ]);
       const result = compileFilterToSql(ast);
 
@@ -146,11 +138,7 @@ describe("compileFilterToSql", () => {
 
   describe("attribute paths", () => {
     it("extracts from the OTEL log attribute map", () => {
-      const ast = Filter.cmp(
-        ["attributes", "http", "method"],
-        "eq",
-        Filter.stringValue("POST"),
-      );
+      const ast = Filter.cmp(["attributes", "http", "method"], "eq", Filter.stringValue("POST"));
       const result = compileFilterToSql(ast);
 
       expect(result.whereClause).toBe(
@@ -160,11 +148,7 @@ describe("compileFilterToSql", () => {
     });
 
     it("wraps numeric comparisons on attributes with TRY_CAST", () => {
-      const ast = Filter.cmp(
-        ["attributes", "http", "status_code"],
-        "gte",
-        Filter.numberValue(500),
-      );
+      const ast = Filter.cmp(["attributes", "http", "status_code"], "gte", Filter.numberValue(500));
       const result = compileFilterToSql(ast);
 
       expect(result.whereClause).toBe(
@@ -175,34 +159,26 @@ describe("compileFilterToSql", () => {
     it("rejects unsafe path segments", () => {
       expect(() =>
         compileFilterToSql(
-          Filter.cmp(
-            ["attributes", "bad; DROP TABLE otel_logs;--"],
-            "eq",
-            Filter.stringValue("x"),
-          ),
+          Filter.cmp(["attributes", "bad; DROP TABLE otel_logs;--"], "eq", Filter.stringValue("x")),
         ),
       ).toThrow(InvalidFilterError);
     });
 
     it("rejects empty attribute paths", () => {
-      expect(() =>
-        compileFilterToSql(Filter.cmp(["attributes"], "exists")),
-      ).toThrow(InvalidFilterError);
+      expect(() => compileFilterToSql(Filter.cmp(["attributes"], "exists"))).toThrow(
+        InvalidFilterError,
+      );
     });
 
     it("rejects path segments starting with a digit", () => {
       expect(() =>
-        compileFilterToSql(
-          Filter.cmp(["attributes", "1stNotAllowed"], "exists"),
-        ),
+        compileFilterToSql(Filter.cmp(["attributes", "1stNotAllowed"], "exists")),
       ).toThrow(InvalidFilterError);
     });
 
     it("rejects paths with quotes", () => {
       expect(() =>
-        compileFilterToSql(
-          Filter.cmp(["attributes", "quote'inside"], "exists"),
-        ),
+        compileFilterToSql(Filter.cmp(["attributes", "quote'inside"], "exists")),
       ).toThrow(InvalidFilterError);
     });
   });
@@ -277,12 +253,7 @@ describe("compileFilterToSql", () => {
 
       const result = compileFilterToSql(ast);
 
-      expect(Object.keys(result.params).sort()).toStrictEqual([
-        "flt_0",
-        "flt_1",
-        "flt_2",
-        "flt_3",
-      ]);
+      expect(Object.keys(result.params).sort()).toStrictEqual(["flt_0", "flt_1", "flt_2", "flt_3"]);
       expect(result.params.flt_0).toBe("%http%");
       expect(result.params.flt_1).toBe("error");
       expect(result.params.flt_2).toBe("fatal");

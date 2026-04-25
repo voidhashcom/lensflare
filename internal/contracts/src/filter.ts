@@ -43,9 +43,7 @@ export const FilterValueSchema = Schema.Union([
   Schema.TaggedStruct("boolean", { value: Schema.Boolean }),
   Schema.TaggedStruct("null", {}),
   Schema.TaggedStruct("list", {
-    values: Schema.Array(
-      Schema.Union([Schema.String, Schema.Number, Schema.Boolean]),
-    ),
+    values: Schema.Array(Schema.Union([Schema.String, Schema.Number, Schema.Boolean])),
   }),
 ]);
 
@@ -506,15 +504,13 @@ export const Filter = {
   not(child: FilterNode): FilterNode {
     return { _tag: "not", child };
   },
-  cmp(
-    path: ReadonlyArray<string>,
-    op: FilterOperator,
-    value?: FilterValue,
-  ): FilterNode {
+  cmp(path: ReadonlyArray<string>, op: FilterOperator, value?: FilterValue): FilterNode {
     if (path.length === 0) {
       throw new Error("Filter.cmp requires a non-empty field path.");
     }
-    const field: FilterField = { path: path as unknown as readonly [string, ...ReadonlyArray<string>] };
+    const field: FilterField = {
+      path: path as unknown as readonly [string, ...ReadonlyArray<string>],
+    };
     return value === undefined ? { _tag: "cmp", field, op } : { _tag: "cmp", field, op, value };
   },
   text(query: string, mode?: FilterTextMode): FilterNode {

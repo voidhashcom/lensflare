@@ -1,10 +1,5 @@
 import type { DesktopUpdateChannel } from "@lensflare/contracts";
-import {
-  CheckCircle2Icon,
-  DownloadIcon,
-  RefreshCwIcon,
-  RotateCwIcon,
-} from "lucide-react";
+import { CheckCircle2Icon, DownloadIcon, RefreshCwIcon, RotateCwIcon } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
 import {

@@ -27,11 +27,17 @@ export const datasetRpcLayer = DatasetRpcGroup.toLayer(
       ListDatasetStorageStats: () =>
         service
           .listDatasetStorageStats()
-          .pipe(Effect.catchTag("SqlError", Effect.die), Effect.catchTag("DuckDbError", Effect.die)),
+          .pipe(
+            Effect.catchTag("SqlError", Effect.die),
+            Effect.catchTag("DuckDbError", Effect.die),
+          ),
       ClearDatasetData: ({ projectId, datasetId }) =>
         service
           .clearDatasetData(projectId, datasetId)
-          .pipe(Effect.catchTag("SqlError", Effect.die), Effect.catchTag("DuckDbError", Effect.die)),
+          .pipe(
+            Effect.catchTag("SqlError", Effect.die),
+            Effect.catchTag("DuckDbError", Effect.die),
+          ),
       SubscribeDatasetEvents: () => service.stream,
     });
   }),

@@ -217,3 +217,7 @@ yalc.lock
 resources/
 artifacts/
 build/
+release/
+release-mock/
+apps/*/artifacts/
+packages/*/dist/

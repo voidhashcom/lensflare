@@ -74,9 +74,7 @@ function insertLogRecordSql(recordId: string, record: NormalizedLogRecord, recei
 export class TelemetryLogsRepository extends Context.Service<
   TelemetryLogsRepository,
   {
-    readonly writeBatch: (
-      request: IngestWriteRequest,
-    ) => Effect.Effect<
+    readonly writeBatch: (request: IngestWriteRequest) => Effect.Effect<
       {
         readonly batchId: string;
         readonly records: ReadonlyArray<WrittenLogRecord>;

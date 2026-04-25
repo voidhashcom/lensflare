@@ -63,6 +63,8 @@ export function mapArrayLiteral(
   return { sql: `[${items.join(", ")}]`, params };
 }
 
-export function mergeFragments(...fragments: ReadonlyArray<SqlFragment>): Record<string, DuckDBValue> {
+export function mergeFragments(
+  ...fragments: ReadonlyArray<SqlFragment>
+): Record<string, DuckDBValue> {
   return Object.assign({}, ...fragments.map((fragment) => fragment.params));
 }

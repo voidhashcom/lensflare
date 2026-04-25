@@ -32,9 +32,7 @@ const initialState: DeleteDialogState = {
  * is the currently active route (project or dataset), navigates away so the
  * user isn't stranded on a stale URL pointing at nothing.
  */
-export function useDeleteDialog(
-  activeProjectId: string | undefined,
-): UseDeleteDialogResult {
+export function useDeleteDialog(activeProjectId: string | undefined): UseDeleteDialogResult {
   const navigate = useNavigate();
   const [state, setState] = React.useState<DeleteDialogState>(initialState);
 

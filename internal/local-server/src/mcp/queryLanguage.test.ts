@@ -43,7 +43,9 @@ const fields: ReadonlyArray<TelemetryFilterCatalogEntry> = [
 
 describe("parseTelemetryQuery", () => {
   it("parses the error query that replaces findErrors", () => {
-    expect(parseTelemetryQuery('(level in ["error", "fatal"]) or status = "error"', fields)).toEqual({
+    expect(
+      parseTelemetryQuery('(level in ["error", "fatal"]) or status = "error"', fields),
+    ).toEqual({
       _tag: "or",
       children: [
         {
@@ -63,7 +65,9 @@ describe("parseTelemetryQuery", () => {
   });
 
   it("supports free text, attributes, numbers, and implicit and", () => {
-    expect(parseTelemetryQuery('timeout attr.http.status_code >= 500 durationUs > 1000', fields)).toEqual({
+    expect(
+      parseTelemetryQuery("timeout attr.http.status_code >= 500 durationUs > 1000", fields),
+    ).toEqual({
       _tag: "and",
       children: [
         { _tag: "text", query: "timeout", mode: "substring" },

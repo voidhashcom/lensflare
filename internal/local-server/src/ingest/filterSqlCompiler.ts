@@ -127,9 +127,10 @@ function attributeStringExpr(segments: ReadonlyArray<string>): string {
   return `COALESCE(LogAttributes['${exactKey}'], LogAttributes['${segments.at(-1) ?? ""}'])`;
 }
 
-function resolveField(
-  field: FilterField,
-): { readonly stringExpr: string; readonly numericExpr: string } {
+function resolveField(field: FilterField): {
+  readonly stringExpr: string;
+  readonly numericExpr: string;
+} {
   const [head, ...rest] = field.path;
   if (head === undefined) {
     throw new InvalidFilterError({ reason: "filter field path is empty" });

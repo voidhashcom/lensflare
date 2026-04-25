@@ -24,12 +24,7 @@ interface QueryBuilderProps {
  * add a `filterNodeToSource` helper in `syntax.ts` and a controlled
  * `source` prop here.
  */
-export function QueryBuilder({
-  projectId,
-  datasetId,
-  viewId,
-  appliedSource,
-}: QueryBuilderProps) {
+export function QueryBuilder({ projectId, datasetId, viewId, appliedSource }: QueryBuilderProps) {
   const { fields } = useFieldCatalog(projectId, datasetId);
 
   return (
