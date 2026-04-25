@@ -31,7 +31,6 @@ import { FilterPillsDisplay } from "./FilterPillsDisplay";
 import {
   FilterSuggestionsPanel,
   type FilterSuggestion,
-  type PillMutation,
 } from "./FilterSuggestionsPanel";
 import {
   applyFieldSuggestion,
@@ -44,8 +43,6 @@ import {
   parseFilterInput,
   parsedToFilter,
   resolvePillField,
-  serialisePill,
-  type ParsedPill,
 } from "./syntax";
 
 const PlainTextDocument = Document.extend({
@@ -65,8 +62,8 @@ const FilterPillDecorations = Extension.create<FilterPillDecorationOptions>({
         props: {
           decorations: (state) => {
             const source = state.doc.textContent;
-            const parsed = parseFilterInput(source, source.length);
             const fields = this.options.getFields();
+            const parsed = parseFilterInput(source, source.length, fields);
             const decorations: Array<Decoration> = [];
 
             for (const pill of completeParsedPills(parsed)) {
@@ -181,17 +178,16 @@ export function FilterQueryInput({
   draftSourceRef.current = draftSource;
 
   const appliedParsed = useMemo(
-    () => parseFilterInput(appliedSource, appliedSource.length),
-    [appliedSource],
+    () => parseFilterInput(appliedSource, appliedSource.length, fields),
+    [appliedSource, fields],
   );
   const appliedDisplayPills = useMemo(
     () => completeParsedPills(appliedParsed),
     [appliedParsed],
   );
-  const parsed = useMemo(() => parseFilterInput(draftSource, cursor), [cursor, draftSource]);
-  const draftDisplayPills = useMemo(
-    () => completeParsedPills(parsed),
-    [parsed],
+  const parsed = useMemo(
+    () => parseFilterInput(draftSource, cursor, fields),
+    [cursor, draftSource, fields],
   );
   const cursorContextKey = useMemo(
     () => cursorContextToKey(parsed.cursorContext),
@@ -319,7 +315,11 @@ export function FilterQueryInput({
   const applyAndClose = useCallback(() => {
     const nextAppliedSource =
       editorRef.current?.getText({ blockSeparator: " " }) ?? draftSourceRef.current;
-    const nextAppliedParsed = parseFilterInput(nextAppliedSource, nextAppliedSource.length);
+    const nextAppliedParsed = parseFilterInput(
+      nextAppliedSource,
+      nextAppliedSource.length,
+      fieldsRef.current,
+    );
     const nextAppliedFilter = parsedToFilter(nextAppliedParsed, fieldsRef.current);
     suppressNextCloseResetRef.current = true;
     setDraftSource(nextAppliedSource);
@@ -393,47 +393,6 @@ export function FilterQueryInput({
       editor.commands.setContent(textToDoc(""), { emitUpdate: false });
     }
   }, [editor, onAppliedSourceChange]);
-
-  const handleRemovePill = useCallback(
-    (index: number) => {
-      const pill = draftDisplayPills[index];
-      if (!pill) return;
-      let removeEnd = pill.end;
-      while (
-        removeEnd < draftSource.length &&
-        /\s/.test(draftSource[removeEnd] ?? "")
-      ) {
-        removeEnd += 1;
-      }
-      const nextSource =
-        draftSource.slice(0, pill.start) + draftSource.slice(removeEnd);
-      updateDraftSource(nextSource, pill.start);
-    },
-    [draftDisplayPills, draftSource, updateDraftSource],
-  );
-
-  const handleEditPill = useCallback(
-    (index: number, mutation: PillMutation) => {
-      const pill = draftDisplayPills[index];
-      if (!pill) return;
-      const nextPill: ParsedPill = {
-        fieldPath: mutation.fieldPath,
-        operatorToken: mutation.operatorToken,
-        operator: mutation.operator,
-        negated: mutation.negated,
-        rawValue: mutation.rawValue,
-        valueWasQuoted: mutation.valueWasQuoted,
-        start: pill.start,
-        end: pill.end,
-      };
-      const serialised = serialisePill(nextPill);
-      const nextSource =
-        draftSource.slice(0, pill.start) + serialised + draftSource.slice(pill.end);
-      const nextCursor = pill.start + serialised.length;
-      updateDraftSource(nextSource, nextCursor);
-    },
-    [draftDisplayPills, draftSource, updateDraftSource],
-  );
 
   const handleApplySuggestion = useCallback(
     (suggestion: FilterSuggestion) => {
@@ -562,10 +521,7 @@ export function FilterQueryInput({
             fields={fields}
             highlightedSuggestionIndex={highlightedSuggestionIndex}
             onApplySuggestion={handleApplySuggestion}
-            onEditPill={handleEditPill}
-            onRemovePill={handleRemovePill}
             onSuggestionCountChange={handleSuggestionCountChange}
-            pills={draftDisplayPills}
             projectId={projectId}
             suggestionsId={suggestionsId}
           />

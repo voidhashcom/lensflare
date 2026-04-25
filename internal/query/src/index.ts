@@ -2,6 +2,7 @@ export * from "./ast.ts";
 export * from "./compiler.ts";
 export * from "./editor.ts";
 export * from "./format.ts";
+export * from "./languageService.ts";
 export * from "./lexer.ts";
 export * from "./operators.ts";
 export * from "./parser.ts";

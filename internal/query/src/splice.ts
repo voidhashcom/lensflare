@@ -18,10 +18,11 @@ export function applyFieldSuggestion(ctx: SpliceContext, field: QueryField): Spl
   const pathString = field.path.join(".");
   const expressionStart = findReplacementStart(ctx.trailingText);
   const keepBefore = ctx.trailingText.slice(0, expressionStart);
+  const composing = readComposingIdent(ctx.trailingText.slice(expressionStart));
   const inserted = field.kind === "number"
     ? `${pathString} ${token} `
     : `${pathString} ${token} ""`;
-  const nextTrailing = keepBefore + inserted;
+  const nextTrailing = keepBefore + composing.leadingWhitespace + inserted;
   const nextSource = ctx.source.slice(0, ctx.trailingStart) + nextTrailing;
   const cursorOffset = field.kind === "number" ? nextTrailing.length : nextTrailing.length - 1;
   return { source: nextSource, cursor: ctx.trailingStart + cursorOffset };
@@ -34,9 +35,9 @@ export function applyOperatorSuggestion(
   const expressionStart = findReplacementStart(ctx.trailingText);
   const keepBefore = ctx.trailingText.slice(0, expressionStart);
   const composing = ctx.trailingText.slice(expressionStart);
-  const ident = extractLeadingIdent(composing);
-  if (ident.length === 0) return null;
-  const nextTrailing = `${keepBefore}${ident} ${syntax.token} `;
+  const head = readComposingIdent(composing);
+  if (head.ident.length === 0) return null;
+  const nextTrailing = `${keepBefore}${head.leadingWhitespace}${head.ident} ${syntax.token} `;
   const nextSource = ctx.source.slice(0, ctx.trailingStart) + nextTrailing;
   return { source: nextSource, cursor: ctx.trailingStart + nextTrailing.length };
 }
@@ -45,15 +46,30 @@ export function applyValueSuggestion(ctx: SpliceContext, value: string): SpliceR
   const expressionStart = findReplacementStart(ctx.trailingText);
   const keepBefore = ctx.trailingText.slice(0, expressionStart);
   const composing = ctx.trailingText.slice(expressionStart);
-  const ident = extractLeadingIdent(composing);
-  if (ident.length === 0) return null;
-  const afterIdent = composing.slice(ident.length).trimStart();
+  const head = readComposingIdent(composing);
+  if (head.ident.length === 0) return null;
+  const afterIdent = head.afterIdent.trimStart();
   const op = extractLeadingOperator(afterIdent);
   if (op === null) return null;
   const quotedValue = quoteValueIfNeeded(value);
-  const nextTrailing = `${keepBefore}${ident} ${op.token} ${quotedValue} `;
+  const nextTrailing = `${keepBefore}${head.leadingWhitespace}${head.ident} ${op.token} ${quotedValue} `;
   const nextSource = ctx.source.slice(0, ctx.trailingStart) + nextTrailing;
   return { source: nextSource, cursor: ctx.trailingStart + nextTrailing.length };
+}
+
+function readComposingIdent(text: string): {
+  readonly leadingWhitespace: string;
+  readonly ident: string;
+  readonly afterIdent: string;
+} {
+  const match = /^(\s*)([A-Za-z_][A-Za-z0-9_.-]*)(.*)$/s.exec(text);
+  return match === null
+    ? { leadingWhitespace: /^\s*/.exec(text)?.[0] ?? "", ident: "", afterIdent: "" }
+    : {
+      leadingWhitespace: match[1] ?? "",
+      ident: match[2] ?? "",
+      afterIdent: match[3] ?? "",
+    };
 }
 
 function findReplacementStart(text: string): number {

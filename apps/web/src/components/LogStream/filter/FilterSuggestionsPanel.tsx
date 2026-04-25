@@ -1,26 +1,16 @@
-import type { FilterOperator } from "@lensflare/contracts";
 import { useEffect, useMemo, useRef } from "react";
 
 import type { TelemetryLogField } from "~/data/logApi";
 import { cn } from "~/lib/utils";
 
 import { FieldTypeBadge } from "./FieldTypeBadge";
-import { FilterRow } from "./FilterRow";
 import { limitAttributeFieldSuggestions, sortFieldsByFrequency } from "./fieldSuggestionLimits";
-import {
-  OPERATOR_LABELS,
-  UNARY_OPERATORS,
-  parsedPillToDraft,
-  type FilterRowDraft,
-} from "./filterTypes";
+import { OPERATOR_LABELS } from "./filterTypes";
 import { useFieldValues } from "./hooks/useFieldValues";
 import {
   operatorSyntaxesForKind,
-  preferredTokenForOperator,
-  resolvePillField,
   type CursorContext,
   type OperatorSyntax,
-  type ParsedPill,
 } from "./syntax";
 
 /**
@@ -33,59 +23,28 @@ export type FilterSuggestion =
   | { readonly kind: "operator"; readonly syntax: OperatorSyntax }
   | { readonly kind: "value"; readonly value: string };
 
-/**
- * Describes how the parent should patch the pill at index `index` back into
- * `source`. Passed to the mutation callback so the parent re-serialises with
- * the pill's canonical shape (field join, preferred operator token, quoted
- * value when necessary).
- */
-export interface PillMutation {
-  readonly fieldPath: ReadonlyArray<string>;
-  readonly operator: FilterOperator;
-  readonly operatorToken: string;
-  readonly negated: boolean;
-  readonly rawValue: string;
-  readonly valueWasQuoted: boolean;
-}
-
 interface FilterSuggestionsPanelProps {
   suggestionsId: string;
   projectId: string;
   datasetId: string;
-  pills: ReadonlyArray<ParsedPill>;
   fields: ReadonlyArray<TelemetryLogField>;
   cursorContext: CursorContext;
   highlightedSuggestionIndex: number | null;
-  onEditPill: (index: number, mutation: PillMutation) => void;
-  onRemovePill: (index: number) => void;
   onApplySuggestion: (suggestion: FilterSuggestion) => void;
   onSuggestionCountChange: (count: number) => void;
 }
 
 /**
- * Dropdown body for the query input. Holds two stacked sections:
- *
- *   1. **Query builder** — one `FilterRow` per committed pill, re-using the
- *      existing row editor so users still have the explicit control surface
- *      for rarely-typed operators (`matchesRegex`, `in`, `notIn`, …). The
- *      section is hidden when there are no pills.
- *
- *   2. **Suggestions** — a context-sensitive list of what can come next:
- *      fields when the caret is in a field position, operators when it's in
- *      an operator position, and (for enum-ish fields) known values when in
- *      a value position. The list is derived purely from `cursorContext` and
- *      the catalog.
+ * Dropdown body for context-sensitive query suggestions: fields in field
+ * position, operators in operator position, and known values in value position.
  */
 export function FilterSuggestionsPanel({
   suggestionsId,
   projectId,
   datasetId,
-  pills,
   fields,
   cursorContext,
   highlightedSuggestionIndex,
-  onEditPill,
-  onRemovePill,
   onApplySuggestion,
   onSuggestionCountChange,
 }: FilterSuggestionsPanelProps) {
@@ -94,16 +53,6 @@ export function FilterSuggestionsPanel({
       className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-y-auto divide-y"
       id={suggestionsId}
     >
-      {pills.length > 0 ? (
-        <QueryBuilderSection
-          datasetId={datasetId}
-          fields={fields}
-          onEditPill={onEditPill}
-          onRemovePill={onRemovePill}
-          pills={pills}
-          projectId={projectId}
-        />
-      ) : null}
       <SuggestionsSection
         cursorContext={cursorContext}
         datasetId={datasetId}
@@ -113,127 +62,6 @@ export function FilterSuggestionsPanel({
         onSuggestionCountChange={onSuggestionCountChange}
         projectId={projectId}
       />
-    </div>
-  );
-}
-
-interface QueryBuilderSectionProps {
-  projectId: string;
-  datasetId: string;
-  pills: ReadonlyArray<ParsedPill>;
-  fields: ReadonlyArray<TelemetryLogField>;
-  onEditPill: (index: number, mutation: PillMutation) => void;
-  onRemovePill: (index: number) => void;
-}
-
-function QueryBuilderSection({
-  projectId,
-  datasetId,
-  pills,
-  fields,
-  onEditPill,
-  onRemovePill,
-}: QueryBuilderSectionProps) {
-  return (
-    <section className="flex flex-col gap-2 p-3">
-      <header className="flex items-center justify-between">
-        <h3 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-          Query builder
-        </h3>
-      </header>
-      <div className="flex flex-col gap-2">
-        {pills.map((pill, index) => (
-          <PillRow
-            datasetId={datasetId}
-            fields={fields}
-            index={index}
-            key={`${index}:${pill.start}`}
-            onEditPill={onEditPill}
-            onRemovePill={onRemovePill}
-            pill={pill}
-            projectId={projectId}
-          />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-interface PillRowProps {
-  projectId: string;
-  datasetId: string;
-  index: number;
-  pill: ParsedPill;
-  fields: ReadonlyArray<TelemetryLogField>;
-  onEditPill: (index: number, mutation: PillMutation) => void;
-  onRemovePill: (index: number) => void;
-}
-
-function PillRow({
-  projectId,
-  datasetId,
-  index,
-  pill,
-  fields,
-  onEditPill,
-  onRemovePill,
-}: PillRowProps) {
-  const resolvedField = resolvePillField(pill, fields);
-  const draft: FilterRowDraft = useMemo(() => {
-    const adapted = parsedPillToDraft(pill, fields, () => `pill-${index}`);
-    if (adapted !== null) return adapted;
-    return { id: `pill-${index}`, field: null, operator: pill.operator, value: pill.rawValue };
-  }, [pill, fields, index]);
-
-  const handleChange = (next: FilterRowDraft) => {
-    if (next.field === null) {
-      // User cleared the field from the row editor — treat as "remove pill"
-      // to avoid an inconsistent half-deleted pill in `source`.
-      onRemovePill(index);
-      return;
-    }
-    const kind = next.field.kind;
-    const token = preferredTokenForOperator(next.operator, pill.negated, kind);
-    const isUnary = UNARY_OPERATORS.includes(next.operator);
-    const rawValue = isUnary ? "" : next.value;
-    const valueWasQuoted =
-      !isUnary && (rawValue.includes(" ") || rawValue.includes('"'));
-    onEditPill(index, {
-      fieldPath: next.field.path,
-      operator: next.operator,
-      operatorToken: token,
-      negated: pill.negated,
-      rawValue,
-      valueWasQuoted,
-    });
-  };
-
-  return (
-    <div
-      className={cn(
-        "rounded-md",
-        resolvedField === null && "bg-destructive/5 p-2",
-      )}
-    >
-      <FilterRow
-        datasetId={datasetId}
-        draft={draft}
-        onChange={handleChange}
-        onRemove={() => onRemovePill(index)}
-        projectId={projectId}
-      />
-      {pill.negated ? (
-        <p className="mt-1 text-muted-foreground text-xs">
-          Typed as <code className="font-mono">{pill.operatorToken}</code> — row
-          editor shows the positive form; edits are wrapped in{" "}
-          <code className="font-mono">NOT</code>.
-        </p>
-      ) : null}
-      {resolvedField === null ? (
-        <p className="mt-1 text-destructive text-xs">
-          Unknown field "{pill.fieldPath.join(".")}".
-        </p>
-      ) : null}
     </div>
   );
 }
@@ -387,7 +215,7 @@ function OperatorSuggestions({
           key={`${syntax.token}-${syntax.operator}-${syntax.negated}`}
           onSelect={() => onSelect(syntax)}
         >
-          <span className="w-12 font-mono text-foreground text-sm">
+          <span className="w-28 shrink-0 whitespace-nowrap font-mono text-foreground text-sm">
             {syntax.token}
           </span>
           <span className="truncate text-muted-foreground">
@@ -496,7 +324,9 @@ interface SuggestionListProps {
 
 function SuggestionList({ title, emptyLabel, children }: SuggestionListProps) {
   const items = Array.isArray(children) ? children : [children];
-  const hasItems = items.some((child) => child !== null && child !== undefined && child !== false);
+  const hasItems = items.some((child) =>
+    child !== null && child !== undefined && child !== false
+  );
 
   return (
     <section className="flex flex-col gap-1 p-2">

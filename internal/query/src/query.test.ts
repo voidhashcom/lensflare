@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
+  analyzeQueryLanguage,
+  applyOperatorSuggestion,
+  applyQueryCompletion,
+  applyValueSuggestion,
   compileQueryToFilter,
   getEditorContext,
   lexQuery,
+  operatorSyntaxesForKind,
+  parseFilterInput,
   parseQuery,
   parseQueryStrict,
   parseTelemetryQuery,
@@ -178,6 +184,116 @@ describe("editor context", () => {
     expect(getEditorContext('kind = "span" ', 'kind = "span" '.length, fields).cursorContext).toEqual({
       kind: "field",
       prefix: "",
+    });
+  });
+
+  it("does not request values after valueless operators", () => {
+    for (const source of ["traceId exists ", "parentSpanId missing "]) {
+      expect(getEditorContext(source, source.length, fields).cursorContext).toEqual({
+        kind: "field",
+        prefix: "",
+      });
+    }
+  });
+
+  it("starts a new field context after complete expressions", () => {
+    expect(getEditorContext("traceId exists serv", "traceId exists serv".length, fields).cursorContext).toEqual({
+      kind: "field",
+      prefix: "serv",
+    });
+    expect(getEditorContext("level = error sta", "level = error sta".length, fields).cursorContext).toEqual({
+      kind: "field",
+      prefix: "sta",
+    });
+  });
+});
+
+describe("language service", () => {
+  it("returns LSP-style completions with text edits", () => {
+    const fieldAnalysis = analyzeQueryLanguage("lev", 3, fields);
+    const fieldCompletion = fieldAnalysis.completions.find((completion) => completion.label === "level");
+    expect(fieldCompletion).toMatchObject({
+      kind: "field",
+      textEdit: {
+        range: { start: 0, end: 3 },
+        newText: 'level = ""',
+        cursorOffset: 9,
+      },
+    });
+    expect(fieldCompletion === undefined ? null : applyQueryCompletion("lev", fieldCompletion)).toEqual({
+      source: 'level = ""',
+      cursor: 9,
+    });
+
+    const operatorAnalysis = analyzeQueryLanguage("durationUs !", "durationUs !".length, fields);
+    expect(operatorAnalysis.completions.map((completion) => completion.label)).toContain("!=");
+
+    const valueAnalysis = analyzeQueryLanguage("level = e", "level = e".length, fields);
+    const valueCompletion = valueAnalysis.completions.find((completion) => completion.label === "error");
+    expect(valueCompletion).toMatchObject({
+      kind: "value",
+      textEdit: {
+        range: { start: 8, end: 9 },
+        newText: "error ",
+        cursorOffset: 6,
+      },
+    });
+
+    const quotedValueAnalysis = analyzeQueryLanguage('level = "er"', 'level = "er'.length, fields);
+    const quotedValueCompletion = quotedValueAnalysis.completions.find((completion) => completion.label === "error");
+    expect(quotedValueCompletion).toMatchObject({
+      kind: "value",
+      textEdit: {
+        range: { start: 8, end: 12 },
+        newText: "error ",
+        cursorOffset: 6,
+      },
+    });
+  });
+
+  it("classifies semantic tokens from the parser AST", () => {
+    const result = analyzeQueryLanguage('level = "error" and traceId exists', 0, fields);
+    expect(result.semanticTokens).toEqual(
+      expect.arrayContaining([
+        { kind: "field", start: 0, end: 5 },
+        { kind: "operator", start: 6, end: 7 },
+        { kind: "value", start: 8, end: 15 },
+        { kind: "keyword", start: 16, end: 19 },
+        { kind: "field", start: 20, end: 27 },
+        { kind: "operator", start: 28, end: 34 },
+      ]),
+    );
+  });
+});
+
+describe("suggestion splicing", () => {
+  it("preserves the separator before a new expression when applying an operator", () => {
+    const source = "serviceName = lensflare-desktop spanId";
+    const parsed = parseFilterInput(source, source.length, fields);
+    const startsWith = operatorSyntaxesForKind("string").find((syntax) => syntax.token === "startsWith");
+
+    expect(parsed.trailingText).toBe(" spanId");
+    expect(startsWith === undefined ? null : applyOperatorSuggestion({
+      source,
+      trailingStart: parsed.trailingStart,
+      trailingText: parsed.trailingText,
+    }, startsWith)).toEqual({
+      source: "serviceName = lensflare-desktop spanId startsWith ",
+      cursor: "serviceName = lensflare-desktop spanId startsWith ".length,
+    });
+  });
+
+  it("preserves the separator before a new expression when applying a value", () => {
+    const source = "serviceName = lensflare-desktop level = ";
+    const trailingStart = "serviceName = lensflare-desktop".length;
+
+    expect(applyValueSuggestion({
+      source,
+      trailingStart,
+      trailingText: source.slice(trailingStart),
+    }, "error")).toEqual({
+      source: "serviceName = lensflare-desktop level = error ",
+      cursor: "serviceName = lensflare-desktop level = error ".length,
     });
   });
 });
