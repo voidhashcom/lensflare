@@ -1,55 +1,35 @@
 ---
 /**
- * Top chrome — opaque background, hard bottom rule, monospace links. The only
- * `.astro` component on the page because Astro's `client:*` hydration
- * directives are only recognised at the `.astro` ↔ React boundary.
+ * Top chrome — full-width band with a hairline bottom rule, plus the inner
+ * 1152px container framed by hairline vertical rules so the column lines line
+ * up with every section below. The wordmark sits on the left, a small GitHub
+ * icon-and-label on the right. Matches the Paper design 1:1.
  */
 import { GITHUB_REPO_URL } from "../lib/links";
 import { GithubIcon } from "./icons/GithubIcon";
 import { Logo } from "./Logo";
-import { ThemeToggle } from "./ThemeToggle";
-
-const NAV_LINKS = [
-  { label: "features", href: "#features" },
-  { label: "install", href: "#install" },
-  { label: "platforms", href: "#platforms" },
-];
 ---
 
-<header class="sticky top-0 z-40 w-full border-b border-foreground/15 bg-background">
-  <div class="mx-auto flex h-14 max-w-6xl items-center gap-4 px-5 sm:px-8">
+<header class="w-full border-b border-border bg-background">
+  <div
+    class="mx-auto flex h-14 max-w-[1152px] items-center border-x border-border px-8"
+  >
     <a
       href="/"
-      class="flex items-center gap-2 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
+      class="flex items-center gap-2 text-[var(--logo)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--logo)]"
       aria-label="Lensflare — home"
     >
       <Logo className="h-5 w-auto" />
     </a>
 
-    <nav
-      class="ml-6 hidden items-center gap-6 font-mono text-xs uppercase tracking-[0.14em] text-muted-foreground md:flex"
-      aria-label="Primary"
+    <a
+      href={GITHUB_REPO_URL}
+      target="_blank"
+      rel="noreferrer noopener"
+      class="ml-auto flex h-9 items-center gap-2 rounded-md px-3 font-[family-name:var(--font-geist)] text-[12px] leading-[16px] text-foreground transition-colors hover:bg-[#f4f4f4]"
     >
-      {
-        NAV_LINKS.map((link) => (
-          <a href={link.href} class="transition-colors hover:text-foreground">
-            [{link.label}]
-          </a>
-        ))
-      }
-    </nav>
-
-    <div class="ml-auto flex items-center gap-2">
-      <a
-        href={GITHUB_REPO_URL}
-        target="_blank"
-        rel="noreferrer noopener"
-        class="hidden h-9 items-center gap-2 border border-foreground/15 px-3 font-mono text-xs uppercase tracking-[0.14em] text-foreground transition-colors hover:border-foreground sm:inline-flex"
-      >
-        <GithubIcon className="h-3.5 w-3.5" />
-        <span>github</span>
-      </a>
-      <ThemeToggle client:load />
-    </div>
+      <GithubIcon className="h-3.5 w-3.5" />
+      <span>Github</span>
+    </a>
   </div>
 </header>

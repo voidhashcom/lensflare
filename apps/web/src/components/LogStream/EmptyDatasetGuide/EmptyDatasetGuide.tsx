@@ -1,7 +1,8 @@
-import { CheckIcon, CopyIcon } from "lucide-react";
+import { CheckIcon, CopyIcon, XIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "~/components/ui/button";
+import { IconButtonTooltip } from "~/components/ui/tooltip";
 import { integrationToMarkdown } from "~/integrations/markdown";
 import { integrationRegistry, PROTOCOL_LABEL } from "~/integrations/registry";
 import type { Integration, Language, TemplateVars } from "~/integrations/types";
@@ -22,6 +23,7 @@ interface EmptyDatasetGuideProps {
    */
   variant?: "overlay" | "sheet";
   className?: string;
+  onClose?: () => void;
 }
 
 const COPY_FEEDBACK_MS = 1500;
@@ -44,6 +46,7 @@ export function EmptyDatasetGuide({
   serverOrigin,
   variant = "overlay",
   className,
+  onClose,
 }: EmptyDatasetGuideProps) {
   const defaultIntegration = integrationRegistry.getDefault();
   const [selectedLanguage, setSelectedLanguage] = useState<Language>(
@@ -104,6 +107,7 @@ export function EmptyDatasetGuide({
       data-slot="empty-dataset-guide"
       data-variant={variant}
     >
+      {variant === "sheet" ? <EmptyDatasetGuideHeader onClose={onClose} /> : null}
       <div className="flex-1 overflow-y-auto p-6 sm:p-8">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
           <header className="flex flex-col gap-2">
@@ -152,6 +156,31 @@ export function EmptyDatasetGuide({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function EmptyDatasetGuideHeader({ onClose }: { onClose: (() => void) | undefined }) {
+  return (
+    <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-4">
+      <span className="font-mono text-muted-foreground/80 text-sm">Setup</span>
+      <span className="text-muted-foreground/50">—</span>
+      <span className="min-w-0 flex-1 truncate font-mono text-foreground text-sm">
+        Integration guide
+      </span>
+      {onClose ? (
+        <IconButtonTooltip label="Close integration guide">
+          <Button
+            aria-label="Close integration guide"
+            className="desktop-no-drag shrink-0"
+            onClick={onClose}
+            size="icon"
+            variant="ghost"
+          >
+            <XIcon className="size-3.5" />
+          </Button>
+        </IconButtonTooltip>
+      ) : null}
     </div>
   );
 }

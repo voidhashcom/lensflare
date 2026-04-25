@@ -84,9 +84,14 @@ export function LogStreamHeader({
             />
             <TooltipPopup side="bottom">Setup guide</TooltipPopup>
           </Tooltip>
-          <SheetPopup className="w-[min(92vw,640px)] max-w-[640px] p-0" side="right">
+          <SheetPopup
+            className="w-[min(92vw,640px)] max-w-[640px] p-0"
+            showCloseButton={false}
+            side="right"
+          >
             <EmptyDatasetGuide
               datasetSlug={datasetSlug}
+              onClose={() => setIsGuideOpen(false)}
               projectSlug={projectSlug}
               serverOrigin={serverOrigin}
               variant="sheet"

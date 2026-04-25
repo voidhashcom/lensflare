@@ -1,8 +1,10 @@
 ---
 /**
  * Root document shell for every marketing page. Owns `<head>` metadata, font
- * loading, the pre-hydration theme-init script (adapted from
- * `apps/web/index.html`), and the single `<slot />` the page renders into.
+ * loading, and the single `<slot />` the page renders into. The visual
+ * language matches the Paper design — light only, Inter for prose, Geist for
+ * the small UI label on the GitHub button — so there is no theme-init script
+ * or scroll-reveal observer to bootstrap.
  */
 import "../styles/global.css";
 
@@ -12,8 +14,8 @@ interface Props {
 }
 
 const {
-  title = "Lensflare — Observability your AI agent can actually use",
-  description = "Free, open-source debugging tool that turns your app's traces, logs, and metrics into straight answers. For you when something fails. For your coding agent when it needs to know what actually broke.",
+  title = "Lensflare — Development observability stack for humans and agents",
+  description = "Free, open-source development observability stack. You and your agent can now move beyond static code to see what actually happened at runtime.",
 } = Astro.props;
 ---
 
@@ -23,8 +25,7 @@ const {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
-    <meta name="theme-color" content="#fbfbfc" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#232225" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
     <link rel="icon" type="image/png" href="/favicon-32x32.png" sizes="32x32" />
     <link rel="icon" type="image/png" href="/favicon-16x16.png" sizes="16x16" />
@@ -38,93 +39,21 @@ const {
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
 
-    <!-- Fonts: Inter for prose, JetBrains Mono for code/labels. -->
+    <!--
+      Inter for prose & headlines; Geist for the small GitHub label per the
+      Paper design. Both come from Google Fonts. We pull only the weights the
+      page actually uses to keep the font payload tight.
+    -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&family=Inter:wght@400;500&display=swap"
     />
-
-    <!--
-      Pre-hydration theme init. Runs synchronously before first paint so the
-      `.dark` class is set on `<html>` before Tailwind's dark-variant rules
-      need it. Adapted from `apps/web/index.html`; Electron-only branches
-      stripped out since this is a public web page.
-    -->
-    <script is:inline>
-      (() => {
-        try {
-          const storedTheme = window.localStorage.getItem("lensflare:theme");
-          const theme =
-            storedTheme === "light" || storedTheme === "dark" || storedTheme === "system"
-              ? storedTheme
-              : "system";
-          const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-          const isDark = theme === "dark" || (theme === "system" && prefersDark);
-          document.documentElement.classList.toggle("dark", isDark);
-        } catch {
-          // localStorage/matchMedia unavailable (e.g. some crawlers) — default
-          // to the light theme so page is readable.
-        }
-      })();
-    </script>
 
     <title>{title}</title>
   </head>
-  <body class="bg-background text-foreground antialiased">
+  <body>
     <slot />
-
-    <!--
-      Marketing-only micro-motion wiring. Two tiny inline scripts, no React
-      hydration cost:
-        1. IntersectionObserver flips `data-reveal` to `in` when elements
-           enter the viewport, triggering the CSS fade+translate.
-        2. A throttled mousemove listener on any `.hero-grid` element writes
-           --mouse-x/--mouse-y CSS vars so the pseudo-element radial follows
-           the cursor. Both respect `prefers-reduced-motion`.
-    -->
-    <script is:inline>
-      (() => {
-        const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-        // Scroll reveal.
-        const revealTargets = document.querySelectorAll("[data-reveal]");
-        if (prefersReduced || !("IntersectionObserver" in window)) {
-          revealTargets.forEach((el) => el.setAttribute("data-reveal", "in"));
-        } else {
-          const obs = new IntersectionObserver(
-            (entries) => {
-              for (const entry of entries) {
-                if (entry.isIntersecting) {
-                  entry.target.setAttribute("data-reveal", "in");
-                  obs.unobserve(entry.target);
-                }
-              }
-            },
-            { rootMargin: "0px 0px -10% 0px", threshold: 0.12 },
-          );
-          revealTargets.forEach((el) => obs.observe(el));
-        }
-
-        // Cursor-follow highlight on any .hero-grid element.
-        if (prefersReduced) return;
-        const grids = document.querySelectorAll(".hero-grid");
-        grids.forEach((grid) => {
-          let raf = 0;
-          grid.addEventListener("pointermove", (e) => {
-            if (raf) return;
-            raf = requestAnimationFrame(() => {
-              raf = 0;
-              const rect = grid.getBoundingClientRect();
-              const x = ((e.clientX - rect.left) / rect.width) * 100;
-              const y = ((e.clientY - rect.top) / rect.height) * 100;
-              grid.style.setProperty("--mouse-x", `${x}%`);
-              grid.style.setProperty("--mouse-y", `${y}%`);
-            });
-          });
-        });
-      })();
-    </script>
   </body>
 </html>
