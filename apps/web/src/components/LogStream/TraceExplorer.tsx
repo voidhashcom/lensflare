@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type MouseEvent, type KeyboardEvent } from "react";
 
+import { Button } from "~/components/ui/button";
 import { TopTabsItem, TopTabsList, TopTabsTrigger } from "~/components/ui/top-tabs";
 import { IconButtonTooltip } from "~/components/ui/tooltip";
 import { getLogTraceContext } from "~/data/logApi";
@@ -278,11 +279,11 @@ function ExplorerToolbar({
       <div className="relative flex min-w-0 flex-1 items-center">
         <SearchIcon
           aria-hidden
-          className="pointer-events-none absolute left-2.5 size-3.5 text-muted-foreground/60"
+          className="pointer-events-none absolute left-2.5 size-3.5 shrink-0 text-muted-foreground/80"
         />
         <input
           aria-label="Filter spans"
-          className="h-8 w-full min-w-0 rounded-md border border-input bg-background/60 pl-8 pr-2 font-mono text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-ring focus:outline-none"
+          className="h-8 w-full min-w-0 rounded-md bg-card pl-8 pr-2.5 text-left text-sm text-foreground/80 shadow-xs/5 outline-none placeholder:text-muted-foreground/72 focus-visible:ring-[3px] focus-visible:ring-ring/24"
           onChange={(event) => onFilterChange(event.target.value)}
           placeholder="Filter spans"
           type="search"
@@ -290,13 +291,15 @@ function ExplorerToolbar({
         />
       </div>
       <IconButtonTooltip label="Toggle span tree">
-        <button
+        <Button
           aria-label="Toggle span tree"
-          className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-input bg-background/60 text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+          className="shrink-0"
+          size="icon"
           type="button"
+          variant="ghost"
         >
           <ListTreeIcon className="size-3.5" />
-        </button>
+        </Button>
       </IconButtonTooltip>
       <div className="flex shrink-0 items-center gap-3 font-mono text-xs text-muted-foreground/80">
         <span>
@@ -311,28 +314,28 @@ function ExplorerToolbar({
         </span>
         <div className="inline-flex items-center gap-0.5">
           <IconButtonTooltip label="Select previous span">
-            <button
+            <Button
               aria-label="Select previous span"
-              className="inline-flex size-6 cursor-pointer items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
               disabled={moveUpDisabled}
               onClick={handleMoveClick("prev")}
               onMouseDown={handleMoveMouseDown("prev")}
-              type="button"
+              size="icon"
+              variant="ghost"
             >
               <ChevronUpIcon className="size-3.5" />
-            </button>
+            </Button>
           </IconButtonTooltip>
           <IconButtonTooltip label="Select next span">
-            <button
+            <Button
               aria-label="Select next span"
-              className="inline-flex size-6 cursor-pointer items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
               disabled={moveDownDisabled}
               onClick={handleMoveClick("next")}
               onMouseDown={handleMoveMouseDown("next")}
-              type="button"
+              size="icon"
+              variant="ghost"
             >
               <ChevronDownIcon className="size-3.5" />
-            </button>
+            </Button>
           </IconButtonTooltip>
         </div>
       </div>
@@ -648,14 +651,15 @@ function SpanDetailsHeader({ span }: { span: TraceSpan }) {
         {span.id}
       </span>
       <IconButtonTooltip label="Copy span id">
-        <button
+        <Button
           aria-label="Copy span id"
-          className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+          className="shrink-0"
           onClick={handleCopy}
-          type="button"
+          size="icon"
+          variant="ghost"
         >
           <CopyIcon className="size-3.5" />
-        </button>
+        </Button>
       </IconButtonTooltip>
     </div>
   );

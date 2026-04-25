@@ -3,6 +3,7 @@ import { PlusIcon, TelescopeIcon, XIcon } from "lucide-react";
 import { useEffect, useMemo, type MouseEvent } from "react";
 
 import { LogoSymbol } from "~/components/Logo";
+import { Button } from "~/components/ui/button";
 import { TopTabsItem, TopTabsList, TopTabsTrigger } from "~/components/ui/top-tabs";
 import { IconButtonTooltip } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
@@ -90,14 +91,15 @@ export function DatasetTabsTitlebar() {
           />
         ))}
         <IconButtonTooltip label="New Telemetry tab">
-          <button
+          <Button
             aria-label="New Telemetry tab"
-            className="desktop-no-drag inline-flex h-full w-9 shrink-0 cursor-pointer items-center justify-center text-muted-foreground/70 outline-none transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring"
+            className="desktop-no-drag my-auto"
             onClick={openTab}
-            type="button"
+            size="icon"
+            variant="ghost"
           >
             <PlusIcon className="size-3.5" />
-          </button>
+          </Button>
         </IconButtonTooltip>
       </div>
     </TopTabsList>
@@ -145,14 +147,15 @@ function DatasetTabButton({ active, tab, onSelect, onClose }: DatasetTabButtonPr
           <div className="h-full w-4 bg-linear-to-r from-background/0 to-background" />
           <div className="bg-background pl-2">
             <IconButtonTooltip label={`Close ${tab.title}`}>
-              <button
+              <Button
                 aria-label={`Close ${tab.title}`}
-                className="pointer-events-auto mr-2 inline-flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground opacity-70 hover:bg-accent hover:text-foreground"
+                className="pointer-events-auto mr-2"
                 onClick={() => onClose(tab.id)}
-                type="button"
+                size="icon-xs"
+                variant="ghost"
               >
                 <XIcon className="size-3" />
-              </button>
+              </Button>
             </IconButtonTooltip>
           </div>
         </div>

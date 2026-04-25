@@ -137,8 +137,8 @@ export function CodeBlock({ snippet, variables, className }: CodeBlockProps) {
             className="absolute end-2 top-2 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 data-[copied=true]:opacity-100"
             data-copied={copied}
             onClick={handleCopy}
-            size="icon-xs"
-            variant="outline"
+            size="icon"
+            variant="ghost"
           >
             {copied ? <CheckIcon /> : <CopyIcon />}
           </Button>

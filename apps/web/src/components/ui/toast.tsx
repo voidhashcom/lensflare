@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "~/lib/utils";
-import { buttonVariants } from "~/components/ui/button";
+import { Button, buttonVariants } from "~/components/ui/button";
 import { IconButtonTooltip } from "~/components/ui/tooltip";
 import { buildVisibleToastLayout, shouldHideCollapsedToastContent } from "./toast.logic";
 
@@ -67,11 +67,6 @@ function errorDescriptionClampClass(type: unknown, description: unknown): string
 
 /** Dismiss-only: circular control overlapping the card corner (iOS notification–style). */
 const toastCornerDismissClass = "absolute z-20 -top-1.5 -right-1.5";
-const toastCornerOrbClass = cn(
-  "inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full border border-border/60 bg-popover/92 text-muted-foreground shadow-sm outline-none backdrop-blur-sm",
-  "transition-[color,background-color,box-shadow] hover:bg-popover hover:text-foreground",
-  "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
-);
 
 function CopyErrorButton({ text }: { text: string }) {
   const [isCopied, setIsCopied] = useState(false);
@@ -88,14 +83,15 @@ function CopyErrorButton({ text }: { text: string }) {
 
   return (
     <IconButtonTooltip label={isCopied ? "Copied" : "Copy error"}>
-      <button
+      <Button
         aria-label={isCopied ? "Copied" : "Copy error"}
-        className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-md p-0 text-muted-foreground/80 transition-colors hover:text-muted-foreground"
+        className="shrink-0"
         onClick={copy}
-        type="button"
+        size="icon"
+        variant="ghost"
       >
         {isCopied ? <CheckIcon className="size-3 text-success" /> : <CopyIcon className="size-3" />}
-      </button>
+      </Button>
     </IconButtonTooltip>
   );
 }
@@ -544,15 +540,15 @@ function Toasts({ position }: { position: ToastPosition }) {
               />
               <div className={toastCornerDismissClass}>
                 <IconButtonTooltip label="Dismiss notification">
-                  <button
+                  <Button
                     aria-label="Dismiss notification"
-                    className={toastCornerOrbClass}
                     data-slot="toast-close"
                     onClick={() => toastManager.close(toast.id)}
-                    type="button"
+                    size="icon"
+                    variant="ghost"
                   >
                     <XIcon className="size-3" strokeWidth={2.25} />
-                  </button>
+                  </Button>
                 </IconButtonTooltip>
               </div>
               <Toast.Content
@@ -634,15 +630,15 @@ function AnchoredToasts() {
                   <>
                     <div className={toastCornerDismissClass}>
                       <IconButtonTooltip label="Dismiss notification">
-                        <button
+                        <Button
                           aria-label="Dismiss notification"
-                          className={toastCornerOrbClass}
                           data-slot="toast-close"
                           onClick={() => anchoredToastManager.close(toast.id)}
-                          type="button"
+                          size="icon"
+                          variant="ghost"
                         >
                           <XIcon className="size-3" strokeWidth={2.25} />
-                        </button>
+                        </Button>
                       </IconButtonTooltip>
                     </div>
                     <Toast.Content

@@ -13,6 +13,7 @@ import {
   shouldToastDesktopUpdateActionResult,
 } from "~/components/desktopUpdate.logic";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { Button } from "~/components/ui/button";
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import {
@@ -169,14 +170,15 @@ export function SidebarUpdatePill() {
             <Tooltip>
               <TooltipTrigger
                 render={
-                  <button
+                  <Button
                     aria-label="Dismiss update"
-                    className="relative mr-1 inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-primary/60 transition-colors hover:text-primary"
+                    className="relative mr-1"
                     onClick={() => setDismissed(true)}
-                    type="button"
+                    size="icon"
+                    variant="ghost"
                   >
                     <XIcon className="size-3.5" />
-                  </button>
+                  </Button>
                 }
               />
               <TooltipPopup side="top">Dismiss until next launch</TooltipPopup>

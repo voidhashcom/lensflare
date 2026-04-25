@@ -92,12 +92,11 @@ export function SettingResetButton({ label, onClick }: { label: string; onClick:
     <IconButtonTooltip label="Reset to default">
       <Button
         aria-label={`Reset ${label} to default`}
-        className="size-5 rounded-sm p-0 text-muted-foreground hover:text-foreground"
         onClick={(event) => {
           event.stopPropagation();
           onClick();
         }}
-        size="icon-xs"
+        size="icon"
         variant="ghost"
       >
         <Undo2Icon className="size-3" />

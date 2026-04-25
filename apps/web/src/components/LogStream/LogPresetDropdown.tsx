@@ -318,12 +318,12 @@ function PresetApplyRow({ preset, onApply, onEdit }: PresetApplyRowProps) {
             render={
               <Button
                 aria-label={`Edit ${preset.name} preset`}
-                className="absolute right-1 top-1/2 size-6 -translate-y-1/2 rounded-sm opacity-0 group-hover/preset:opacity-100 focus-visible:opacity-100"
+                className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/preset:opacity-100 focus-visible:opacity-100"
                 onClick={(event) => {
                   event.stopPropagation();
                   onEdit();
                 }}
-                size="icon-xs"
+                size="icon"
                 variant="ghost"
               >
                 <CogIcon />

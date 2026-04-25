@@ -1,6 +1,7 @@
 import { CircleSlashIcon, XIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { Button } from "~/components/ui/button";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { Skeleton } from "~/components/ui/skeleton";
 import { TopTabsItem, TopTabsList, TopTabsTrigger } from "~/components/ui/top-tabs";
@@ -275,14 +276,15 @@ function LogDetailsHeader({
         {title}
       </span>
       <IconButtonTooltip label="Close log details">
-        <button
+        <Button
           aria-label="Close log details"
-          className="desktop-no-drag inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+          className="desktop-no-drag shrink-0"
           onClick={onClose}
-          type="button"
+          size="icon"
+          variant="ghost"
         >
           <XIcon className="size-3.5" />
-        </button>
+        </Button>
       </IconButtonTooltip>
     </div>
   );

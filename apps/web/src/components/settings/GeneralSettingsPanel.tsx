@@ -158,7 +158,7 @@ export function GeneralSettingsPanel() {
               aria-label="Refresh dataset storage"
               disabled={storageLoading}
               onClick={() => void refreshStorageStats()}
-              size="icon-xs"
+              size="icon"
               variant="ghost"
             >
               <RefreshCwIcon className={storageLoading ? "size-3 animate-spin" : "size-3"} />

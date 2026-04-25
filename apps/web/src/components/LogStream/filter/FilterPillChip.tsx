@@ -1,5 +1,6 @@
 import { XIcon } from "lucide-react";
 
+import { Button } from "~/components/ui/button";
 import {
   Select,
   SelectButton,
@@ -101,15 +102,16 @@ export function FilterPillChip({
         {pill.valueWasQuoted ? `"${pill.rawValue}"` : pill.rawValue}
       </span>
       <IconButtonTooltip label={`Remove filter ${fieldLabel}`}>
-        <button
+        <Button
           aria-label={`Remove filter ${fieldLabel}`}
-          className="ml-0.5 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground/80 hover:bg-destructive/20 hover:text-destructive"
+          className="ml-0.5 shrink-0"
           onClick={onRemove}
           onMouseDown={(event) => event.preventDefault()}
-          type="button"
+          size="icon"
+          variant="ghost"
         >
           <XIcon className="size-3.5" />
-        </button>
+        </Button>
       </IconButtonTooltip>
     </span>
   );

@@ -6,6 +6,7 @@ import { PlusIcon, SettingsIcon } from "lucide-react";
 import { datasetsCollection } from "~/collections/datasetsCollection";
 import { projectsCollection } from "~/collections/projectsCollection";
 import { SettingsSidebarNav } from "~/components/settings/SettingsSidebarNav";
+import { Button } from "~/components/ui/button";
 import {
   SidebarContent,
   SidebarFooter,
@@ -101,15 +102,16 @@ export function AppSidebar() {
                   Projects
                 </span>
                 <IconButtonTooltip label="New project" side="right">
-                  <button
+                  <Button
                     aria-label="New project"
-                    className="desktop-no-drag inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+                    className="desktop-no-drag"
                     disabled={projectDialog.submitting}
                     onClick={() => projectDialog.openCreate()}
-                    type="button"
+                    size="icon"
+                    variant="ghost"
                   >
                     <PlusIcon className="size-3.5" />
-                  </button>
+                  </Button>
                 </IconButtonTooltip>
               </div>
 

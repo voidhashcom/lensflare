@@ -180,7 +180,7 @@ export function FilterRow({
         <Button
           aria-label="Remove filter"
           onClick={onRemove}
-          size="icon-sm"
+          size="icon"
           variant="ghost"
         >
           <TrashIcon />

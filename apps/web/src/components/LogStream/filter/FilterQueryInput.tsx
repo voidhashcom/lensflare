@@ -15,6 +15,7 @@ import {
   CommandFooter,
   CommandPanel,
 } from "~/components/ui/command";
+import { Button } from "~/components/ui/button";
 import { Kbd, KbdGroup } from "~/components/ui/kbd";
 import { IconButtonTooltip } from "~/components/ui/tooltip";
 import type { TelemetryLogField } from "~/data/logApi";
@@ -447,18 +448,19 @@ export function FilterQueryInput({
         </button>
         {hasAppliedContent ? (
           <IconButtonTooltip label="Clear filters">
-            <button
+            <Button
               aria-label="Clear filters"
-              className="absolute right-1.5 top-1/2 inline-flex size-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-muted-foreground/80 hover:bg-accent/60 hover:text-foreground"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2"
               onClick={(event) => {
                 event.stopPropagation();
                 handleClearApplied();
               }}
               onMouseDown={(event) => event.preventDefault()}
-              type="button"
+              size="icon"
+              variant="ghost"
             >
               <XIcon className="size-3.5" />
-            </button>
+            </Button>
           </IconButtonTooltip>
         ) : null}
       </div>
@@ -487,15 +489,16 @@ export function FilterQueryInput({
             </div>
             {hasDraftContent ? (
               <IconButtonTooltip label="Clear filters">
-                <button
+                <Button
                   aria-label="Clear filters"
-                  className="mt-1 inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground/80 hover:bg-accent/60 hover:text-foreground"
+                  className="mt-1 shrink-0"
                   onClick={handleClearDraft}
                   onMouseDown={(event) => event.preventDefault()}
-                  type="button"
+                  size="icon"
+                  variant="ghost"
                 >
                   <XIcon className="size-4" />
-                </button>
+                </Button>
               </IconButtonTooltip>
             ) : null}
           </div>
