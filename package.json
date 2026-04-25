@@ -22,7 +22,7 @@
     "check": "vp check",
     "typecheck": "vp run -r typecheck",
     "test": "vp test --dir scripts --passWithNoTests && vp run -r test",
-    "clean": "vp run -r clean && rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/*/dist apps/*/artifacts"
+    "clean": "vp run -r clean && rm -rf node_modules apps/*/node_modules internal/*/node_modules packages/*/node_modules apps/*/dist apps/*/artifacts"
   },
   "devDependencies": {
     "@effect/language-service": "^0.85.1",

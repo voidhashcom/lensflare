@@ -69,7 +69,7 @@ describe("logStreamStore", () => {
     setDatasetStreamFilter({
       projectId: "p",
       datasetId: "d",
-      source: "level:error ",
+      source: 'level = "error" ',
       filter: Filter.cmp(["level"], "eq", Filter.stringValue("error")),
     });
     fakes.emit("p", "d", logRecord("log-info", "info", "info"));
@@ -88,7 +88,7 @@ describe("logStreamStore", () => {
     setDatasetStreamFilter({
       projectId: "p",
       datasetId: "d",
-      source: "level:error ",
+      source: 'level = "error" ',
       filter: Filter.cmp(["level"], "eq", Filter.stringValue("error")),
     });
 
@@ -281,7 +281,7 @@ describe("logStreamStore", () => {
     setDatasetStreamFilter({
       projectId: "p",
       datasetId: "d",
-      source: "level:error ",
+      source: 'level = "error" ',
       filter: Filter.cmp(["level"], "eq", Filter.stringValue("error")),
     });
 

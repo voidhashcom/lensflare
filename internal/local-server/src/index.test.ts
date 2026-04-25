@@ -79,6 +79,60 @@ function delay(ms: number): Promise<void> {
 }
 
 describe("startLocalServer", () => {
+  it("serves MCP over the same HTTP server", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "lensflare-local-server-"));
+    const port = await getAvailablePort();
+
+    const server = await startLocalServer({
+      mode: "server",
+      host: "127.0.0.1",
+      port,
+      sqliteDatabaseFile: join(directory, "lensflare.sqlite"),
+      duckdbDatabaseFile: join(directory, "lensflare.duckdb"),
+      otel: otelDisabled,
+    });
+
+    try {
+      const initializeResponse = await fetch(`${server.origin}/mcp`, {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+        },
+        body:
+          '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"lensflare-test","version":"0.1.0"}}}',
+      });
+
+      expect(initializeResponse.status).toBe(200);
+      const sessionId = initializeResponse.headers.get("mcp-session-id");
+      expect(sessionId).toEqual(expect.any(String));
+
+      const toolsResponse = await fetch(`${server.origin}/mcp`, {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+          "mcp-session-id": sessionId ?? "",
+        },
+        body: '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}',
+      });
+
+      expect(toolsResponse.status).toBe(200);
+      const toolsBody = (await toolsResponse.json()) as {
+        readonly result?: {
+          readonly tools?: ReadonlyArray<{ readonly name: string }>;
+        };
+      };
+      const toolNames = toolsBody.result?.tools?.map((tool) => tool.name) ?? [];
+      expect(toolNames).toEqual(["listDatasets", "queryTelemetry", "getTrace"]);
+    } finally {
+      await Promise.all([
+        server.stop(),
+        rm(directory, { recursive: true, force: true }),
+      ]);
+    }
+  });
+
   it("serves catalog operations over Effect RPC websockets", async () => {
     const directory = await mkdtemp(join(tmpdir(), "lensflare-local-server-"));
     const port = await getAvailablePort();
@@ -297,33 +351,8 @@ describe("startLocalServer", () => {
                 headers: {
                   "content-type": "application/json",
                 },
-                body: JSON.stringify({
-                  resourceLogs: [
-                    {
-                      resource: {
-                        attributes: [
-                          {
-                            key: "service.name",
-                            value: { stringValue: "api" },
-                          },
-                        ],
-                      },
-                      scopeLogs: [
-                        {
-                          scope: { name: "tests", version: "1.0.0" },
-                          logRecords: [
-                            {
-                              timeUnixNano: "1716201600000000000",
-                              severityNumber: 9,
-                              severityText: "INFO",
-                              body: { stringValue: "hello realtime" },
-                            },
-                          ],
-                        },
-                      ],
-                    },
-                  ],
-                }),
+                body:
+                  '{"resourceLogs":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"api"}}]},"scopeLogs":[{"scope":{"name":"tests","version":"1.0.0"},"logRecords":[{"timeUnixNano":"1716201600000000000","severityNumber":9,"severityText":"INFO","body":{"stringValue":"hello realtime"}}]}]}]}',
               }),
             );
             expect(response.status).toBe(200);

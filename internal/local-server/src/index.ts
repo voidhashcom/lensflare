@@ -10,3 +10,4 @@ export {
   type StartLocalServerOptions,
   startLocalServer,
 } from "./server.ts";
+export { LensflareMcpToolsLayer } from "./mcp/server.ts";

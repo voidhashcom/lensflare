@@ -22,6 +22,7 @@ import { BatchLogRecordProcessor } from "@opentelemetry/sdk-logs";
 import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { HttpRouter } from "effect/unstable/http";
+import { McpServer } from "effect/unstable/ai";
 import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
@@ -48,6 +49,7 @@ import { datasetRpcLayer } from "./rpc/datasetRpc.ts";
 import { projectRpcLayer } from "./rpc/projectRpc.ts";
 import { telemetryLogRpcLayer } from "./rpc/telemetryLogRpc.ts";
 import { makeHttpRoutesLayer } from "./http/routes.ts";
+import { LensflareMcpToolsLayer } from "./mcp/server.ts";
 import { DatasetService } from "./services/datasetService.ts";
 import { ProjectService } from "./services/projectService.ts";
 
@@ -347,6 +349,15 @@ export async function startLocalServer(
       duckdbDatabaseFile,
     }),
     ingestProvidersLayer,
+    LensflareMcpToolsLayer.pipe(
+      Layer.provide(
+        McpServer.layerHttp({
+          name: "lensflare",
+          version: APP_VERSION,
+          path: "/mcp",
+        }),
+      ),
+    ),
     RpcServer.layerHttp({
       group: rpcGroup,
       path: "/rpc",

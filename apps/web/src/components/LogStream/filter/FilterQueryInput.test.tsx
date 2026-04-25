@@ -73,7 +73,7 @@ describe("FilterQueryInput — initial render", () => {
   });
 
   it("renders the controlled applied source in the trigger", () => {
-    const html = render({ appliedSource: "level:error " });
+    const html = render({ appliedSource: 'level = "error" ' });
 
     // The applied filter is rendered as three adjacent pill spans (field /
     // operator / value) so the trigger can colour the parts independently.
@@ -81,19 +81,19 @@ describe("FilterQueryInput — initial render", () => {
     expect(html).toContain("filter-query-pill--operator");
     expect(html).toContain("filter-query-pill--value");
     expect(html).toContain(">level<");
-    expect(html).toContain(">:<");
-    expect(html).toContain(">error<");
+    expect(html).toContain(">=<");
+    expect(html).toContain("&quot;error&quot;");
     expect(html).toContain('aria-label="Clear filters"');
   });
 
   it("renders a final applied filter as a pill without requiring trailing whitespace", () => {
-    const html = render({ appliedSource: "level:error message:timeout" });
+    const html = render({ appliedSource: 'level = "error" message = "timeout"' });
 
     expect(html).toContain("filter-query-pill--field");
     expect(html).toContain(">level<");
-    expect(html).toContain(">error<");
+    expect(html).toContain("&quot;error&quot;");
     expect(html).toContain(">message<");
-    expect(html).toContain(">timeout<");
+    expect(html).toContain("&quot;timeout&quot;");
     expect(html).not.toContain("text-muted-foreground italic");
   });
 });

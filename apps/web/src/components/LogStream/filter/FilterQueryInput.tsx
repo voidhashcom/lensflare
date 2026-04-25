@@ -82,12 +82,21 @@ const FilterPillDecorations = Extension.create<FilterPillDecorationOptions>({
               // pill visually (shared top/bottom border + background, outer
               // border + rounded corners only on the first/last part).
               const fieldText = pill.fieldPath.join(".");
-              const fieldEnd = pill.start + fieldText.length;
-              const operatorEnd = fieldEnd + pill.operatorToken.length;
+              const fieldStart = pill.fieldSpan?.start ?? pill.start;
+              const fieldEnd = pill.fieldSpan?.end ?? pill.start + fieldText.length;
+              const operatorStart = pill.operatorSpan?.start ?? fieldEnd;
+              const operatorEnd =
+                pill.operatorSpan?.end ?? operatorStart + pill.operatorToken.length;
+              const valueStart = pill.valueSpan?.start ?? operatorEnd;
+              const valueEnd = pill.valueSpan?.end ?? pill.end;
               const hasValue = !isValuelessOperator(pill.operator);
+              const fieldDecorationEnd = operatorStart > fieldEnd ? operatorStart : fieldEnd;
+              const operatorDecorationEnd = hasValue && valueStart > operatorEnd
+                ? valueStart
+                : operatorEnd;
 
               decorations.push(
-                Decoration.inline(pill.start + 1, fieldEnd + 1, {
+                Decoration.inline(fieldStart + 1, fieldDecorationEnd + 1, {
                   class: cn(
                     "filter-query-pill",
                     "filter-query-pill--field",
@@ -98,7 +107,7 @@ const FilterPillDecorations = Extension.create<FilterPillDecorationOptions>({
                 }),
               );
               decorations.push(
-                Decoration.inline(fieldEnd + 1, operatorEnd + 1, {
+                Decoration.inline(operatorStart + 1, operatorDecorationEnd + 1, {
                   class: cn(
                     "filter-query-pill",
                     "filter-query-pill--operator",
@@ -110,7 +119,7 @@ const FilterPillDecorations = Extension.create<FilterPillDecorationOptions>({
               );
               if (hasValue) {
                 decorations.push(
-                  Decoration.inline(operatorEnd + 1, pill.end + 1, {
+                  Decoration.inline(valueStart + 1, valueEnd + 1, {
                     class: cn(
                       "filter-query-pill",
                       "filter-query-pill--value",
@@ -523,7 +532,7 @@ export function FilterQueryInput({
                   className="pointer-events-none absolute left-0 top-1.5 text-muted-foreground/72 text-sm leading-6"
                   htmlFor={editorId}
                 >
-                  Filter telemetry — try kind:span status:error
+                  Filter telemetry — try kind = "span" status = "error"
                 </label>
               ) : null}
               <EditorContent

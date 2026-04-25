@@ -42,6 +42,9 @@ function isBackendRoutedPath(pathname: string): boolean {
   if (pathname === "/rpc" || pathname.startsWith("/rpc/")) {
     return true;
   }
+  if (pathname === "/mcp" || pathname.startsWith("/mcp/")) {
+    return true;
+  }
   if (pathname === "/ingest" || pathname.startsWith("/ingest/")) {
     return true;
   }

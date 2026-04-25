@@ -8,9 +8,10 @@ export const releasePackageFiles = [
   "apps/desktop/package.json",
   "apps/server/package.json",
   "apps/web/package.json",
-  "packages/contracts/package.json",
-  "packages/local-server/package.json",
-  "packages/shared/package.json",
+  "internal/contracts/package.json",
+  "internal/local-server/package.json",
+  "internal/shared/package.json",
+  "packages/effect/package.json",
 ] as const;
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -32,7 +33,7 @@ export function updateReleasePackageVersions(
     }
   }
 
-  const browserPath = join(rootDir, "packages/shared/src/browser.ts");
+  const browserPath = join(rootDir, "internal/shared/src/browser.ts");
   const browserSource = readFileSync(browserPath, "utf8");
   const nextBrowserSource = browserSource.replace(
     /export const APP_VERSION = "([^"]+)";/,

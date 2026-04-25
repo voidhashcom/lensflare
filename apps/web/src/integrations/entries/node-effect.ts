@@ -1,10 +1,9 @@
 import type { Integration } from "../types";
 
 /**
- * Effect-ts via the `@effect/opentelemetry` NodeSdk layer. We dogfood this
- * pattern inside Lensflare itself — the reference implementation lives at
- * `packages/local-server/src/server.ts`, where the local server wires its
- * own tracer and log record processor through the same layer.
+ * Effect-ts via the `@lensflare/effect` SDK. The package is a tiny wrapper
+ * over Effect's built-in OTLP tracer/logger layers and only enables itself in
+ * development by default.
  *
  * The snippet intentionally mirrors our internal layer as closely as
  * possible so that a user who copies it into a fresh service ends up with
@@ -14,58 +13,37 @@ const nodeEffect: Integration = {
   id: "node-effect",
   language: "effect",
   library: {
-    id: "effect-opentelemetry",
-    label: "Effect + OpenTelemetry",
-    homepageUrl: "https://effect.website/docs/platform/opentelemetry",
+    id: "lensflare-effect",
+    label: "Lensflare Effect SDK",
+    homepageUrl: "https://github.com/voidhashcom/lensflare",
   },
   protocol: "otlp-http",
   signals: ["logs", "traces"],
-  summary:
-    "Wire Effect's built-in telemetry into OTLP HTTP using the `@effect/opentelemetry` NodeSdk layer. This is the exact pattern Lensflare uses internally.",
+  summary: "Wire Effect's built-in telemetry into Lensflare with one development-only layer.",
   steps: [
     {
-      title: "Install the Effect OpenTelemetry bridge",
-      body: "The `@effect/opentelemetry` package adapts Effect's tracer/logger to the OpenTelemetry SDK. The two OTLP exporter packages ship the batches over HTTP.",
+      title: "Install the Lensflare Effect SDK",
+      body: "The SDK composes Effect's built-in OTLP tracer and logger layers, so you do not need to wire exporters yourself.",
       snippet: {
         lang: "bash",
-        code: "pnpm add effect @effect/opentelemetry \\\n  @opentelemetry/exporter-logs-otlp-http \\\n  @opentelemetry/exporter-trace-otlp-http \\\n  @opentelemetry/sdk-logs \\\n  @opentelemetry/sdk-trace-base",
+        code: "pnpm add effect @lensflare/effect",
       },
     },
     {
-      title: "Build a `TracingLive` layer",
-      body: "`NodeSdk.layer` returns an Effect layer you can compose into your main program. The resource identifies the service; the batch processors handle the OTLP export.",
+      title: "Provide `Lensflare.layer`",
+      body: "`Lensflare.layer` returns an Effect layer you can compose into your main program. It sends logs and traces to your local Lensflare server in development and becomes empty in production.",
       snippet: {
         lang: "ts",
         filename: "tracing.ts",
-        code: `import { NodeSdk } from "@effect/opentelemetry";
-import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
-import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
-import { BatchLogRecordProcessor } from "@opentelemetry/sdk-logs";
-import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
+        code: `import { Lensflare } from "@lensflare/effect";
 
-export const TracingLive = NodeSdk.layer(() => ({
-  resource: {
-    serviceName: "my-service",
-    serviceVersion: "0.1.0",
-  },
-  logRecordProcessor: new BatchLogRecordProcessor(
-    new OTLPLogExporter({
-      url: "{{serverOrigin}}/ingest/otlp/v1/logs/{{projectSlug}}/{{datasetSlug}}",
-    }),
-    { scheduledDelayMillis: 1_000, maxExportBatchSize: 100 },
-  ),
-  spanProcessor: new BatchSpanProcessor(
-    new OTLPTraceExporter({
-      url: "{{serverOrigin}}/ingest/otlp/v1/traces/{{projectSlug}}/{{datasetSlug}}",
-    }),
-    { scheduledDelayMillis: 1_000, maxExportBatchSize: 100 },
-  ),
-  shutdownTimeout: "250 millis",
-}));
+export const ObservabilityLive = Lensflare.layer("{{datasetSlug}}", {
+  serviceName: "my-service",
+  serviceVersion: "0.1.0",
+});
 `,
       },
-      note:
-        "Reference implementation lives at `packages/local-server/src/server.ts` in this repo — Lensflare's own local server uses the exact same layer shape.",
+      note: "Use `LENSFLARE_ENABLED=1` to force it on or `LENSFLARE_ENABLED=0` to force it off.",
     },
     {
       title: "Provide the layer to your program",
@@ -73,7 +51,7 @@ export const TracingLive = NodeSdk.layer(() => ({
       snippet: {
         lang: "ts",
         code: `import { Effect, Layer } from "effect";
-import { TracingLive } from "./tracing";
+import { ObservabilityLive } from "./tracing";
 
 const program = Effect.gen(function* () {
   yield* Effect.log("Service starting");
@@ -86,7 +64,7 @@ const program = Effect.gen(function* () {
   );
 });
 
-Effect.runPromise(program.pipe(Effect.provide(TracingLive)));
+Effect.runPromise(program.pipe(Effect.provide(ObservabilityLive)));
 `,
       },
     },

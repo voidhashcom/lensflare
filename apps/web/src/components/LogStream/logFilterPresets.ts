@@ -21,7 +21,7 @@ export const DEFAULT_LOG_FILTER_PRESETS: ReadonlyArray<LogFilterPreset> = [
   {
     id: "default:logs",
     name: "Logs",
-    source: "kind:log",
+    source: 'kind = "log"',
     filter: Filter.cmp(["kind"], "eq", Filter.stringValue("log")),
     icon: "logs",
     readonly: true,
@@ -29,7 +29,7 @@ export const DEFAULT_LOG_FILTER_PRESETS: ReadonlyArray<LogFilterPreset> = [
   {
     id: "default:traces",
     name: "Traces",
-    source: "kind:span parentSpanId:notExists:",
+    source: 'kind = "span" parentSpanId missing',
     filter: Filter.and([
       Filter.cmp(["kind"], "eq", Filter.stringValue("span")),
       Filter.cmp(["parentSpanId"], "notExists"),
@@ -40,7 +40,7 @@ export const DEFAULT_LOG_FILTER_PRESETS: ReadonlyArray<LogFilterPreset> = [
   {
     id: "default:error-spans",
     name: "Error spans",
-    source: "kind:span status:error",
+    source: 'kind = "span" status = "error"',
     filter: Filter.and([
       Filter.cmp(["kind"], "eq", Filter.stringValue("span")),
       Filter.cmp(["status"], "eq", Filter.stringValue("error")),

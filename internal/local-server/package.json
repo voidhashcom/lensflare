@@ -16,6 +16,7 @@
     "@effect/opentelemetry": "catalog:",
     "@effect/platform-node": "catalog:",
     "@lensflare/contracts": "workspace:*",
+    "@lensflare/query": "workspace:*",
     "@lensflare/shared": "workspace:*",
     "@opentelemetry/exporter-logs-otlp-http": "^0.215.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.215.0",
