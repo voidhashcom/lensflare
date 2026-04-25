@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Sheet, SheetPopup } from "~/components/ui/sheet";
 import { readBackendTarget } from "~/data/backendTarget";
@@ -15,6 +15,7 @@ import {
   loadOlderDatasetTelemetry,
   selectDatasetTelemetryEntry,
   useDatasetStreamSnapshot,
+  type DatasetStreamMetadata,
 } from "./logStreamStore";
 import { TraceExplorer } from "./TraceExplorer";
 import type { SourceIconKind, TelemetryEntry } from "./types";
@@ -69,7 +70,6 @@ export function LogStreamView({
   datasetSlug,
 }: LogStreamViewProps) {
   const tabsByDataset = useDatasetTabsSnapshot();
-  const tableRef = useRef<LogTableHandle | null>(null);
   const shouldUseDetailsSheet = useMediaQuery(LOG_DETAILS_SHEET_MEDIA_QUERY);
   const hasDesktopTitleTabs =
     typeof document !== "undefined" &&
@@ -89,7 +89,6 @@ export function LogStreamView({
     }),
     [datasetIcon, datasetName, datasetSlug, projectSlug],
   );
-  const stream = useDatasetStreamSnapshot(projectId, datasetId, streamMetadata);
 
   // `serverOrigin` is pinned for the lifetime of the view. Resolving it
   // on every render would read `window.location` on every paint — the
@@ -101,14 +100,6 @@ export function LogStreamView({
     // the integration snippets (they never include a trailing slash).
     return target.httpBaseUrl.replace(/\/$/, "");
   }, []);
-
-  const closeDetails = useCallback(() => {
-    selectDatasetTelemetryEntry(projectId, datasetId, null);
-  }, [datasetId, projectId]);
-
-  const handleLoadOlder = useCallback(async () => {
-    await loadOlderDatasetTelemetry(projectId, datasetId);
-  }, [datasetId, projectId]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-background/40">
@@ -128,17 +119,15 @@ export function LogStreamView({
               tab={tab}
             />
           ) : (
-            <LiveTabPanel
+            <TelemetryTabPanel
               active={tab.id === tabState.activeTabId}
-              closeDetails={closeDetails}
               datasetId={datasetId}
-              handleLoadOlder={handleLoadOlder}
               key={tab.id}
               projectId={projectId}
               serverOrigin={serverOrigin}
               shouldUseDetailsSheet={shouldUseDetailsSheet}
-              stream={stream}
-              tableRef={tableRef}
+              streamMetadata={streamMetadata}
+              tab={tab}
             />
           ),
         )}
@@ -147,32 +136,30 @@ export function LogStreamView({
   );
 }
 
-interface LiveTabPanelProps {
+interface TelemetryTabPanelProps {
   active: boolean;
-  closeDetails: () => void;
   datasetId: string;
-  handleLoadOlder: () => void;
   projectId: string;
   serverOrigin: string;
   shouldUseDetailsSheet: boolean;
-  stream: ReturnType<typeof useDatasetStreamSnapshot>;
-  tableRef: RefObject<LogTableHandle | null>;
+  streamMetadata: DatasetStreamMetadata;
+  tab: Extract<DatasetTab, { kind: "telemetry" }>;
 }
 
-function LiveTabPanel({
+function TelemetryTabPanel({
   active,
-  closeDetails,
   datasetId,
-  handleLoadOlder,
   projectId,
   serverOrigin,
   shouldUseDetailsSheet,
-  stream,
-  tableRef,
-}: LiveTabPanelProps) {
-  // Keep the live tab mounted so table, details state, and in-flight effects
+  streamMetadata,
+  tab,
+}: TelemetryTabPanelProps) {
+  // Keep telemetry tabs mounted so table, details state, and in-flight effects
   // survive tab switches. React Activity preserves state but tears down effects
   // while hidden, which would replay trace-loading skeletons when returning.
+  const tableRef = useRef<LogTableHandle | null>(null);
+  const stream = useDatasetStreamSnapshot(projectId, datasetId, tab.id, streamMetadata);
   const sheetCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [closingSheetLog, setClosingSheetLog] = useState<TelemetryEntry | null>(null);
   const [isSheetClosing, setIsSheetClosing] = useState(false);
@@ -180,6 +167,13 @@ function LiveTabPanel({
   const showSheetDetails =
     active && stream.selectedLog !== null && shouldUseDetailsSheet && !isSheetClosing;
   const sheetLog = stream.selectedLog ?? closingSheetLog;
+  const closeDetails = useCallback(() => {
+    selectDatasetTelemetryEntry(projectId, datasetId, tab.id, null);
+  }, [datasetId, projectId, tab.id]);
+
+  const handleLoadOlder = useCallback(async () => {
+    await loadOlderDatasetTelemetry(projectId, datasetId, tab.id);
+  }, [datasetId, projectId, tab.id]);
 
   // "First event" latch. Once we've observed a single log we never
   // re-render the overlay for this mount — the user can always get back
@@ -273,7 +267,7 @@ function LiveTabPanel({
   return (
     <div
       className="flex min-h-0 min-w-0 flex-1 flex-col"
-      data-dataset-tab={`${datasetId}:live`}
+      data-dataset-tab={`${datasetId}:${tab.id}`}
       hidden={!active}
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -288,6 +282,7 @@ function LiveTabPanel({
               projectId={projectId}
               projectSlug={stream.metadata.projectSlug}
               serverOrigin={serverOrigin}
+              viewId={tab.id}
             />
             {stream.errorMessage ? (
               <div className="border-b border-rose-500/20 bg-rose-500/8 px-4 py-2 font-mono text-[11px] text-rose-600 dark:text-rose-200">
@@ -299,7 +294,9 @@ function LiveTabPanel({
               isLoadingPrevious={stream.isLoadingOlder}
               logs={stream.logs}
               onLoadPrevious={handleLoadOlder}
-              onSelectLog={(logId) => selectDatasetTelemetryEntry(projectId, datasetId, logId)}
+              onSelectLog={(logId) =>
+                selectDatasetTelemetryEntry(projectId, datasetId, tab.id, logId)
+              }
               ref={tableRef}
               selectedLogId={stream.selectedLogId}
               waiting={stream.errorMessage === null || stream.isInitialLoading}

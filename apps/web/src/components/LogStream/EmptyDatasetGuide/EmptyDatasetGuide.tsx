@@ -15,7 +15,7 @@ interface EmptyDatasetGuideProps {
   datasetSlug: string;
   serverOrigin: string;
   /**
-   * When the guide is rendered as an overlay on the live tab we want
+   * When the guide is rendered as an overlay on a telemetry tab we want
    * extra negative space at the top so it doesn't look cramped against
    * the filter bar. Sheets don't need that — their own padding applies.
    */
@@ -35,7 +35,7 @@ const PROTOCOL_LABEL: Record<string, string> = {
  * a specific integration's steps, with slugs substituted live into every
  * snippet.
  *
- * Same component is used both as the in-place overlay on `LiveTabPanel`
+ * Same component is used both as the in-place overlay on `TelemetryTabPanel`
  * (when the dataset has never received a log) and inside the
  * `LogStreamHeader` sheet (re-entry button for users who have data
  * flowing but want the snippets back).

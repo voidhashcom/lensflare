@@ -1,12 +1,13 @@
 import type { FilterNode } from "@lensflare/contracts";
 
-import { setDatasetStreamFilter } from "../logStreamStore";
+import { setDatasetStreamFilter, type DatasetStreamSnapshot } from "../logStreamStore";
 import { FilterQueryInput } from "./FilterQueryInput";
 import { useFieldCatalog } from "./hooks/useFieldCatalog";
 
 interface QueryBuilderProps {
   projectId: string;
   datasetId: string;
+  viewId: DatasetStreamSnapshot["viewId"];
   appliedSource: string;
 }
 
@@ -26,6 +27,7 @@ interface QueryBuilderProps {
 export function QueryBuilder({
   projectId,
   datasetId,
+  viewId,
   appliedSource,
 }: QueryBuilderProps) {
   const { fields } = useFieldCatalog(projectId, datasetId);
@@ -36,7 +38,7 @@ export function QueryBuilder({
       datasetId={datasetId}
       fields={fields}
       onAppliedSourceChange={(source: string, filter: FilterNode | null) => {
-        setDatasetStreamFilter({ projectId, datasetId, source, filter });
+        setDatasetStreamFilter({ projectId, datasetId, viewId, source, filter });
       }}
       projectId={projectId}
     />

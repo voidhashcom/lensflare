@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 
 import {
   closeDatasetTab as closeDatasetTabReducer,
+  openTelemetryTab as openTelemetryTabReducer,
   openTraceTab as openTraceTabReducer,
   setActiveDatasetTab as setActiveDatasetTabReducer,
   type DatasetTabId,
@@ -63,8 +64,14 @@ export function setActiveDatasetTab(datasetId: string, tabId: DatasetTabId): voi
   commit(setActiveDatasetTabReducer(snapshot, datasetId, tabId));
 }
 
-export function closeDatasetTab(datasetId: string, tabId: DatasetTabId): void {
-  commit(closeDatasetTabReducer(snapshot, datasetId, tabId));
+export function openTelemetryTab(datasetId: string): void {
+  commit(openTelemetryTabReducer(snapshot, datasetId));
+}
+
+export function closeDatasetTab(datasetId: string, tabId: DatasetTabId): { closedLast: boolean } {
+  const result = closeDatasetTabReducer(snapshot, datasetId, tabId);
+  commit(result.tabsByDataset);
+  return { closedLast: result.closedLast };
 }
 
 export function openTraceTab(datasetId: string, input: OpenTraceTabInput): void {

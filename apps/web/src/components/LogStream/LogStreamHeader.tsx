@@ -13,6 +13,7 @@ import type { DatasetStreamSnapshot } from "./logStreamStore";
 interface LogStreamHeaderProps {
   projectId: string;
   datasetId: string;
+  viewId: DatasetStreamSnapshot["viewId"];
   datasetName: string;
   filterSource: string;
   filter: DatasetStreamSnapshot["filter"];
@@ -49,6 +50,7 @@ export function LogStreamHeader({
   filterSource,
   projectSlug,
   serverOrigin,
+  viewId,
 }: LogStreamHeaderProps) {
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const canOpenGuide = projectSlug !== undefined && datasetSlug !== undefined;
@@ -60,8 +62,14 @@ export function LogStreamHeader({
         filter={filter}
         filterSource={filterSource}
         projectId={projectId}
+        viewId={viewId}
       />
-      <QueryBuilder appliedSource={filterSource} datasetId={datasetId} projectId={projectId} />
+      <QueryBuilder
+        appliedSource={filterSource}
+        datasetId={datasetId}
+        projectId={projectId}
+        viewId={viewId}
+      />
       {canOpenGuide ? (
         <Sheet onOpenChange={setIsGuideOpen} open={isGuideOpen}>
           <Tooltip>

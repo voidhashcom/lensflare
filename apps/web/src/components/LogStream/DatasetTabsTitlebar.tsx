@@ -1,6 +1,6 @@
-import { useParams } from "@tanstack/react-router";
-import { TelescopeIcon, XIcon } from "lucide-react";
-import { useMemo, type MouseEvent } from "react";
+import { useNavigate, useParams } from "@tanstack/react-router";
+import { PlusIcon, TelescopeIcon, XIcon } from "lucide-react";
+import { useEffect, useMemo, type MouseEvent } from "react";
 
 import { LogoSymbol } from "~/components/Logo";
 import { TopTabsItem, TopTabsList, TopTabsTrigger } from "~/components/ui/top-tabs";
@@ -8,17 +8,22 @@ import { IconButtonTooltip } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
 
 import { getDatasetTabState, type DatasetTab, type DatasetTabId } from "./datasetTabs";
-import { closeDatasetTab, setActiveDatasetTab, useDatasetTabsSnapshot } from "./datasetTabsStore";
+import {
+  closeDatasetTab,
+  openTelemetryTab,
+  setActiveDatasetTab,
+  useDatasetTabsSnapshot,
+} from "./datasetTabsStore";
 
 const ROUTE_PARAMS_OPTIONS = { strict: false } as const;
 
 /**
- * Dataset-scoped tab strip rendered in the desktop titlebar. For now every
- * dataset starts with a single unclosable Live tab; the state shape already
- * keeps room for trace-detail tabs once that view exists.
+ * Dataset-scoped tab strip rendered in the desktop titlebar.
  */
 export function DatasetTabsTitlebar() {
   const params = useParams(ROUTE_PARAMS_OPTIONS);
+  const navigate = useNavigate();
+  const projectId = params.projectId;
   const datasetId = params.collectionId;
   const tabsByDataset = useDatasetTabsSnapshot();
 
@@ -30,6 +35,22 @@ export function DatasetTabsTitlebar() {
     return getDatasetTabState(tabsByDataset, datasetId);
   }, [datasetId, tabsByDataset]);
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (event.key.toLowerCase() !== "t") return;
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
+      if (!datasetId) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      openTelemetryTab(datasetId);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [datasetId]);
+
   if (!datasetId || tabState === null) {
     return null;
   }
@@ -39,7 +60,18 @@ export function DatasetTabsTitlebar() {
   };
 
   const closeTab = (tabId: DatasetTabId) => {
-    closeDatasetTab(datasetId, tabId);
+    const result = closeDatasetTab(datasetId, tabId);
+    if (result.closedLast && projectId) {
+      void navigate({
+        to: "/projects/$projectId",
+        params: { projectId },
+        replace: true,
+      });
+    }
+  };
+
+  const openTab = () => {
+    openTelemetryTab(datasetId);
   };
 
   return (
@@ -57,6 +89,16 @@ export function DatasetTabsTitlebar() {
             tab={tab}
           />
         ))}
+        <IconButtonTooltip label="New Telemetry tab">
+          <button
+            aria-label="New Telemetry tab"
+            className="desktop-no-drag inline-flex h-full w-9 shrink-0 cursor-pointer items-center justify-center text-muted-foreground/70 outline-none transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring"
+            onClick={openTab}
+            type="button"
+          >
+            <PlusIcon className="size-3.5" />
+          </button>
+        </IconButtonTooltip>
       </div>
     </TopTabsList>
   );

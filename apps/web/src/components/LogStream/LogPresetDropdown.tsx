@@ -36,11 +36,12 @@ import {
   updateLogFilterPreset,
   useLogFilterPresets,
 } from "./logFilterPresets";
-import { setDatasetStreamFilter } from "./logStreamStore";
+import { setDatasetStreamFilter, type DatasetStreamSnapshot } from "./logStreamStore";
 
 interface LogPresetDropdownProps {
   readonly projectId: string;
   readonly datasetId: string;
+  readonly viewId: DatasetStreamSnapshot["viewId"];
   readonly filterSource: string;
   readonly filter: FilterNode | null;
 }
@@ -48,6 +49,7 @@ interface LogPresetDropdownProps {
 export function LogPresetDropdown({
   projectId,
   datasetId,
+  viewId,
   filterSource,
   filter,
 }: LogPresetDropdownProps) {
@@ -67,6 +69,7 @@ export function LogPresetDropdown({
     setDatasetStreamFilter({
       projectId,
       datasetId,
+      viewId,
       source: preset.source,
       filter: preset.filter,
     });

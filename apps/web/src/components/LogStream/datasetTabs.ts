@@ -1,15 +1,16 @@
-export const LIVE_DATASET_TAB_ID = "live";
+export const DEFAULT_TELEMETRY_DATASET_TAB_ID = "telemetry:1";
 
-export type DatasetTabId = typeof LIVE_DATASET_TAB_ID | `trace:${string}`;
+export type DatasetTelemetryTabId = `telemetry:${number}`;
+export type DatasetTabId = DatasetTelemetryTabId | `trace:${string}`;
 export type DatasetTabIcon = "lensflare" | "trace";
 
 export type DatasetTab =
   | {
-      readonly id: typeof LIVE_DATASET_TAB_ID;
-      readonly kind: "live";
+      readonly id: DatasetTelemetryTabId;
+      readonly kind: "telemetry";
       readonly icon: "lensflare";
-      readonly title: "Live";
-      readonly closable: false;
+      readonly title: string;
+      readonly closable: true;
     }
   | {
       readonly id: `trace:${string}`;
@@ -31,17 +32,23 @@ export type DatasetTab =
 export interface DatasetTabState {
   readonly activeTabId: DatasetTabId;
   readonly tabs: ReadonlyArray<DatasetTab>;
+  readonly nextTelemetryOrdinal: number;
 }
 
 export type DatasetTabsByDataset = Readonly<Record<string, DatasetTabState>>;
 
-export const LIVE_DATASET_TAB: DatasetTab = {
-  id: LIVE_DATASET_TAB_ID,
-  kind: "live",
+export const DEFAULT_TELEMETRY_DATASET_TAB: DatasetTab = {
+  id: DEFAULT_TELEMETRY_DATASET_TAB_ID,
+  kind: "telemetry",
   icon: "lensflare",
-  title: "Live",
-  closable: false,
+  title: "Telemetry",
+  closable: true,
 };
+
+export interface CloseDatasetTabResult {
+  readonly tabsByDataset: DatasetTabsByDataset;
+  readonly closedLast: boolean;
+}
 
 export function getDatasetTabState(
   tabsByDataset: DatasetTabsByDataset,
@@ -59,7 +66,7 @@ export function setActiveDatasetTab(
   const current = normalizeDatasetTabState(existing);
   const nextActiveTabId = current.tabs.some((tab) => tab.id === tabId)
     ? tabId
-    : LIVE_DATASET_TAB_ID;
+    : (current.tabs[0]?.id ?? DEFAULT_TELEMETRY_DATASET_TAB_ID);
 
   if (existing === current && current.activeTabId === nextActiveTabId) {
     return tabsByDataset;
@@ -70,6 +77,31 @@ export function setActiveDatasetTab(
     [datasetId]: {
       ...current,
       activeTabId: nextActiveTabId,
+    },
+  };
+}
+
+export function openTelemetryTab(
+  tabsByDataset: DatasetTabsByDataset,
+  datasetId: string,
+): DatasetTabsByDataset {
+  const current = normalizeDatasetTabState(tabsByDataset[datasetId]);
+  const ordinal = current.nextTelemetryOrdinal;
+  const tabId = `telemetry:${ordinal}` as const;
+  const nextTab: DatasetTab = {
+    id: tabId,
+    kind: "telemetry",
+    icon: "lensflare",
+    title: `Telemetry ${ordinal}`,
+    closable: true,
+  };
+
+  return {
+    ...tabsByDataset,
+    [datasetId]: {
+      activeTabId: tabId,
+      tabs: [...current.tabs, nextTab],
+      nextTelemetryOrdinal: ordinal + 1,
     },
   };
 }
@@ -125,6 +157,7 @@ export function openTraceTab(
       [datasetId]: {
         activeTabId: tabId,
         tabs: nextTabs,
+        nextTelemetryOrdinal: current.nextTelemetryOrdinal,
       },
     };
   }
@@ -144,6 +177,7 @@ export function openTraceTab(
     [datasetId]: {
       activeTabId: tabId,
       tabs: [...current.tabs, nextTab],
+      nextTelemetryOrdinal: current.nextTelemetryOrdinal,
     },
   };
 }
@@ -152,47 +186,85 @@ export function closeDatasetTab(
   tabsByDataset: DatasetTabsByDataset,
   datasetId: string,
   tabId: DatasetTabId,
-): DatasetTabsByDataset {
+): CloseDatasetTabResult {
   const current = normalizeDatasetTabState(tabsByDataset[datasetId]);
-  const tab = current.tabs.find((candidate) => candidate.id === tabId);
+  const closedIndex = current.tabs.findIndex((candidate) => candidate.id === tabId);
 
-  if (!tab?.closable) {
-    return tabsByDataset;
+  if (closedIndex < 0) {
+    return { tabsByDataset, closedLast: false };
   }
 
   const tabs = current.tabs.filter((candidate) => candidate.id !== tabId);
-  const activeTabId =
-    current.activeTabId === tabId ? (tabs.at(-1)?.id ?? LIVE_DATASET_TAB_ID) : current.activeTabId;
+  if (tabs.length === 0) {
+    if (tabsByDataset[datasetId] === undefined) {
+      return {
+        tabsByDataset,
+        closedLast: true,
+      };
+    }
+
+    const { [datasetId]: _closedDataset, ...remainingTabsByDataset } = tabsByDataset;
+    return {
+      tabsByDataset: remainingTabsByDataset,
+      closedLast: true,
+    };
+  }
+
+  const fallbackTab = tabs[Math.max(0, closedIndex - 1)] ?? tabs[0]!;
+  const activeTabId = current.activeTabId === tabId ? fallbackTab.id : current.activeTabId;
 
   return {
-    ...tabsByDataset,
-    [datasetId]: normalizeDatasetTabState({
-      activeTabId,
-      tabs,
-    }),
+    tabsByDataset: {
+      ...tabsByDataset,
+      [datasetId]: normalizeDatasetTabState({
+        activeTabId,
+        tabs,
+        nextTelemetryOrdinal: current.nextTelemetryOrdinal,
+      }),
+    },
+    closedLast: false,
   };
 }
 
 function normalizeDatasetTabState(state: DatasetTabState | undefined): DatasetTabState {
   if (
     state !== undefined &&
-    state.tabs.some((tab) => tab.id === LIVE_DATASET_TAB_ID) &&
+    state.tabs.length > 0 &&
     state.tabs.some((tab) => tab.id === state.activeTabId)
   ) {
-    return state;
+    if (state.nextTelemetryOrdinal > maxTelemetryOrdinal(state.tabs)) {
+      return state;
+    }
+
+    return {
+      ...state,
+      nextTelemetryOrdinal: maxTelemetryOrdinal(state.tabs) + 1,
+    };
   }
 
-  const tabs = state?.tabs.some((tab) => tab.id === LIVE_DATASET_TAB_ID)
-    ? state.tabs
-    : [LIVE_DATASET_TAB, ...(state?.tabs ?? [])];
-
+  const tabs = state?.tabs.length ? state.tabs : [DEFAULT_TELEMETRY_DATASET_TAB];
   const activeTabId =
     state !== undefined && tabs.some((tab) => tab.id === state.activeTabId)
       ? state.activeTabId
-      : LIVE_DATASET_TAB_ID;
+      : (tabs[0]?.id ?? DEFAULT_TELEMETRY_DATASET_TAB_ID);
 
   return {
     activeTabId,
     tabs,
+    nextTelemetryOrdinal: Math.max(state?.nextTelemetryOrdinal ?? 2, maxTelemetryOrdinal(tabs) + 1),
   };
+}
+
+function maxTelemetryOrdinal(tabs: ReadonlyArray<DatasetTab>): number {
+  let maxOrdinal = 0;
+  for (const tab of tabs) {
+    if (tab.kind !== "telemetry") {
+      continue;
+    }
+    const ordinal = Number(tab.id.slice("telemetry:".length));
+    if (Number.isFinite(ordinal)) {
+      maxOrdinal = Math.max(maxOrdinal, ordinal);
+    }
+  }
+  return maxOrdinal;
 }

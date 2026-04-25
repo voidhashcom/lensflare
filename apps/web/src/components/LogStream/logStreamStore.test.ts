@@ -69,6 +69,7 @@ describe("logStreamStore", () => {
     setDatasetStreamFilter({
       projectId: "p",
       datasetId: "d",
+      viewId: "telemetry:1",
       source: 'level = "error" ',
       filter: Filter.cmp(["level"], "eq", Filter.stringValue("error")),
     });
@@ -76,6 +77,73 @@ describe("logStreamStore", () => {
     fakes.emit("p", "d", logRecord("log-error", "error", "error"));
 
     expect(getDatasetStreamSnapshot("p", "d").logs.map((log) => log.id)).toEqual(["log-error"]);
+  });
+
+  it("keeps filters independent across telemetry views for the same dataset", async () => {
+    const fakes = installFakes({ pages: [page([]), page([]), page([])] });
+    activateDatasetStream(baseInput({ viewId: "telemetry:1" }));
+    activateDatasetStream(baseInput({ viewId: "telemetry:2" }));
+    await flushStream("p", "d", "telemetry:1");
+    await flushStream("p", "d", "telemetry:2");
+
+    setDatasetStreamFilter({
+      projectId: "p",
+      datasetId: "d",
+      viewId: "telemetry:2",
+      source: 'level = "error" ',
+      filter: Filter.cmp(["level"], "eq", Filter.stringValue("error")),
+    });
+    fakes.emit("p", "d", logRecord("log-info", "info", "info"));
+    fakes.emit("p", "d", logRecord("log-error", "error", "error"));
+
+    expect(getDatasetStreamSnapshot("p", "d", "telemetry:1").logs.map((log) => log.id)).toEqual([
+      "log-info",
+      "log-error",
+    ]);
+    expect(getDatasetStreamSnapshot("p", "d", "telemetry:2").logs.map((log) => log.id)).toEqual([
+      "log-error",
+    ]);
+  });
+
+  it("keeps selected rows independent across telemetry views", async () => {
+    installFakes({ pages: [page([logRecord("a", "a"), logRecord("b", "b")]), page([])] });
+    activateDatasetStream(baseInput({ viewId: "telemetry:1" }));
+    activateDatasetStream(baseInput({ viewId: "telemetry:2" }));
+    await flushStream("p", "d", "telemetry:1");
+    await flushStream("p", "d", "telemetry:2");
+
+    selectDatasetTelemetryEntry("p", "d", "telemetry:1", "a");
+    selectDatasetTelemetryEntry("p", "d", "telemetry:2", "b");
+
+    expect(getDatasetStreamSnapshot("p", "d", "telemetry:1").selectedLogId).toBe("a");
+    expect(getDatasetStreamSnapshot("p", "d", "telemetry:2").selectedLogId).toBe("b");
+  });
+
+  it("uses one backend subscription for multiple telemetry views of the same dataset", async () => {
+    const { subscribeTelemetry } = installFakes({ pages: [page([]), page([])] });
+
+    activateDatasetStream(baseInput({ viewId: "telemetry:1" }));
+    activateDatasetStream(baseInput({ viewId: "telemetry:2" }));
+    await flushStream("p", "d", "telemetry:1");
+    await flushStream("p", "d", "telemetry:2");
+
+    expect(subscribeTelemetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the shared subscription while at least one telemetry view remains mounted", async () => {
+    const fakes = installFakes({ pages: [page([]), page([])] });
+    activateDatasetStream(baseInput({ viewId: "telemetry:1" }));
+    activateDatasetStream(baseInput({ viewId: "telemetry:2" }));
+    await flushStream("p", "d", "telemetry:1");
+    await flushStream("p", "d", "telemetry:2");
+
+    deactivateDatasetStream("p", "d", "telemetry:1");
+    fakes.emit("p", "d", logRecord("still-live", "still live"));
+
+    expect(fakes.cancelCount()).toBe(0);
+    expect(getDatasetStreamSnapshot("p", "d", "telemetry:2").logs.map((log) => log.id)).toEqual([
+      "still-live",
+    ]);
   });
 
   it("derives filtered rows immediately from raw recent websocket data", async () => {
@@ -88,6 +156,7 @@ describe("logStreamStore", () => {
     setDatasetStreamFilter({
       projectId: "p",
       datasetId: "d",
+      viewId: "telemetry:1",
       source: 'level = "error" ',
       filter: Filter.cmp(["level"], "eq", Filter.stringValue("error")),
     });
@@ -187,7 +256,7 @@ describe("logStreamStore", () => {
     activateDatasetStream(baseInput());
     await flushStream("p", "d");
     await loadOlderDatasetTelemetry("p", "d");
-    selectDatasetTelemetryEntry("p", "d", "old");
+    selectDatasetTelemetryEntry("p", "d", "telemetry:1", "old");
 
     fakes.emit("p", "d", logRecord("live", "live", "info", "2026-01-01T00:00:20.000Z"));
 
@@ -281,6 +350,7 @@ describe("logStreamStore", () => {
     setDatasetStreamFilter({
       projectId: "p",
       datasetId: "d",
+      viewId: "telemetry:1",
       source: 'level = "error" ',
       filter: Filter.cmp(["level"], "eq", Filter.stringValue("error")),
     });
@@ -320,7 +390,7 @@ describe("logStreamStore", () => {
     activateDatasetStream(baseInput());
     await flushStream("p", "d");
 
-    selectDatasetTelemetryEntry("p", "d", "log-selected");
+    selectDatasetTelemetryEntry("p", "d", "telemetry:1", "log-selected");
     deactivateDatasetStream("p", "d");
     activateDatasetStream(baseInput());
 
@@ -330,21 +400,28 @@ describe("logStreamStore", () => {
   });
 
   it("invalidates a dataset and cancels its subscription", async () => {
-    const fakes = installFakes({ pages: [page([])] });
-    activateDatasetStream(baseInput());
-    await flushStream("p", "d");
+    const fakes = installFakes({ pages: [page([logRecord("a", "a")]), page([logRecord("b", "b")])] });
+    activateDatasetStream(baseInput({ viewId: "telemetry:1" }));
+    activateDatasetStream(baseInput({ viewId: "telemetry:2" }));
+    await flushStream("p", "d", "telemetry:1");
+    await flushStream("p", "d", "telemetry:2");
 
     invalidateDatasetTelemetry("p", "d");
 
     expect(fakes.cancelCount()).toBe(1);
     expect(getLogStreamStoreSessionCountForTests()).toBe(0);
+    expect(getDatasetStreamSnapshot("p", "d", "telemetry:1").logs).toEqual([]);
+    expect(getDatasetStreamSnapshot("p", "d", "telemetry:2").logs).toEqual([]);
   });
 });
 
-function baseInput(overrides: { readonly datasetId?: string } = {}) {
+function baseInput(
+  overrides: { readonly datasetId?: string; readonly viewId?: `telemetry:${number}` } = {},
+) {
   return {
     projectId: "p",
     datasetId: overrides.datasetId ?? "d",
+    viewId: overrides.viewId ?? "telemetry:1",
     metadata: {
       datasetName: "Dataset",
       datasetIcon: "js" as const,
@@ -406,9 +483,13 @@ function deferred<A>() {
   return { promise, resolve, reject };
 }
 
-async function flushStream(projectId: string, datasetId: string): Promise<void> {
+async function flushStream(
+  projectId: string,
+  datasetId: string,
+  viewId: `telemetry:${number}` = "telemetry:1",
+): Promise<void> {
   await wait(0);
-  const snapshot = getDatasetStreamSnapshot(projectId, datasetId);
+  const snapshot = getDatasetStreamSnapshot(projectId, datasetId, viewId);
   if (snapshot.isInitialLoading || snapshot.isRefreshing) {
     await wait(0);
   }
