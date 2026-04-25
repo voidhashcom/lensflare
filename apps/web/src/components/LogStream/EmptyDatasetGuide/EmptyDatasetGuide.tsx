@@ -1,47 +1,44 @@
-import { useMemo, useState } from "react";
-import { BookOpenIcon } from "lucide-react";
+import { CheckIcon, CopyIcon } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { integrationRegistry } from "~/integrations/registry";
-import type { Language, TemplateVars } from "~/integrations/types";
+import { Button } from "~/components/ui/button";
+import { integrationToMarkdown } from "~/integrations/markdown";
+import { integrationRegistry, PROTOCOL_LABEL } from "~/integrations/registry";
+import type { Integration, Language, TemplateVars } from "~/integrations/types";
 import { cn } from "~/lib/utils";
 
-import { Badge } from "../../ui/badge";
 import { IntegrationPicker } from "./IntegrationPicker";
 import { IntegrationSteps } from "./IntegrationSteps";
 
 interface EmptyDatasetGuideProps {
-  datasetName: string;
   projectSlug: string;
   datasetSlug: string;
   serverOrigin: string;
   /**
-   * When the guide is rendered as an overlay on a telemetry tab we want
-   * extra negative space at the top so it doesn't look cramped against
-   * the filter bar. Sheets don't need that — their own padding applies.
+   * When the guide is rendered as an overlay on a telemetry tab we still
+   * want the page-style padding to apply, but the overlay variant also
+   * frosts the background so the underlying empty table hints through.
+   * The `sheet` variant lets the parent `Sheet` own its own background.
    */
   variant?: "overlay" | "sheet";
   className?: string;
 }
 
-const PROTOCOL_LABEL: Record<string, string> = {
-  "otlp-http": "OTLP HTTP",
-  "axiom-native": "Axiom-native",
-  curl: "Raw HTTP",
-};
+const COPY_FEEDBACK_MS = 1500;
 
 /**
  * The "getting started" screen shown when a dataset has no telemetry yet.
- * Renders the full language + library picker and walks the user through
- * a specific integration's steps, with slugs substituted live into every
- * snippet.
+ * Renders as a single-column documentation page — page title, language +
+ * library picker, then the integration's numbered steps — using the same
+ * scroll container, max-width, and typographic scale as the settings
+ * panels so the guide feels like part of the same surface.
  *
- * Same component is used both as the in-place overlay on `TelemetryTabPanel`
- * (when the dataset has never received a log) and inside the
- * `LogStreamHeader` sheet (re-entry button for users who have data
- * flowing but want the snippets back).
+ * Same component is used both as the in-place overlay on
+ * `TelemetryTabPanel` (when the dataset has never received a log) and
+ * inside the `LogStreamHeader` sheet (re-entry button for users who have
+ * data flowing but want the snippets back).
  */
 export function EmptyDatasetGuide({
-  datasetName,
   projectSlug,
   datasetSlug,
   serverOrigin,
@@ -83,10 +80,19 @@ export function EmptyDatasetGuide({
 
   const handleLanguageChange = (language: Language) => {
     setSelectedLanguage(language);
-    const firstLibrary =
-      integrationRegistry.listLibraries(language)[0]?.id ?? "";
+    const firstLibrary = integrationRegistry.listLibraries(language)[0]?.id ?? "";
     setSelectedLibraryId(firstLibrary);
   };
+
+  const protocolLabel = integration
+    ? (PROTOCOL_LABEL[integration.protocol] ?? integration.protocol)
+    : null;
+
+  // Resolve the language's display label so the markdown heading reads
+  // "Effect + …" rather than "effect + …".
+  const languageLabel =
+    integrationRegistry.listLanguages().find((meta) => meta.id === selectedLanguage)?.label ??
+    selectedLanguage;
 
   return (
     <div
@@ -98,38 +104,49 @@ export function EmptyDatasetGuide({
       data-slot="empty-dataset-guide"
       data-variant={variant}
     >
-      <Hero datasetName={datasetName} />
+      <div className="flex-1 overflow-y-auto p-6 sm:p-8">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
+          <header className="flex flex-col gap-2">
+            <h1 className="font-semibold text-2xl text-foreground tracking-tight">
+              Start sending telemetry to Lensflare
+            </h1>
+          </header>
 
-      <IntegrationPicker
-        onLanguageChange={handleLanguageChange}
-        onLibraryChange={setSelectedLibraryId}
-        selectedLanguage={selectedLanguage}
-        selectedLibraryId={selectedLibraryId}
-      />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-3">
+            <div className="flex-1">
+              <IntegrationPicker
+                onLanguageChange={handleLanguageChange}
+                onLibraryChange={setSelectedLibraryId}
+                selectedLanguage={selectedLanguage}
+                selectedLibraryId={selectedLibraryId}
+              />
+            </div>
+            <CopyMarkdownButton
+              integration={integration}
+              languageLabel={languageLabel}
+              variables={variables}
+            />
+          </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex max-w-3xl flex-col gap-4 px-4 pt-1 pb-8">
           {integration ? (
-            <>
-              <IntegrationSummary
-                protocolLabel={
-                  PROTOCOL_LABEL[integration.protocol] ?? integration.protocol
-                }
-                signals={integration.signals}
-                summary={integration.summary}
-              />
-              <IntegrationSteps
-                integration={integration}
-                variables={variables}
-              />
+            <section className="flex flex-col gap-6">
+              <div className="flex flex-col gap-1.5">
+                <p className="text-[13px] text-muted-foreground/80 leading-relaxed">
+                  {integration.summary}
+                </p>
+                <p className="font-mono text-[11px] text-muted-foreground/70 tracking-[0.04em]">
+                  {[protocolLabel, ...integration.signals].filter(Boolean).join("  ·  ")}
+                </p>
+              </div>
+              <IntegrationSteps integration={integration} variables={variables} />
               {integration.verifyHint ? (
-                <p className="rounded-lg border border-dashed border-border/60 bg-muted/30 p-3 text-xs text-muted-foreground">
+                <p className="border-border/60 border-t pt-4 text-muted-foreground/70 text-xs leading-relaxed">
                   {integration.verifyHint}
                 </p>
               ) : null}
-            </>
+            </section>
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-muted-foreground text-sm">
               No integration guides are registered yet.
             </p>
           )}
@@ -139,62 +156,70 @@ export function EmptyDatasetGuide({
   );
 }
 
-interface HeroProps {
-  datasetName: string;
+interface CopyMarkdownButtonProps {
+  integration: Integration | undefined;
+  languageLabel: string;
+  variables: TemplateVars;
 }
 
-function Hero({ datasetName }: HeroProps) {
+/**
+ * "Copy MD" affordance shown next to the page title. Renders the active
+ * integration as a self-contained Markdown document via {@link
+ * integrationToMarkdown} and writes it to the clipboard. The button
+ * disables itself when the picker has no resolvable integration so it
+ * never copies an empty document.
+ */
+function CopyMarkdownButton({ integration, languageLabel, variables }: CopyMarkdownButtonProps) {
+  const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current !== null) {
+        clearTimeout(copyTimerRef.current);
+      }
+    };
+  }, []);
+
+  // The integration / vars / label are captured in the click handler so
+  // the user always copies the markdown for whatever they're currently
+  // looking at, even after switching language or library.
+  const handleCopy = useCallback(() => {
+    if (!integration) {
+      return;
+    }
+    const markdown = integrationToMarkdown(integration, variables, {
+      languageLabel,
+    });
+    void navigator.clipboard
+      .writeText(markdown)
+      .then(() => {
+        setCopied(true);
+        if (copyTimerRef.current !== null) {
+          clearTimeout(copyTimerRef.current);
+        }
+        copyTimerRef.current = setTimeout(() => {
+          setCopied(false);
+          copyTimerRef.current = null;
+        }, COPY_FEEDBACK_MS);
+      })
+      .catch(() => {
+        // Clipboard can reject if the document isn't focused or the user
+        // denied permission. We silently swallow it — the snippets below
+        // remain copyable individually via their own buttons.
+      });
+  }, [integration, languageLabel, variables]);
+
   return (
-    <div className="flex items-start gap-3 px-6 pt-6 pb-4">
-      <div className="relative mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border bg-card text-muted-foreground">
-        <BookOpenIcon className="size-4" />
-      </div>
-      <div className="flex min-w-0 flex-col gap-1">
-        <div className="flex items-center gap-2">
-          <span
-            aria-hidden="true"
-            className="relative inline-flex size-2 items-center justify-center"
-          >
-            <span className="absolute inset-0 animate-ping rounded-full bg-primary/60" />
-            <span className="relative inline-block size-2 rounded-full bg-primary" />
-          </span>
-          <h2 className="font-semibold text-base leading-none">
-            Waiting for first event in{" "}
-            <span className="text-primary">{datasetName}</span>
-          </h2>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Pick a language and a library below, then run one of the snippets
-          to start sending data. This screen will disappear as soon as your
-          first event lands.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-interface IntegrationSummaryProps {
-  protocolLabel: string;
-  signals: ReadonlyArray<string>;
-  summary: string;
-}
-
-function IntegrationSummary({
-  protocolLabel,
-  signals,
-  summary,
-}: IntegrationSummaryProps) {
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <Badge variant="outline">{protocolLabel}</Badge>
-        {signals.map((signal) => (
-          <Badge key={signal} variant="secondary">
-            {signal}
-          </Badge>
-        ))}
-      </div>
-      <p className="text-sm text-muted-foreground">{summary}</p>
-    </div>
+    <Button
+      aria-label={copied ? "Copied as Markdown" : "Copy guide as Markdown"}
+      data-copied={copied}
+      disabled={!integration}
+      onClick={handleCopy}
+      variant="outline"
+    >
+      {copied ? <CheckIcon /> : <CopyIcon />}
+      {copied ? "Copied" : "Copy MD"}
+    </Button>
   );
 }

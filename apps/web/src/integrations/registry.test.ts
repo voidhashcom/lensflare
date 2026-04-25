@@ -3,7 +3,9 @@ import { describe, expect, it } from "vite-plus/test";
 import { createRegistry } from "./registry";
 import type { Integration } from "./types";
 
-const makeIntegration = (overrides: Partial<Integration> & Pick<Integration, "id" | "language" | "library">): Integration => ({
+const makeIntegration = (
+  overrides: Partial<Integration> & Pick<Integration, "id" | "language" | "library">,
+): Integration => ({
   protocol: "otlp-http",
   signals: ["logs"],
   summary: "",
@@ -21,6 +23,11 @@ const NODE_PINO = makeIntegration({
   language: "node",
   library: { id: "pino", label: "pino" },
   protocol: "axiom-native",
+});
+const EFFECT_LENSFLARE = makeIntegration({
+  id: "node-effect",
+  language: "effect",
+  library: { id: "lensflare-effect", label: "Lensflare Effect SDK" },
 });
 const PYTHON_OTEL = makeIntegration({
   id: "python-opentelemetry",
@@ -49,11 +56,7 @@ describe("createRegistry", () => {
     // Canonical order is node, effect, python, go, browser, shell — so we
     // expect node/python/shell to appear in that order even though the
     // registry was built shell-first.
-    expect(registry.listLanguages().map((meta) => meta.id)).toEqual([
-      "node",
-      "python",
-      "shell",
-    ]);
+    expect(registry.listLanguages().map((meta) => meta.id)).toEqual(["node", "python", "shell"]);
   });
 
   it("lists libraries for a language sorted by display label", () => {
@@ -66,27 +69,21 @@ describe("createRegistry", () => {
 
   it("find() returns the matching integration for a language+library pair", () => {
     const registry = createRegistry([NODE_OTEL, NODE_PINO, PYTHON_OTEL]);
-    expect(
-      registry.find({ language: "node", libraryId: "pino" })?.id,
-    ).toBe("node-pino");
+    expect(registry.find({ language: "node", libraryId: "pino" })?.id).toBe("node-pino");
   });
 
   it("find() returns undefined when the library is not registered for that language", () => {
     const registry = createRegistry([NODE_OTEL]);
-    expect(
-      registry.find({ language: "node", libraryId: "pino" }),
-    ).toBeUndefined();
-    expect(
-      registry.find({ language: "python", libraryId: "opentelemetry-sdk" }),
-    ).toBeUndefined();
+    expect(registry.find({ language: "node", libraryId: "pino" })).toBeUndefined();
+    expect(registry.find({ language: "python", libraryId: "opentelemetry-sdk" })).toBeUndefined();
   });
 
-  it("getDefault() prefers Node + OpenTelemetry SDK when available", () => {
-    const registry = createRegistry([PYTHON_OTEL, NODE_OTEL, SHELL_CURL]);
-    expect(registry.getDefault()?.id).toBe("node-opentelemetry");
+  it("getDefault() prefers Effect + Lensflare Effect SDK when available", () => {
+    const registry = createRegistry([NODE_OTEL, EFFECT_LENSFLARE, SHELL_CURL]);
+    expect(registry.getDefault()?.id).toBe("node-effect");
   });
 
-  it("getDefault() falls back to the first sorted entry when Node+OTel is missing", () => {
+  it("getDefault() falls back to the first sorted entry when the Effect SDK is missing", () => {
     const registry = createRegistry([SHELL_CURL, PYTHON_OTEL]);
     expect(registry.getDefault()?.id).toBe("python-opentelemetry");
   });
@@ -104,9 +101,6 @@ describe("createRegistry", () => {
       library: { id: "axiom-rb", label: "axiom-rb" },
     });
     const registry = createRegistry([exotic, NODE_OTEL]);
-    expect(registry.listLanguages().map((meta) => meta.id)).toEqual([
-      "node",
-      "ruby",
-    ]);
+    expect(registry.listLanguages().map((meta) => meta.id)).toEqual(["node", "ruby"]);
   });
 });

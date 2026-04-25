@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { cn } from "~/lib/utils";
 
 import type { TraceContext, TraceSpan } from "./types";
+import { ExternalLinkIcon } from "lucide-react";
 
 /**
  * Number of spans to show above and below the log's own span. The rest are
@@ -68,12 +69,15 @@ export function TraceOverview({ trace, className, onExplore }: TraceOverviewProp
       </ol>
       <button
         aria-label="Explore trace"
-        className="absolute inset-0 flex  items-center justify-center bg-background/35 opacity-0 backdrop-blur-xs duration-100 hover:transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 disabled:cursor-default"
+        className="absolute inset-0 flex  items-center justify-center space-x-2 bg-background/35 opacity-0 backdrop-blur-xs duration-100 hover:transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 disabled:cursor-default"
         disabled={onExplore === undefined}
         onClick={onExplore}
         type="button"
       >
-        <span className="font-medium text-sm text-foreground">Explore trace</span>
+        <div className="flex space-x-2 px-3 py-2 rounded-md bg-foreground/5 hover:bg-foreground/10">
+          <span className="font-medium text-sm text-foreground">Explore trace</span>
+          <ExternalLinkIcon className="size-3.5 opacity-60" />
+        </div>
       </button>
     </div>
   );

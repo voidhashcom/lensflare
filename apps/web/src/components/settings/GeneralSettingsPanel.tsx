@@ -15,10 +15,29 @@ import {
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import { IconButtonTooltip } from "~/components/ui/tooltip";
 import { clearDatasetData, listDatasetStorageStats } from "~/data/datasetApi";
+import { useTheme, type Theme } from "~/hooks/useTheme";
 
-import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
+import {
+  SettingResetButton,
+  SettingsPageContainer,
+  SettingsRow,
+  SettingsSection,
+} from "./settingsLayout";
+
+const THEME_OPTIONS: ReadonlyArray<{ value: Theme; label: string }> = [
+  { value: "system", label: "System" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+];
 
 function selectDatasets(q: any) {
   return q
@@ -64,6 +83,7 @@ function formatBytes(bytes: number): string {
  * General settings for app-level data management.
  */
 export function GeneralSettingsPanel() {
+  const { theme, setTheme } = useTheme();
   const [storageStats, setStorageStats] = useState<
     Awaited<ReturnType<typeof listDatasetStorageStats>>
   >([]);
@@ -151,6 +171,41 @@ export function GeneralSettingsPanel() {
 
   return (
     <SettingsPageContainer>
+      <SettingsSection title="Appearance">
+        <SettingsRow
+          control={
+            <Select
+              onValueChange={(value) => {
+                if (value === "system" || value === "light" || value === "dark") {
+                  setTheme(value);
+                }
+              }}
+              value={theme}
+            >
+              <SelectTrigger aria-label="Theme preference" className="w-full sm:w-40">
+                <SelectValue>
+                  {THEME_OPTIONS.find((option) => option.value === theme)?.label ?? "System"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                {THEME_OPTIONS.map((option) => (
+                  <SelectItem hideIndicator key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          }
+          description="Choose how Lensflare looks across the app."
+          resetAction={
+            theme !== "system" ? (
+              <SettingResetButton label="Theme" onClick={() => setTheme("system")} />
+            ) : undefined
+          }
+          title="Color theme"
+        />
+      </SettingsSection>
+
       <SettingsSection
         headerAction={
           <IconButtonTooltip label="Refresh">

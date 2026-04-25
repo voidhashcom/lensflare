@@ -39,16 +39,16 @@ export function AboutSettingsPanel() {
         <SettingsRow
           control={
             <Button
-              onClick={() => window.open("https://opentelemetry.io/docs/", "_blank", "noopener")}
+              onClick={() => window.open("https://lensflare.dev", "_blank", "noopener")}
               size="xs"
               variant="outline"
             >
               <ExternalLinkIcon className="size-3.5" />
-              Open docs
+              Open site
             </Button>
           }
-          description="Learn more about the OpenTelemetry data model that powers Lensflare."
-          title="OpenTelemetry documentation"
+          description="Visit the Lensflare website for product information and updates."
+          title="Lensflare website"
         />
         <SettingsRow
           control={

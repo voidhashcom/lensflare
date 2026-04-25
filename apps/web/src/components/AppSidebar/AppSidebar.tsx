@@ -154,7 +154,7 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                  render={<Link to="/settings" />}
+                  render={<Link to="/settings/general" />}
                   size="sm"
                 >
                   <SettingsIcon className="size-3.5" />

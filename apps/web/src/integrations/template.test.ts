@@ -47,9 +47,7 @@ describe("renderTemplate", () => {
 
 describe("collectPlaceholders", () => {
   it("returns the unique set of referenced names", () => {
-    const names = collectPlaceholders(
-      "{{projectSlug}}/{{datasetSlug}}?token={{projectSlug}}",
-    );
+    const names = collectPlaceholders("{{projectSlug}}/{{datasetSlug}}?token={{projectSlug}}");
     expect([...names].sort()).toEqual(["datasetSlug", "projectSlug"]);
   });
 

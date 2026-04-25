@@ -1,4 +1,4 @@
-import type { Integration, Language, LanguageMeta, LibraryMeta } from "./types";
+import type { Integration, Language, LanguageMeta, LibraryMeta, Protocol } from "./types";
 
 /**
  * Stable display order for the language tabs. Entries whose language does
@@ -6,13 +6,19 @@ import type { Integration, Language, LanguageMeta, LibraryMeta } from "./types";
  * silently drops it from the UI.
  */
 export const LANGUAGE_ORDER: ReadonlyArray<LanguageMeta> = [
-  { id: "node", label: "Node.js", sublabel: "TypeScript & JS" },
-  { id: "effect", label: "Effect", sublabel: "TypeScript" },
-  { id: "python", label: "Python" },
-  { id: "go", label: "Go" },
-  { id: "browser", label: "Browser JS" },
-  { id: "shell", label: "Shell / curl" },
+  { id: "effect", label: "Effect", logo: "effect", sublabel: "TypeScript" },
+  { id: "node", label: "Node.js", logo: "nodejs", sublabel: "TypeScript & JS" },
 ];
+
+/**
+ * Human-readable name for each wire protocol. Shared by the on-screen
+ * meta line and the markdown export so renames stay in lockstep.
+ */
+export const PROTOCOL_LABEL: Record<Protocol, string> = {
+  "otlp-http": "OTLP HTTP",
+  "axiom-native": "Axiom-native",
+  curl: "Raw HTTP",
+};
 
 /** Language + library id pair used by {@link IntegrationRegistry.find}. */
 export interface FindIntegrationQuery {
@@ -40,12 +46,8 @@ export interface IntegrationRegistry {
  * Pure — does no filesystem or module lookup — so it's safe to use in
  * tests.
  */
-export function createRegistry(
-  entries: ReadonlyArray<Integration>,
-): IntegrationRegistry {
-  const allIntegrations = [...entries].sort((a, b) =>
-    a.id.localeCompare(b.id),
-  );
+export function createRegistry(entries: ReadonlyArray<Integration>): IntegrationRegistry {
+  const allIntegrations = [...entries].sort((a, b) => a.id.localeCompare(b.id));
 
   const integrationsByLanguage = new Map<Language, Array<Integration>>();
   for (const integration of allIntegrations) {
@@ -58,9 +60,7 @@ export function createRegistry(
   }
 
   const listLanguages = (): ReadonlyArray<LanguageMeta> => {
-    const known = LANGUAGE_ORDER.filter((meta) =>
-      integrationsByLanguage.has(meta.id),
-    );
+    const known = LANGUAGE_ORDER.filter((meta) => integrationsByLanguage.has(meta.id));
     const unknownIds = [...integrationsByLanguage.keys()].filter(
       (id) => !LANGUAGE_ORDER.some((meta) => meta.id === id),
     );
@@ -71,9 +71,8 @@ export function createRegistry(
     return [...known, ...unknown];
   };
 
-  const listIntegrations = (
-    language: Language,
-  ): ReadonlyArray<Integration> => integrationsByLanguage.get(language) ?? [];
+  const listIntegrations = (language: Language): ReadonlyArray<Integration> =>
+    integrationsByLanguage.get(language) ?? [];
 
   const listLibraries = (language: Language): ReadonlyArray<LibraryMeta> =>
     listIntegrations(language)
@@ -87,17 +86,17 @@ export function createRegistry(
     );
 
   /**
-   * Default landing integration. Prefers Node + OpenTelemetry SDK because
-   * that is the protocol we most want users to converge on; falls back to
-   * the first registered entry if Node+OTel isn't present (e.g. stubbed
-   * registries in tests).
+   * Default landing integration. Prefers Effect + the Lensflare Effect
+   * SDK because that is the path we most want users to converge on;
+   * falls back to the first registered entry if it's not present
+   * (e.g. stubbed registries in tests).
    */
   const getDefault = (): Integration | undefined => {
-    const nodeOtel = find({
-      language: "node",
-      libraryId: "opentelemetry-sdk",
+    const lensflareEffect = find({
+      language: "effect",
+      libraryId: "lensflare-effect",
     });
-    return nodeOtel ?? allIntegrations[0];
+    return lensflareEffect ?? allIntegrations[0];
   };
 
   return {
@@ -116,10 +115,9 @@ export function createRegistry(
  * under `./entries/` surfaces a new integration with no other edits.
  */
 function createDefaultRegistry(): IntegrationRegistry {
-  const entryModules = import.meta.glob<{ default: Integration }>(
-    "./entries/*.ts",
-    { eager: true },
-  );
+  const entryModules = import.meta.glob<{ default: Integration }>("./entries/*.ts", {
+    eager: true,
+  });
   const entries = Object.values(entryModules).map((mod) => mod.default);
   return createRegistry(entries);
 }

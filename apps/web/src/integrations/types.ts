@@ -24,13 +24,15 @@ export type Signal = "logs" | "traces" | "metrics";
 export type Protocol = "otlp-http" | "axiom-native" | "curl";
 
 /** The programming language / runtime the snippet targets. */
-export type Language =
-  | "node"
-  | "effect"
-  | "python"
-  | "go"
-  | "browser"
-  | "shell";
+export type Language = "node" | "effect" | "python" | "go" | "browser" | "shell";
+
+/**
+ * Stable identifier for one of the inline brand marks declared in
+ * `./logos.tsx`. Kept as a string-literal union so the type system flags
+ * a typo here as soon as `LANGUAGE_ORDER` or an integration entry lands
+ * in review.
+ */
+export type LogoId = "nodejs" | "effect" | "opentelemetry" | "lensflare";
 
 /** Human-facing description of a language for tab labels, icons, etc. */
 export interface LanguageMeta {
@@ -38,17 +40,12 @@ export interface LanguageMeta {
   readonly label: string;
   /** Short sublabel shown in the language tab (e.g. "TypeScript"). */
   readonly sublabel?: string;
+  /** Brand mark shown next to the label in the language picker. */
+  readonly logo?: LogoId;
 }
 
 /** The shiki-compatible language grammar id for a given snippet. */
-export type SnippetLang =
-  | "bash"
-  | "ts"
-  | "tsx"
-  | "js"
-  | "python"
-  | "go"
-  | "json";
+export type SnippetLang = "bash" | "ts" | "tsx" | "js" | "python" | "go" | "json";
 
 /** A single copy-pastable code block inside a step. */
 export interface Snippet {
@@ -84,6 +81,8 @@ export interface LibraryMeta {
   readonly label: string;
   /** Optional docs/homepage link shown on hover. */
   readonly homepageUrl?: string;
+  /** Brand mark shown next to the label in the library picker. */
+  readonly logo?: LogoId;
 }
 
 /** A single integration entry. One module per file under `./entries/`. */

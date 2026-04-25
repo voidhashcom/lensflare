@@ -14,6 +14,7 @@ const nodeOpenTelemetry: Integration = {
     id: "opentelemetry-sdk",
     label: "OpenTelemetry SDK",
     homepageUrl: "https://opentelemetry.io/docs/languages/js/",
+    logo: "opentelemetry",
   },
   protocol: "otlp-http",
   signals: ["logs", "traces"],
@@ -29,8 +30,8 @@ const nodeOpenTelemetry: Integration = {
       },
     },
     {
-      title: "Create an `otel.ts` bootstrap",
-      body: "Point the two OTLP exporters at the Lensflare ingest routes. The slugs are baked into the URL; there's no auth header to set.",
+      title: "Create production and Lensflare dev configs",
+      body: "Pick the Lensflare endpoints in development and your production collector otherwise.",
       snippet: {
         lang: "ts",
         filename: "otel.ts",
@@ -41,20 +42,38 @@ import { BatchLogRecordProcessor } from "@opentelemetry/sdk-logs";
 import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { resourceFromAttributes } from "@opentelemetry/resources";
 
+const isDevelopment = true;
+
+const productionConfig = {
+  serviceName: "my-service",
+  serviceVersion: "0.1.0",
+  logsUrl: "https://otel-collector.example.com/v1/logs",
+  tracesUrl: "https://otel-collector.example.com/v1/traces",
+};
+
+const lensflareDevConfig = {
+  serviceName: "my-service",
+  serviceVersion: "0.1.0",
+  logsUrl: "{{serverOrigin}}/ingest/otlp/v1/logs/{{datasetSlug}}",
+  tracesUrl: "{{serverOrigin}}/ingest/otlp/v1/traces/{{datasetSlug}}",
+};
+
+const config = isDevelopment ? lensflareDevConfig : productionConfig;
+
 const sdk = new NodeSDK({
   resource: resourceFromAttributes({
-    "service.name": "my-service",
-    "service.version": "0.1.0",
+    "service.name": config.serviceName,
+    "service.version": config.serviceVersion,
   }),
   logRecordProcessor: new BatchLogRecordProcessor(
     new OTLPLogExporter({
-      url: "{{serverOrigin}}/ingest/otlp/v1/logs/{{datasetSlug}}",
+      url: config.logsUrl,
     }),
   ),
   spanProcessors: [
     new BatchSpanProcessor(
       new OTLPTraceExporter({
-        url: "{{serverOrigin}}/ingest/otlp/v1/traces/{{datasetSlug}}",
+        url: config.tracesUrl,
       }),
     ),
   ],
@@ -67,6 +86,7 @@ process.on("SIGTERM", () => {
 });
 `,
       },
+      note: "Set `isDevelopment` from your app's existing runtime config.",
     },
     {
       title: "Require the bootstrap before your app starts",
@@ -79,7 +99,7 @@ process.on("SIGTERM", () => {
     },
   ],
   verifyHint:
-    "Start your service — this screen will switch to the live log table as soon as the first batch lands.",
+    "Start your service in development — this screen will switch to the live log table as soon as the first batch lands.",
 };
 
 export default nodeOpenTelemetry;

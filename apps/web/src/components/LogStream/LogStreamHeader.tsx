@@ -14,7 +14,6 @@ interface LogStreamHeaderProps {
   projectId: string;
   datasetId: string;
   viewId: DatasetStreamSnapshot["viewId"];
-  datasetName: string;
   filterSource: string;
   filter: DatasetStreamSnapshot["filter"];
   /**
@@ -44,7 +43,6 @@ interface LogStreamHeaderProps {
 export function LogStreamHeader({
   projectId,
   datasetId,
-  datasetName,
   datasetSlug,
   filter,
   filterSource,
@@ -88,7 +86,6 @@ export function LogStreamHeader({
           </Tooltip>
           <SheetPopup className="w-[min(92vw,640px)] max-w-[640px] p-0" side="right">
             <EmptyDatasetGuide
-              datasetName={datasetName}
               datasetSlug={datasetSlug}
               projectSlug={projectSlug}
               serverOrigin={serverOrigin}

@@ -275,7 +275,6 @@ function TelemetryTabPanel({
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
             <LogStreamHeader
               datasetId={datasetId}
-              datasetName={stream.metadata.datasetName}
               datasetSlug={stream.metadata.datasetSlug}
               filter={stream.filter}
               filterSource={stream.filterSource}
@@ -308,7 +307,6 @@ function TelemetryTabPanel({
                 data-state={isGuideExiting ? "exiting" : "idle"}
               >
                 <EmptyDatasetGuide
-                  datasetName={stream.metadata.datasetName}
                   datasetSlug={stream.metadata.datasetSlug}
                   projectSlug={stream.metadata.projectSlug}
                   serverOrigin={serverOrigin}

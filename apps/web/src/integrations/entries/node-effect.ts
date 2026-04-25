@@ -16,10 +16,12 @@ const nodeEffect: Integration = {
     id: "lensflare-effect",
     label: "Lensflare Effect SDK",
     homepageUrl: "https://github.com/voidhashcom/lensflare",
+    logo: "lensflare",
   },
   protocol: "otlp-http",
   signals: ["logs", "traces"],
-  summary: "Wire Effect's built-in telemetry into Lensflare with one development-only layer.",
+  summary:
+    "Provide your production observability layer normally, and swap in Lensflare's Effect SDK during local development.",
   steps: [
     {
       title: "Install the Lensflare Effect SDK",
@@ -30,38 +32,41 @@ const nodeEffect: Integration = {
       },
     },
     {
-      title: "Provide `Lensflare.layer`",
-      body: "`Lensflare.layer` returns an Effect layer you can compose into your main program. It sends logs and traces to your local Lensflare server in development and becomes empty in production.",
+      title: "Choose the layer for this environment",
+      body: "Keep your production observability layer as-is. In development, provide `Lensflare.layer` instead so logs and spans go to your local Lensflare dataset.",
       snippet: {
         lang: "ts",
         filename: "tracing.ts",
         code: `import { Lensflare } from "@lensflare/effect";
+import { Layer } from "effect";
 
-export const ObservabilityLive = Lensflare.layer("{{datasetSlug}}", {
+const isDevelopment = true;
+
+const ProductionObservabilityLive = Layer.empty;
+
+const LensflareDevLive = Lensflare.layer("{{datasetSlug}}", {
+  serverOrigin: "{{serverOrigin}}",
   serviceName: "my-service",
   serviceVersion: "0.1.0",
 });
+
+export const ObservabilityLive = isDevelopment
+  ? LensflareDevLive
+  : ProductionObservabilityLive;
 `,
       },
-      note: "Use `LENSFLARE_ENABLED=1` to force it on or `LENSFLARE_ENABLED=0` to force it off.",
+      note: "Replace `Layer.empty` with the observability layer your app already provides in production.",
     },
     {
-      title: "Provide the layer to your program",
-      body: "Once `TracingLive` is merged in, every `Effect.log`, `Effect.withSpan`, and `Effect.annotateLogs` call becomes a record in Lensflare. No other code changes are needed.",
+      title: "Provide the selected layer",
+      body: "Your application only provides `ObservabilityLive`. The environment choice stays isolated in `tracing.ts`.",
       snippet: {
         lang: "ts",
-        code: `import { Effect, Layer } from "effect";
+        code: `import { Effect } from "effect";
 import { ObservabilityLive } from "./tracing";
 
 const program = Effect.gen(function* () {
   yield* Effect.log("Service starting");
-
-  yield* Effect.withSpan("handle-request")(
-    Effect.gen(function* () {
-      yield* Effect.annotateLogs({ userId: "42" });
-      yield* Effect.log("Processing request");
-    }),
-  );
 });
 
 Effect.runPromise(program.pipe(Effect.provide(ObservabilityLive)));
@@ -70,7 +75,7 @@ Effect.runPromise(program.pipe(Effect.provide(ObservabilityLive)));
     },
   ],
   verifyHint:
-    "Run your Effect program — you'll see both logs and spans appear. Spans annotated with `Effect.withSpan` surface as trace entries in the dataset.",
+    "Run your Effect program in development — you'll see both logs and spans appear in this Lensflare dataset. Spans annotated with `Effect.withSpan` surface as trace entries.",
 };
 
 export default nodeEffect;

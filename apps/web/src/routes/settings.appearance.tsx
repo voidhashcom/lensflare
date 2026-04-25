@@ -1,7 +1,16 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 
-import { AppearanceSettingsPanel } from "~/components/settings/AppearanceSettingsPanel";
+function AppearanceSettingsRedirect() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    void navigate({ to: "/settings/general", replace: true });
+  }, [navigate]);
+
+  return null;
+}
 
 export const Route = createFileRoute("/settings/appearance")({
-  component: AppearanceSettingsPanel,
+  component: AppearanceSettingsRedirect,
 });
