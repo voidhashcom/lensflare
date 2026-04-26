@@ -54,14 +54,14 @@ function PlatformCard({
 }
 
 /**
- * Desktop download cards. URLs are resolved from the latest GitHub release
- * assets in Astro frontmatter, with GitHub's release page as a fallback when a
- * platform-specific asset is not present.
+ * macOS download cards. URLs are resolved from the latest GitHub release assets
+ * in Astro frontmatter, with GitHub's release page as a fallback when an
+ * architecture-specific asset is not present.
  */
 export function PlatformDownloads({ release }: { release: LatestReleaseDownloads }): ReactNode {
   return (
     <section className="w-full border-b border-border">
-      <div className="mx-auto flex max-w-[1152px] flex-col gap-16 border-x border-border">
+      <div className="mx-auto flex max-w-[1152px] flex-col border-x border-border">
         <div className="flex flex-col">
           <div className="flex items-center border-b border-border bg-[#FAFAFA] px-8 py-4">
             <div className="flex items-center gap-3.5">
@@ -89,60 +89,6 @@ export function PlatformDownloads({ release }: { release: LatestReleaseDownloads
               description="For older Intel-based Macs · x64"
               download={release.downloads.macX64}
               format=".dmg"
-            />
-          </div>
-        </div>
-
-        <div className="flex flex-col">
-          <div className="flex items-center border-b border-border bg-[#FAFAFA] px-8 py-4">
-            <div className="flex items-center gap-3.5">
-              <span
-                aria-hidden="true"
-                className="flex h-7 w-7 shrink-0 items-center justify-center text-[19px] font-medium leading-none text-foreground"
-              >
-                W
-              </span>
-              <h2 className="text-[16px] font-medium leading-[28px] tracking-[-0.02em] text-foreground">
-                Windows
-              </h2>
-              <p className="text-[14px] leading-[28px] text-muted-foreground">
-                Windows 10 or later
-              </p>
-            </div>
-          </div>
-          <div className="flex">
-            <PlatformCard
-              title="Windows"
-              description="For 64-bit Windows PCs · x64"
-              download={release.downloads.windowsX64}
-              format=".exe"
-            />
-          </div>
-        </div>
-
-        <div className="flex flex-col">
-          <div className="flex items-center border-b border-border bg-[#FAFAFA] px-8 py-4">
-            <div className="flex items-center gap-3.5">
-              <span
-                aria-hidden="true"
-                className="flex h-7 w-7 shrink-0 items-center justify-center text-[16px] font-medium leading-none text-foreground"
-              >
-                Linux
-              </span>
-              <h2 className="text-[16px] font-medium leading-[28px] tracking-[-0.02em] text-foreground">
-                Linux
-              </h2>
-              <p className="text-[14px] leading-[28px] text-muted-foreground">
-                AppImage for 64-bit Linux
-              </p>
-            </div>
-          </div>
-          <div className="flex">
-            <PlatformCard
-              title="Linux"
-              description="Portable AppImage · x64"
-              download={release.downloads.linuxX64}
-              format="AppImage"
             />
           </div>
         </div>
