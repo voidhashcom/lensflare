@@ -4,7 +4,7 @@ export default defineConfig({
   pack: {
     entry: ["src/index.ts"],
     outDir: "dist",
-    format: ["esm"],
+    format: ["esm", "cjs"],
     platform: "node",
     target: "node20",
     clean: true,
@@ -14,10 +14,10 @@ export default defineConfig({
     deps: {
       neverBundle: ["effect"],
     },
-    outExtensions() {
+    outExtensions({ format }) {
       return {
-        js: ".js",
-        dts: ".d.ts",
+        js: format === "cjs" ? ".cjs" : ".js",
+        dts: format === "cjs" ? ".d.cts" : ".d.ts",
       };
     },
   },
