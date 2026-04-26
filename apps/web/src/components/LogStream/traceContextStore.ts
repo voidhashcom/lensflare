@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 import { getLogTraceContext } from "~/data/logApi";
 
@@ -34,31 +34,46 @@ export function subscribeTraceContextStore(listener: () => void): () => void {
   };
 }
 
+export function subscribeTraceContext(
+  projectId: string,
+  datasetId: string,
+  traceId: string | null | undefined,
+  spanId: string | undefined,
+  listener: () => void,
+): () => void {
+  listeners.add(listener);
+  if (traceId) {
+    void prefetchTraceContext(projectId, datasetId, traceId, spanId);
+  }
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
 export function useTraceContextSnapshot(
   projectId: string,
   datasetId: string,
   traceId: string | null | undefined,
-  spanId?: string | undefined,
+  spanId?: string,
 ): TraceContextSnapshot {
-  useEffect(() => {
-    if (!traceId) {
-      return;
-    }
-    prefetchTraceContext(projectId, datasetId, traceId, spanId);
-  }, [datasetId, projectId, spanId, traceId]);
-
-  return useSyncExternalStore(
-    subscribeTraceContextStore,
-    () => getTraceContextSnapshot(projectId, datasetId, traceId, spanId),
-    () => getTraceContextSnapshot(projectId, datasetId, traceId, spanId),
+  const subscribe = useCallback(
+    (listener: () => void) =>
+      subscribeTraceContext(projectId, datasetId, traceId, spanId, listener),
+    [datasetId, projectId, spanId, traceId],
   );
+  const getSnapshot = useCallback(
+    () => getTraceContextSnapshot(projectId, datasetId, traceId, spanId),
+    [datasetId, projectId, spanId, traceId],
+  );
+
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 export function getTraceContextSnapshot(
   projectId: string,
   datasetId: string,
   traceId: string | null | undefined,
-  spanId?: string | undefined,
+  spanId?: string,
 ): TraceContextSnapshot {
   if (!traceId) {
     return IDLE_TRACE_SNAPSHOT;
@@ -74,7 +89,7 @@ export function prefetchTraceContext(
   projectId: string,
   datasetId: string,
   traceId: string,
-  spanId?: string | undefined,
+  spanId?: string,
 ): Promise<void> {
   const key = toTraceKey(projectId, datasetId, traceId, spanId);
   const now = Date.now();
@@ -157,7 +172,7 @@ function toTraceKey(
   projectId: string,
   datasetId: string,
   traceId: string,
-  spanId?: string | undefined,
+  spanId?: string,
 ): TraceKey {
   return `${projectId}:${datasetId}:${traceId}:${spanId ?? ""}`;
 }

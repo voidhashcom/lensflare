@@ -99,9 +99,7 @@ describe("logStreamStore", () => {
       "log-info",
       "log-error",
     ]);
-    expect(getDatasetStreamSnapshot("p", "d", "telemetry:2").rowIds).toEqual([
-      "log-error",
-    ]);
+    expect(getDatasetStreamSnapshot("p", "d", "telemetry:2").rowIds).toEqual(["log-error"]);
   });
 
   it("keeps selected rows independent across telemetry views", async () => {
@@ -140,9 +138,7 @@ describe("logStreamStore", () => {
     fakes.emit("p", "d", logRecord("still-live", "still live"));
 
     expect(fakes.cancelCount()).toBe(0);
-    expect(getDatasetStreamSnapshot("p", "d", "telemetry:2").rowIds).toEqual([
-      "still-live",
-    ]);
+    expect(getDatasetStreamSnapshot("p", "d", "telemetry:2").rowIds).toEqual(["still-live"]);
   });
 
   it("derives filtered rows immediately from raw recent websocket data", async () => {
@@ -304,11 +300,7 @@ describe("logStreamStore", () => {
 
     fakes.emit("p", "d", logRecord("m-middle", "middle", "info", "2026-01-01T00:00:00.000000200Z"));
 
-    expect(getDatasetStreamSnapshot("p", "d").rowIds).toEqual([
-      "z-first",
-      "m-middle",
-      "a-last",
-    ]);
+    expect(getDatasetStreamSnapshot("p", "d").rowIds).toEqual(["z-first", "m-middle", "a-last"]);
   });
 
   it("delays live rows so logs and spans can be sorted into correct positions together", async () => {

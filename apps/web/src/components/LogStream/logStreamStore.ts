@@ -5,7 +5,7 @@ import {
   type TelemetryRecord,
   type TelemetryRecordPage,
 } from "@lensflare/contracts";
-import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 
 import { preloadTelemetryFilterCatalog } from "~/collections/telemetryFilterCatalogCollection";
 import { listDatasetTelemetry, subscribeDatasetTelemetryEntries } from "~/data/logApi";
@@ -126,7 +126,7 @@ interface LogStreamStoreTestConfiguration extends Partial<LogStreamStoreDependen
 
 const LOG_PAGE_SIZE = 100;
 const LIVE_VISIBLE_ROW_LIMIT = 100;
-const LIVE_RING_RECORD_LIMIT = 4_000;
+const LIVE_RING_RECORD_LIMIT = 500;
 const MAX_INACTIVE_SESSIONS = 4;
 const STALE_AFTER_MS = 30_000;
 const DEFAULT_LIVE_FLUSH_DELAY_MS = 100;
@@ -134,6 +134,7 @@ const SELECTED_RECORD_PIN = "selected-detail";
 
 const listeners = new Set<() => void>();
 const sessions = new Map<DatasetStreamKey, DatasetStreamSession>();
+const fallbackSnapshots = new Map<string, DatasetStreamSnapshot>();
 
 let dependencies: LogStreamStoreDependencies = {
   listTelemetry: listDatasetTelemetry,
@@ -149,6 +150,18 @@ export function subscribeDatasetStreamStore(listener: () => void): () => void {
   };
 }
 
+export function subscribeDatasetStreamView(
+  input: ActivateDatasetStreamInput,
+  listener: () => void,
+): () => void {
+  listeners.add(listener);
+  activateDatasetStream(input);
+  return () => {
+    listeners.delete(listener);
+    deactivateDatasetStream(input.projectId, input.datasetId, input.viewId);
+  };
+}
+
 export function useDatasetStreamSnapshot(
   projectId: string,
   datasetId: string,
@@ -160,20 +173,21 @@ export function useDatasetStreamSnapshot(
     [metadata.datasetIcon, metadata.datasetName, metadata.datasetSlug, metadata.projectSlug],
   );
 
-  getOrCreateView(getOrCreateSession(projectId, datasetId, stableMetadata), viewId);
-
-  useEffect(() => {
-    activateDatasetStream({ projectId, datasetId, viewId, metadata: stableMetadata });
-    return () => {
-      deactivateDatasetStream(projectId, datasetId, viewId);
-    };
-  }, [datasetId, projectId, stableMetadata, viewId]);
-
-  return useSyncExternalStore(
-    subscribeDatasetStreamStore,
-    () => getDatasetStreamSnapshot(projectId, datasetId, viewId, stableMetadata),
-    () => getDatasetStreamSnapshot(projectId, datasetId, viewId, stableMetadata),
+  const subscribe = useCallback(
+    (listener: () => void) =>
+      subscribeDatasetStreamView(
+        { projectId, datasetId, viewId, metadata: stableMetadata },
+        listener,
+      ),
+    [datasetId, projectId, stableMetadata, viewId],
   );
+
+  const getSnapshot = useCallback(
+    () => getDatasetStreamSnapshot(projectId, datasetId, viewId, stableMetadata),
+    [datasetId, projectId, stableMetadata, viewId],
+  );
+
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 export function activateDatasetStream(input: ActivateDatasetStreamInput): void {
@@ -399,6 +413,7 @@ export function invalidateDatasetTelemetry(projectId: string, datasetId: string)
   clearPendingLiveFlush(session);
   clearTelemetryDatasetCache(projectId, datasetId);
   sessions.delete(key);
+  deleteFallbackSnapshots(projectId, datasetId);
   emit();
 }
 
@@ -432,24 +447,7 @@ export function getDatasetStreamSnapshot(
       return view.snapshot;
     }
   }
-  return createSnapshot(
-    {
-      key: toDatasetStreamKey(projectId, datasetId),
-      projectId,
-      datasetId,
-      metadata: metadata ?? { datasetName: "Dataset" },
-      liveIds: [],
-      pendingLiveRecords: [],
-      views: new Map(),
-      activeCount: 0,
-      subscriptionCancel: undefined,
-      pendingLiveFlushTimer: null,
-      lastTouchedAt: 0,
-      liveRevision: 0,
-      errorMessage: null,
-    },
-    createInitialViewState(viewId),
-  );
+  return getFallbackDatasetStreamSnapshot(projectId, datasetId, viewId, metadata);
 }
 
 export function resetLogStreamStoreForTests(): void {
@@ -459,6 +457,7 @@ export function resetLogStreamStoreForTests(): void {
   }
   sessions.clear();
   listeners.clear();
+  fallbackSnapshots.clear();
   resetTelemetryEntityCacheForTests();
   resetTraceContextStoreForTests();
   dependencies = {
@@ -743,6 +742,41 @@ function createSnapshot(
   };
 }
 
+function getFallbackDatasetStreamSnapshot(
+  projectId: string,
+  datasetId: string,
+  viewId: DatasetTelemetryTabId,
+  metadata: DatasetStreamMetadata | undefined,
+): DatasetStreamSnapshot {
+  const key = `${projectId}:${datasetId}:${viewId}`;
+  const nextMetadata = metadata ?? { datasetName: "Dataset" };
+  const existing = fallbackSnapshots.get(key);
+  if (existing && sameMetadata(existing.metadata, nextMetadata)) {
+    return existing;
+  }
+
+  const snapshot: DatasetStreamSnapshot = {
+    projectId,
+    datasetId,
+    viewId,
+    mode: "live",
+    metadata: nextMetadata,
+    filterSource: "",
+    filter: null,
+    rowIds: [],
+    pageInfo: null,
+    selectedEntryId: null,
+    isInitialLoading: true,
+    isRefreshing: false,
+    isLoadingOlder: false,
+    errorMessage: null,
+    hasLoadedOnce: false,
+    rowsRevision: 0,
+  };
+  fallbackSnapshots.set(key, snapshot);
+  return snapshot;
+}
+
 function deriveLiveRowIds(
   session: DatasetStreamSession,
   view: DatasetStreamView,
@@ -768,16 +802,29 @@ function deriveLiveRowIds(
 }
 
 function updateMetadata(session: DatasetStreamSession, metadata: DatasetStreamMetadata): void {
-  if (
-    session.metadata.datasetName === metadata.datasetName &&
-    session.metadata.datasetSlug === metadata.datasetSlug &&
-    session.metadata.projectSlug === metadata.projectSlug &&
-    session.metadata.datasetIcon === metadata.datasetIcon
-  ) {
+  if (sameMetadata(session.metadata, metadata)) {
     return;
   }
   session.metadata = metadata;
   commitSessionViews(session);
+}
+
+function sameMetadata(left: DatasetStreamMetadata, right: DatasetStreamMetadata): boolean {
+  return (
+    left.datasetName === right.datasetName &&
+    left.datasetSlug === right.datasetSlug &&
+    left.projectSlug === right.projectSlug &&
+    left.datasetIcon === right.datasetIcon
+  );
+}
+
+function deleteFallbackSnapshots(projectId: string, datasetId: string): void {
+  const prefix = `${projectId}:${datasetId}:`;
+  for (const key of fallbackSnapshots.keys()) {
+    if (key.startsWith(prefix)) {
+      fallbackSnapshots.delete(key);
+    }
+  }
 }
 
 function touchSession(session: DatasetStreamSession): void {
@@ -798,6 +845,7 @@ function evictInactiveSessions(): void {
     clearPendingLiveFlush(session);
     clearTelemetryDatasetCache(session.projectId, session.datasetId);
     sessions.delete(session.key);
+    deleteFallbackSnapshots(session.projectId, session.datasetId);
   }
 }
 

@@ -3,7 +3,6 @@ import {
   Activity,
   useCallback,
   useDeferredValue,
-  useEffect,
   useMemo,
   useState,
   type MouseEvent,
@@ -91,7 +90,7 @@ export function TraceExplorer({
 }: TraceExplorerProps) {
   const traceSnapshot = useTraceContextSnapshot(projectId, datasetId, traceId, initialSpanId);
   const loadState = useMemo(() => toLoadState(traceSnapshot), [traceSnapshot]);
-  const [selectedSpanId, setSelectedSpanId] = useState<string | null>(initialSpanId ?? null);
+  const [requestedSpanId, setRequestedSpanId] = useState<string | null>(initialSpanId ?? null);
   const [filter, setFilter] = useState("");
   const deferredFilter = useDeferredValue(filter);
   const [detailsTab, setDetailsTab] = useState<DetailsTab>("fields");
@@ -104,21 +103,19 @@ export function TraceExplorer({
     storageKey: DETAILS_PANEL_WIDTH_STORAGE_KEY,
   });
 
-  // Pick a sensible initial selection once the trace loads. Prefer the span
-  // the user came from, then the first error (most users open the explorer
-  // *because* something failed), falling back to the root span.
-  useEffect(() => {
-    if (loadState.status !== "ready") return;
-    const { trace } = loadState;
-
-    setSelectedSpanId((current) => {
-      if (current !== null && trace.spans.some((span) => span.id === current)) {
-        return current;
-      }
-      const errorSpan = trace.spans.find((span) => span.status === "error");
-      return errorSpan?.id ?? trace.spans[0]?.id ?? null;
-    });
-  }, [loadState]);
+  const selectedSpanId = useMemo(() => {
+    if (loadState.status !== "ready") {
+      return requestedSpanId;
+    }
+    if (
+      requestedSpanId !== null &&
+      loadState.trace.spans.some((span) => span.id === requestedSpanId)
+    ) {
+      return requestedSpanId;
+    }
+    const errorSpan = loadState.trace.spans.find((span) => span.status === "error");
+    return errorSpan?.id ?? loadState.trace.spans[0]?.id ?? null;
+  }, [loadState, requestedSpanId]);
 
   const depthByParent = useMemo(() => {
     if (loadState.status !== "ready") return new Map<string, number>();
@@ -155,7 +152,7 @@ export function TraceExplorer({
             : Math.max(currentIndex - 1, 0);
       const nextSpan = filteredSpans[nextIndex];
       if (nextSpan) {
-        setSelectedSpanId(nextSpan.id);
+        setRequestedSpanId(nextSpan.id);
       }
     },
     [filteredSpans, selectedSpanId],
@@ -187,7 +184,7 @@ export function TraceExplorer({
         <TraceBody
           depthByParent={depthByParent}
           loadState={loadState}
-          onSelect={setSelectedSpanId}
+          onSelect={setRequestedSpanId}
           selectedSpanId={selectedSpanId}
           visibleSpans={filteredSpans}
         />

@@ -5,7 +5,7 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from "@legendapp/list/react";
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { ArrowDownIcon, ChevronUpIcon, ColumnsIcon, LoaderCircleIcon } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
@@ -90,6 +90,11 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
   const listRef = useRef<LegendListRef | null>(null);
   const loadingPreviousRef = useRef(false);
   const [showJumpToEnd, setShowJumpToEnd] = useState(false);
+  const shouldShowJumpToEnd = mode === "history" || showJumpToEnd;
+
+  if (!isLoadingPrevious) {
+    loadingPreviousRef.current = false;
+  }
 
   useImperativeHandle(
     ref,
@@ -104,22 +109,6 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
     }),
     [],
   );
-
-  useEffect(() => {
-    if (!isLoadingPrevious) {
-      loadingPreviousRef.current = false;
-    }
-  }, [isLoadingPrevious]);
-
-  useEffect(() => {
-    const frameId = window.requestAnimationFrame(() => {
-      setShowJumpToEnd(!isNearBottom(listRef.current));
-    });
-
-    return () => {
-      window.cancelAnimationFrame(frameId);
-    };
-  }, [rowIds, waiting]);
 
   const loadPreviousPage = async () => {
     if (!hasPreviousPage || isLoadingPrevious || loadingPreviousRef.current || !onLoadPrevious) {
@@ -221,7 +210,7 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
           style={{ minHeight: 0, width: "100%" }}
         />
       </div>
-      {showJumpToEnd ? (
+      {shouldShowJumpToEnd ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-4">
           <Button
             className="pointer-events-auto"

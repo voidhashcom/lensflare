@@ -317,7 +317,7 @@ function TelemetryTabPanel({
                 resolveRow={resolveRow}
                 rowIds={stream.rowIds}
                 selectedLogId={stream.selectedEntryId}
-                waiting={stream.errorMessage === null || stream.isInitialLoading}
+                waiting={stream.mode === "live" && stream.errorMessage === null}
               />
               {shouldShowGuide && stream.metadata.projectSlug && stream.metadata.datasetSlug ? (
                 <div
