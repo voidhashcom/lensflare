@@ -23,8 +23,6 @@ export interface LatestReleaseDownloads {
   readonly downloads: {
     readonly macArm64: DownloadLink;
     readonly macX64: DownloadLink;
-    readonly windowsX64: DownloadLink;
-    readonly linuxX64: DownloadLink;
   };
 }
 
@@ -40,8 +38,6 @@ const fallbackReleaseDownloads: LatestReleaseDownloads = {
   downloads: {
     macArm64: fallbackDownloadLink,
     macX64: fallbackDownloadLink,
-    windowsX64: fallbackDownloadLink,
-    linuxX64: fallbackDownloadLink,
   },
 };
 
@@ -116,8 +112,6 @@ export async function getLatestReleaseDownloads(): Promise<LatestReleaseDownload
       downloads: {
         macArm64: findAssetUrl(assets, "-arm64.dmg"),
         macX64: findAssetUrl(assets, "-x64.dmg"),
-        windowsX64: findAssetUrl(assets, "-x64.exe"),
-        linuxX64: findAssetUrl(assets, "-x64.AppImage"),
       },
     };
   } catch {

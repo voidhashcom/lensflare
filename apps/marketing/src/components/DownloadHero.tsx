@@ -26,7 +26,7 @@ export function DownloadHero({ release }: { release: LatestReleaseDownloads }): 
           </h1>
           <p className="max-w-[520px] text-[14px] leading-[150%] text-[#6B6B6B]">
             A development observability stack for humans and agents. Free, open source, and built
-            for macOS, Windows, and Linux.
+            for macOS on Apple Silicon and Intel Macs.
           </p>
         </div>
 

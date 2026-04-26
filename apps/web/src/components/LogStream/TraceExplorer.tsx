@@ -1,7 +1,8 @@
 import { ChevronDownIcon, ChevronUpIcon, CopyIcon, ListTreeIcon, SearchIcon } from "lucide-react";
 import {
+  Activity,
   useCallback,
-  useEffect,
+  useDeferredValue,
   useMemo,
   useState,
   type MouseEvent,
@@ -11,10 +12,10 @@ import {
 import { Button } from "~/components/ui/button";
 import { TopTabsItem, TopTabsList, TopTabsTrigger } from "~/components/ui/top-tabs";
 import { IconButtonTooltip } from "~/components/ui/tooltip";
-import { getLogTraceContext } from "~/data/logApi";
 import { useHorizontalResizablePanel } from "~/hooks/useHorizontalResizablePanel";
 import { cn } from "~/lib/utils";
 
+import { useTraceContextSnapshot, type TraceContextSnapshot } from "./traceContextStore";
 import type { TraceContext, TraceSpan } from "./types";
 
 /**
@@ -56,6 +57,20 @@ type LoadState =
   | { readonly status: "empty" }
   | { readonly status: "ready"; readonly trace: TraceContext };
 
+function toLoadState(snapshot: TraceContextSnapshot): LoadState {
+  switch (snapshot.status) {
+    case "ready":
+      return { status: "ready", trace: snapshot.trace };
+    case "error":
+      return { status: "error", message: snapshot.message };
+    case "unavailable":
+      return { status: "empty" };
+    case "idle":
+    case "loading":
+      return { status: "loading" };
+  }
+}
+
 /**
  * Full-screen distributed-trace explorer. Rendered when a trace tab is
  * active in the dataset tab strip. Shape mirrors the Axiom reference:
@@ -73,9 +88,11 @@ export function TraceExplorer({
   initialSpanId,
   className,
 }: TraceExplorerProps) {
-  const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
-  const [selectedSpanId, setSelectedSpanId] = useState<string | null>(initialSpanId ?? null);
+  const traceSnapshot = useTraceContextSnapshot(projectId, datasetId, traceId, initialSpanId);
+  const loadState = useMemo(() => toLoadState(traceSnapshot), [traceSnapshot]);
+  const [requestedSpanId, setRequestedSpanId] = useState<string | null>(initialSpanId ?? null);
   const [filter, setFilter] = useState("");
+  const deferredFilter = useDeferredValue(filter);
   const [detailsTab, setDetailsTab] = useState<DetailsTab>("fields");
   const { panelRef, resizeHandleProps, width } = useHorizontalResizablePanel<HTMLElement>({
     defaultWidth: DETAILS_PANEL_DEFAULT_WIDTH_PX,
@@ -86,55 +103,26 @@ export function TraceExplorer({
     storageKey: DETAILS_PANEL_WIDTH_STORAGE_KEY,
   });
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoadState({ status: "loading" });
-
-    getLogTraceContext(projectId, datasetId, traceId, initialSpanId).then(
-      (trace) => {
-        if (cancelled) return;
-        if (trace === null) {
-          setLoadState({ status: "empty" });
-          return;
-        }
-        setLoadState({ status: "ready", trace });
-      },
-      (error: unknown) => {
-        if (cancelled) return;
-        setLoadState({
-          status: "error",
-          message: error instanceof Error ? error.message : "Failed to load trace.",
-        });
-      },
-    );
-
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, datasetId, traceId, initialSpanId]);
-
-  // Pick a sensible initial selection once the trace loads. Prefer the span
-  // the user came from, then the first error (most users open the explorer
-  // *because* something failed), falling back to the root span.
-  useEffect(() => {
-    if (loadState.status !== "ready") return;
-    const { trace } = loadState;
-
-    setSelectedSpanId((current) => {
-      if (current !== null && trace.spans.some((span) => span.id === current)) {
-        return current;
-      }
-      const errorSpan = trace.spans.find((span) => span.status === "error");
-      return errorSpan?.id ?? trace.spans[0]?.id ?? null;
-    });
-  }, [loadState]);
+  const selectedSpanId = useMemo(() => {
+    if (loadState.status !== "ready") {
+      return requestedSpanId;
+    }
+    if (
+      requestedSpanId !== null &&
+      loadState.trace.spans.some((span) => span.id === requestedSpanId)
+    ) {
+      return requestedSpanId;
+    }
+    const errorSpan = loadState.trace.spans.find((span) => span.status === "error");
+    return errorSpan?.id ?? loadState.trace.spans[0]?.id ?? null;
+  }, [loadState, requestedSpanId]);
 
   const depthByParent = useMemo(() => {
     if (loadState.status !== "ready") return new Map<string, number>();
     return computeDepths(loadState.trace.spans);
   }, [loadState]);
 
-  const normalizedFilter = filter.trim().toLowerCase();
+  const normalizedFilter = deferredFilter.trim().toLowerCase();
   const filteredSpans = useMemo(() => {
     if (loadState.status !== "ready") return [] as ReadonlyArray<TraceSpan>;
     if (normalizedFilter.length === 0) return loadState.trace.spans;
@@ -164,7 +152,7 @@ export function TraceExplorer({
             : Math.max(currentIndex - 1, 0);
       const nextSpan = filteredSpans[nextIndex];
       if (nextSpan) {
-        setSelectedSpanId(nextSpan.id);
+        setRequestedSpanId(nextSpan.id);
       }
     },
     [filteredSpans, selectedSpanId],
@@ -196,7 +184,7 @@ export function TraceExplorer({
         <TraceBody
           depthByParent={depthByParent}
           loadState={loadState}
-          onSelect={setSelectedSpanId}
+          onSelect={setRequestedSpanId}
           selectedSpanId={selectedSpanId}
           visibleSpans={filteredSpans}
         />
@@ -614,13 +602,15 @@ function SpanDetailsPanel({ trace, selectedSpan, activeTab, onSelectTab }: SpanD
       <SpanIdentityFields span={selectedSpan} />
       <SpanDetailsTabs active={activeTab} onSelect={onSelectTab} span={selectedSpan} />
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        {activeTab === "fields" ? (
+        <Activity mode={activeTab === "fields" ? "visible" : "hidden"} name="Span fields">
           <SpanFieldsTab span={selectedSpan} trace={trace} />
-        ) : activeTab === "events" ? (
+        </Activity>
+        <Activity mode={activeTab === "events" ? "visible" : "hidden"} name="Span events">
           <SpanEventsTab span={selectedSpan} trace={trace} />
-        ) : (
+        </Activity>
+        <Activity mode={activeTab === "links" ? "visible" : "hidden"} name="Span links">
           <SpanLinksTab />
-        )}
+        </Activity>
       </div>
     </>
   );

@@ -13,6 +13,8 @@ import {
   loadOlderDatasetTelemetry,
   refreshDatasetTelemetry,
   resetLogStreamStoreForTests,
+  resolveTelemetryEntry,
+  returnTelemetryViewToLive,
   selectDatasetTelemetryEntry,
   setDatasetStreamFilter,
 } from "./logStreamStore";
@@ -34,7 +36,7 @@ describe("logStreamStore", () => {
 
     expect(subscribeTelemetry).toHaveBeenCalledTimes(1);
     expect(listTelemetry).toHaveBeenCalledTimes(1);
-    expect(getDatasetStreamSnapshot("p", "d").logs.map((log) => log.id)).toEqual(["log-1"]);
+    expect(getDatasetStreamSnapshot("p", "d").rowIds).toEqual(["log-1"]);
   });
 
   it("merges incoming websocket entries into visible logs", async () => {
@@ -44,7 +46,7 @@ describe("logStreamStore", () => {
 
     fakes.emit("p", "d", logRecord("log-2", "live"));
 
-    expect(getDatasetStreamSnapshot("p", "d").logs.map((log) => log.id)).toEqual(["log-2"]);
+    expect(getDatasetStreamSnapshot("p", "d").rowIds).toEqual(["log-2"]);
   });
 
   it("keeps inactive recent datasets subscribed and current", async () => {
@@ -55,7 +57,7 @@ describe("logStreamStore", () => {
 
     fakes.emit("p", "d", logRecord("log-3", "inactive live"));
 
-    expect(getDatasetStreamSnapshot("p", "d").logs.map((log) => log.id)).toEqual(["log-3"]);
+    expect(getDatasetStreamSnapshot("p", "d").rowIds).toEqual(["log-3"]);
   });
 
   it("filters incoming events after the applied filter changes", async () => {
@@ -73,7 +75,7 @@ describe("logStreamStore", () => {
     fakes.emit("p", "d", logRecord("log-info", "info", "info"));
     fakes.emit("p", "d", logRecord("log-error", "error", "error"));
 
-    expect(getDatasetStreamSnapshot("p", "d").logs.map((log) => log.id)).toEqual(["log-error"]);
+    expect(getDatasetStreamSnapshot("p", "d").rowIds).toEqual(["log-error"]);
   });
 
   it("keeps filters independent across telemetry views for the same dataset", async () => {
@@ -93,13 +95,11 @@ describe("logStreamStore", () => {
     fakes.emit("p", "d", logRecord("log-info", "info", "info"));
     fakes.emit("p", "d", logRecord("log-error", "error", "error"));
 
-    expect(getDatasetStreamSnapshot("p", "d", "telemetry:1").logs.map((log) => log.id)).toEqual([
+    expect(getDatasetStreamSnapshot("p", "d", "telemetry:1").rowIds).toEqual([
       "log-info",
       "log-error",
     ]);
-    expect(getDatasetStreamSnapshot("p", "d", "telemetry:2").logs.map((log) => log.id)).toEqual([
-      "log-error",
-    ]);
+    expect(getDatasetStreamSnapshot("p", "d", "telemetry:2").rowIds).toEqual(["log-error"]);
   });
 
   it("keeps selected rows independent across telemetry views", async () => {
@@ -112,8 +112,8 @@ describe("logStreamStore", () => {
     selectDatasetTelemetryEntry("p", "d", "telemetry:1", "a");
     selectDatasetTelemetryEntry("p", "d", "telemetry:2", "b");
 
-    expect(getDatasetStreamSnapshot("p", "d", "telemetry:1").selectedLogId).toBe("a");
-    expect(getDatasetStreamSnapshot("p", "d", "telemetry:2").selectedLogId).toBe("b");
+    expect(getDatasetStreamSnapshot("p", "d", "telemetry:1").selectedEntryId).toBe("a");
+    expect(getDatasetStreamSnapshot("p", "d", "telemetry:2").selectedEntryId).toBe("b");
   });
 
   it("uses one backend subscription for multiple telemetry views of the same dataset", async () => {
@@ -138,9 +138,7 @@ describe("logStreamStore", () => {
     fakes.emit("p", "d", logRecord("still-live", "still live"));
 
     expect(fakes.cancelCount()).toBe(0);
-    expect(getDatasetStreamSnapshot("p", "d", "telemetry:2").logs.map((log) => log.id)).toEqual([
-      "still-live",
-    ]);
+    expect(getDatasetStreamSnapshot("p", "d", "telemetry:2").rowIds).toEqual(["still-live"]);
   });
 
   it("derives filtered rows immediately from raw recent websocket data", async () => {
@@ -158,7 +156,7 @@ describe("logStreamStore", () => {
       filter: Filter.cmp(["level"], "eq", Filter.stringValue("error")),
     });
 
-    expect(getDatasetStreamSnapshot("p", "d").logs.map((log) => log.id)).toEqual(["log-error"]);
+    expect(getDatasetStreamSnapshot("p", "d").rowIds).toEqual(["log-error"]);
   });
 
   it("deduplicates concurrent older-page loads", async () => {
@@ -177,10 +175,10 @@ describe("logStreamStore", () => {
     await Promise.all([loadOlderDatasetTelemetry("p", "d"), loadOlderDatasetTelemetry("p", "d")]);
 
     expect(listTelemetry).toHaveBeenCalledTimes(2);
-    expect(getDatasetStreamSnapshot("p", "d").logs.map((log) => log.id)).toEqual(["old", "new"]);
+    expect(getDatasetStreamSnapshot("p", "d").rowIds).toEqual(["old", "new"]);
   });
 
-  it("does not trim away an explicitly loaded older page", async () => {
+  it("caps the live window and keeps an explicitly loaded older page in history", async () => {
     const latestRecords = Array.from({ length: 1_000 }, (_, index) =>
       logRecord(
         `new-${index}`,
@@ -200,12 +198,13 @@ describe("logStreamStore", () => {
 
     await loadOlderDatasetTelemetry("p", "d");
 
-    const ids = getDatasetStreamSnapshot("p", "d").logs.map((log) => log.id);
-    expect(ids).toHaveLength(1_001);
+    const ids = getDatasetStreamSnapshot("p", "d").rowIds;
+    expect(ids).toHaveLength(101);
     expect(ids[0]).toBe("old");
+    expect(ids.at(-1)).toBe("new-999");
   });
 
-  it("preserves loaded older rows and the older cursor across latest-page refreshes", async () => {
+  it("keeps history rows and cursors stable across live refreshes", async () => {
     installFakes({
       pages: [
         page([logRecord("new", "new", "info", "2026-01-01T00:00:10.000Z")], {
@@ -232,9 +231,10 @@ describe("logStreamStore", () => {
     await refreshDatasetTelemetry("p", "d");
 
     const snapshot = getDatasetStreamSnapshot("p", "d");
-    expect(snapshot.logs.map((log) => log.id)).toEqual(["old", "new", "newer"]);
+    expect(snapshot.mode).toBe("history");
+    expect(snapshot.rowIds).toEqual(["old", "new"]);
     expect(snapshot.pageInfo?.startCursor).toBe("cursor-old");
-    expect(snapshot.pageInfo?.endCursor).toBe("end-newer");
+    expect(snapshot.pageInfo?.endCursor).toBe("end-new");
   });
 
   it("keeps the selected older detail open when live entries arrive", async () => {
@@ -255,9 +255,35 @@ describe("logStreamStore", () => {
     fakes.emit("p", "d", logRecord("live", "live", "info", "2026-01-01T00:00:20.000Z"));
 
     const snapshot = getDatasetStreamSnapshot("p", "d");
-    expect(snapshot.logs.map((log) => log.id)).toEqual(["old", "new", "live"]);
-    expect(snapshot.selectedLogId).toBe("old");
-    expect(snapshot.selectedLog?.id).toBe("old");
+    expect(snapshot.mode).toBe("history");
+    expect(snapshot.rowIds).toEqual(["old", "new"]);
+    expect(snapshot.selectedEntryId).toBe("old");
+    expect(resolveTelemetryEntry("p", "d", "old")?.id).toBe("old");
+  });
+
+  it("returns to live mode by clearing history and fetching a fresh backfill", async () => {
+    installFakes({
+      pages: [
+        page([logRecord("new", "new", "info", "2026-01-01T00:00:10.000Z")], {
+          hasPreviousPage: true,
+          startCursor: "cursor",
+        }),
+        page([logRecord("old", "old", "info", "2026-01-01T00:00:01.000Z")]),
+        page([logRecord("latest", "latest", "info", "2026-01-01T00:00:20.000Z")]),
+      ],
+    });
+    activateDatasetStream(baseInput());
+    await flushStream("p", "d");
+    await loadOlderDatasetTelemetry("p", "d");
+
+    returnTelemetryViewToLive("p", "d");
+    await flushStream("p", "d");
+
+    const snapshot = getDatasetStreamSnapshot("p", "d");
+    expect(snapshot.mode).toBe("live");
+    expect(snapshot.selectedEntryId).toBeNull();
+    expect(snapshot.rowIds).toEqual(["latest"]);
+    expect(snapshot.pageInfo?.startCursor).toBeNull();
   });
 
   it("keeps row order stable when same-millisecond records arrive later", async () => {
@@ -274,11 +300,7 @@ describe("logStreamStore", () => {
 
     fakes.emit("p", "d", logRecord("m-middle", "middle", "info", "2026-01-01T00:00:00.000000200Z"));
 
-    expect(getDatasetStreamSnapshot("p", "d").logs.map((log) => log.id)).toEqual([
-      "z-first",
-      "m-middle",
-      "a-last",
-    ]);
+    expect(getDatasetStreamSnapshot("p", "d").rowIds).toEqual(["z-first", "m-middle", "a-last"]);
   });
 
   it("delays live rows so logs and spans can be sorted into correct positions together", async () => {
@@ -297,11 +319,11 @@ describe("logStreamStore", () => {
     fakes.emit("p", "d", logRecord("live-log", "live", "info", "2026-01-01T00:00:00.000000300Z"));
     fakes.emit("p", "d", spanRecord("live-span", "span", "2026-01-01T00:00:00.000000200Z"));
 
-    expect(getDatasetStreamSnapshot("p", "d").logs.map((log) => log.id)).toEqual(["old", "new"]);
+    expect(getDatasetStreamSnapshot("p", "d").rowIds).toEqual(["old", "new"]);
 
     await wait(25);
 
-    expect(getDatasetStreamSnapshot("p", "d").logs.map((log) => log.id)).toEqual([
+    expect(getDatasetStreamSnapshot("p", "d").rowIds).toEqual([
       "old",
       "live-span",
       "live-log",
@@ -326,7 +348,7 @@ describe("logStreamStore", () => {
 
     await refreshDatasetTelemetry("p", "d");
 
-    expect(getDatasetStreamSnapshot("p", "d").logs.map((log) => log.id)).toEqual(["same"]);
+    expect(getDatasetStreamSnapshot("p", "d").rowIds).toEqual(["same"]);
   });
 
   it("queues a filtered first-page load when the filter changes during an in-flight load", async () => {
@@ -364,7 +386,7 @@ describe("logStreamStore", () => {
       limit: 100,
       filter: Filter.cmp(["level"], "eq", Filter.stringValue("error")),
     });
-    expect(getDatasetStreamSnapshot("p", "d").logs.map((log) => log.id)).toEqual(["log-error"]);
+    expect(getDatasetStreamSnapshot("p", "d").rowIds).toEqual(["log-error"]);
   });
 
   it("evicts inactive sessions beyond the recent-dataset cap", async () => {
@@ -393,8 +415,8 @@ describe("logStreamStore", () => {
     activateDatasetStream(baseInput());
 
     const snapshot = getDatasetStreamSnapshot("p", "d");
-    expect(snapshot.selectedLogId).toBe("log-selected");
-    expect(snapshot.selectedLog?.id).toBe("log-selected");
+    expect(snapshot.selectedEntryId).toBe("log-selected");
+    expect(resolveTelemetryEntry("p", "d", "log-selected")?.id).toBe("log-selected");
   });
 
   it("invalidates a dataset and cancels its subscription", async () => {
@@ -410,8 +432,8 @@ describe("logStreamStore", () => {
 
     expect(fakes.cancelCount()).toBe(1);
     expect(getLogStreamStoreSessionCountForTests()).toBe(0);
-    expect(getDatasetStreamSnapshot("p", "d", "telemetry:1").logs).toEqual([]);
-    expect(getDatasetStreamSnapshot("p", "d", "telemetry:2").logs).toEqual([]);
+    expect(getDatasetStreamSnapshot("p", "d", "telemetry:1").rowIds).toEqual([]);
+    expect(getDatasetStreamSnapshot("p", "d", "telemetry:2").rowIds).toEqual([]);
   });
 });
 
