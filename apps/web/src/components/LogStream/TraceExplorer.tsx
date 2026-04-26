@@ -1,9 +1,18 @@
-import { ChevronDownIcon, ChevronUpIcon, CopyIcon, ListTreeIcon, SearchIcon } from "lucide-react";
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  CopyIcon,
+  ListTreeIcon,
+  SearchIcon,
+} from "lucide-react";
 import {
   Activity,
   useCallback,
   useDeferredValue,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type MouseEvent,
   type KeyboardEvent,
@@ -13,6 +22,7 @@ import { Button } from "~/components/ui/button";
 import { TopTabsItem, TopTabsList, TopTabsTrigger } from "~/components/ui/top-tabs";
 import { IconButtonTooltip } from "~/components/ui/tooltip";
 import { useHorizontalResizablePanel } from "~/hooks/useHorizontalResizablePanel";
+import { copyTextToClipboard } from "~/lib/clipboard";
 import { cn } from "~/lib/utils";
 
 import { useTraceContextSnapshot, type TraceContextSnapshot } from "./traceContextStore";
@@ -617,12 +627,36 @@ function SpanDetailsPanel({ trace, selectedSpan, activeTab, onSelectTab }: SpanD
 }
 
 function SpanDetailsHeader({ span }: { span: TraceSpan }) {
+  const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current !== null) {
+        clearTimeout(copyTimerRef.current);
+      }
+    };
+  }, []);
+
   // Copy the span id on click so users can paste it into external tools
   // (grafana, datadog etc.) without re-typing — matches the copy button
   // shown in the reference screenshot.
   const handleCopy = useCallback(() => {
-    if (typeof navigator === "undefined" || !navigator.clipboard) return;
-    void navigator.clipboard.writeText(span.id);
+    void copyTextToClipboard(span.id)
+      .then((success) => {
+        if (!success) {
+          return;
+        }
+        setCopied(true);
+        if (copyTimerRef.current !== null) {
+          clearTimeout(copyTimerRef.current);
+        }
+        copyTimerRef.current = setTimeout(() => {
+          setCopied(false);
+          copyTimerRef.current = null;
+        }, 1500);
+      })
+      .catch(() => {});
   }, [span.id]);
 
   return (
@@ -632,15 +666,15 @@ function SpanDetailsHeader({ span }: { span: TraceSpan }) {
       <span className="min-w-0 flex-1 truncate font-mono text-foreground text-sm" title={span.id}>
         {span.id}
       </span>
-      <IconButtonTooltip label="Copy span id">
+      <IconButtonTooltip label={copied ? "Copied" : "Copy span id"}>
         <Button
-          aria-label="Copy span id"
+          aria-label={copied ? "Copied" : "Copy span id"}
           className="shrink-0"
           onClick={handleCopy}
           size="icon"
           variant="ghost"
         >
-          <CopyIcon className="size-3.5" />
+          {copied ? <CheckIcon className="size-3.5 text-success" /> : <CopyIcon className="size-3.5" />}
         </Button>
       </IconButtonTooltip>
     </div>

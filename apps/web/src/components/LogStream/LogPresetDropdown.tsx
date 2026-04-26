@@ -11,7 +11,7 @@ import {
   Trash2Icon,
   type LucideIcon,
 } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 import { Button } from "~/components/ui/button";
 import {
@@ -24,10 +24,10 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
+import { Kbd, KbdGroup } from "~/components/ui/kbd";
 import { Label } from "~/components/ui/label";
-import { Menu, MenuPopup, MenuSeparator, MenuTrigger } from "~/components/ui/menu";
+import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "~/components/ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
-import { cn } from "~/lib/utils";
 
 import {
   createLogFilterPreset,
@@ -64,6 +64,22 @@ export function LogPresetDropdown({
   const activePreset = presets.find((preset) => presetMatchesFilter(preset, filterSource, filter));
   const triggerLabel = activePreset?.name ?? "Presets";
   const TriggerIcon = iconForPreset(activePreset);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (event.key.toLowerCase() !== "p") return;
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
+      if (saveDialogOpen || editDialogOpen) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      setOpen(true);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [editDialogOpen, saveDialogOpen]);
 
   const applyPreset = (preset: LogFilterPreset) => {
     setDatasetStreamFilter({
@@ -136,20 +152,35 @@ export function LogPresetDropdown({
   return (
     <>
       <Menu onOpenChange={setOpen} open={open}>
-        <MenuTrigger
-          render={
-            <Button
-              aria-label="Open filter presets"
-              className="h-8 gap-2 px-2.5 sm:h-8"
-              size="sm"
-              variant="ghost"
-            >
-              <TriggerIcon className="size-3.5 text-muted-foreground/80" />
-              <span className="max-w-28 truncate text-xs">{triggerLabel}</span>
-              <ChevronDownIcon className="size-3 text-muted-foreground/60" />
-            </Button>
-          }
-        />
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <MenuTrigger
+                render={
+                  <Button
+                    aria-label="Open filter presets"
+                    className="h-8 gap-2 px-2.5 sm:h-8"
+                    size="sm"
+                    variant="ghost"
+                  >
+                    <TriggerIcon className="size-3.5 text-muted-foreground/80" />
+                    <span className="max-w-28 truncate text-xs">{triggerLabel}</span>
+                    <ChevronDownIcon className="size-3 text-muted-foreground/60" />
+                  </Button>
+                }
+              />
+            }
+          />
+          <TooltipPopup>
+            <span className="inline-flex items-center gap-2">
+              Open presets
+              <KbdGroup aria-hidden className="gap-0.5">
+                <Kbd className="h-4 min-w-4 px-1 text-[10px]">⌘</Kbd>
+                <Kbd className="h-4 min-w-4 px-1 text-[10px]">P</Kbd>
+              </KbdGroup>
+            </span>
+          </TooltipPopup>
+        </Tooltip>
         <MenuPopup align="start" className="w-52" sideOffset={6}>
           {presets.map((preset) => (
             <PresetApplyRow
@@ -160,19 +191,14 @@ export function LogPresetDropdown({
             />
           ))}
           <MenuSeparator />
-          <button
-            className={cn(
-              "flex min-h-7 w-full items-center gap-2 rounded-sm px-2 py-1 text-left text-sm outline-none",
-              "hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground",
-              !hasActiveFilter && "cursor-not-allowed opacity-50 hover:bg-transparent",
-            )}
+          <MenuItem
             disabled={!hasActiveFilter}
+            className="min-h-7"
             onClick={openSaveDialog}
-            type="button"
           >
             <PlusIcon className="size-4 shrink-0 text-muted-foreground/80" />
             <span className="min-w-0 truncate">Save preset</span>
-          </button>
+          </MenuItem>
         </MenuPopup>
       </Menu>
 
@@ -301,17 +327,13 @@ function PresetApplyRow({ preset, onApply, onEdit }: PresetApplyRowProps) {
 
   return (
     <div className="group/preset relative">
-      <button
-        className={cn(
-          "flex min-h-7 w-full items-center gap-2 rounded-sm px-2 py-1 pr-8 text-left text-sm outline-none",
-          "hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground",
-        )}
+      <MenuItem
+        className="min-h-7 w-full pr-8"
         onClick={onApply}
-        type="button"
       >
         <PresetIcon className="size-4 shrink-0 text-muted-foreground/80" />
         <span className="min-w-0 truncate">{preset.name}</span>
-      </button>
+      </MenuItem>
       {!preset.readonly ? (
         <Tooltip>
           <TooltipTrigger

@@ -17,6 +17,7 @@ import {
 
 import { cn } from "~/lib/utils";
 import { Button, buttonVariants } from "~/components/ui/button";
+import { copyTextToClipboard } from "~/lib/clipboard";
 import { IconButtonTooltip } from "~/components/ui/tooltip";
 import { buildVisibleToastLayout, shouldHideCollapsedToastContent } from "./toast.logic";
 
@@ -72,13 +73,12 @@ function CopyErrorButton({ text }: { text: string }) {
   const [isCopied, setIsCopied] = useState(false);
 
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(text);
+    if (await copyTextToClipboard(text)) {
       setIsCopied(true);
       window.setTimeout(() => setIsCopied(false), 1500);
-    } catch {
-      setIsCopied(false);
+      return;
     }
+    setIsCopied(false);
   };
 
   return (

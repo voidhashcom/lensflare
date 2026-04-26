@@ -6,6 +6,7 @@ import { IconButtonTooltip } from "~/components/ui/tooltip";
 import { integrationToMarkdown } from "~/integrations/markdown";
 import { integrationRegistry, PROTOCOL_LABEL } from "~/integrations/registry";
 import type { Integration, Language, TemplateVars } from "~/integrations/types";
+import { copyTextToClipboard } from "~/lib/clipboard";
 import { cn } from "~/lib/utils";
 
 import { IntegrationPicker } from "./IntegrationPicker";
@@ -220,9 +221,11 @@ function CopyMarkdownButton({ integration, languageLabel, variables }: CopyMarkd
     const markdown = integrationToMarkdown(integration, variables, {
       languageLabel,
     });
-    void navigator.clipboard
-      .writeText(markdown)
-      .then(() => {
+    void copyTextToClipboard(markdown)
+      .then((success) => {
+        if (!success) {
+          return;
+        }
         setCopied(true);
         if (copyTimerRef.current !== null) {
           clearTimeout(copyTimerRef.current);
@@ -232,11 +235,7 @@ function CopyMarkdownButton({ integration, languageLabel, variables }: CopyMarkd
           copyTimerRef.current = null;
         }, COPY_FEEDBACK_MS);
       })
-      .catch(() => {
-        // Clipboard can reject if the document isn't focused or the user
-        // denied permission. We silently swallow it — the snippets below
-        // remain copyable individually via their own buttons.
-      });
+      .catch(() => {});
   }, [integration, languageLabel, variables]);
 
   return (

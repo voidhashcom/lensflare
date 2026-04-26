@@ -5,10 +5,19 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from "@legendapp/list/react";
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import {
+  forwardRef,
+  type KeyboardEvent,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import { ArrowDownIcon, ChevronUpIcon, ColumnsIcon, LoaderCircleIcon } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { Kbd, KbdGroup } from "~/components/ui/kbd";
 import { cn } from "~/lib/utils";
 import { IconButtonTooltip } from "~/components/ui/tooltip";
 
@@ -91,12 +100,35 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
   ref,
 ) {
   const listRef = useRef<LegendListRef | null>(null);
+  const rowElementsRef = useRef(new Map<string, HTMLButtonElement>());
   const loadingPreviousRef = useRef(false);
   const jumpToEndScrollGuardRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previousModeRef = useRef(mode);
   const [showJumpToEnd, setShowJumpToEnd] = useState(false);
   const shouldShowJumpToEnd = mode === "history" || showJumpToEnd;
   const shouldShowBottomAction = shouldShowJumpToEnd || waiting;
+
+  const clearJumpToEndScrollGuard = useCallback(() => {
+    if (jumpToEndScrollGuardRef.current === null) {
+      return;
+    }
+    clearTimeout(jumpToEndScrollGuardRef.current);
+    jumpToEndScrollGuardRef.current = null;
+  }, []);
+
+  const guardJumpToEndScroll = useCallback(() => {
+    clearJumpToEndScrollGuard();
+    jumpToEndScrollGuardRef.current = setTimeout(() => {
+      jumpToEndScrollGuardRef.current = null;
+    }, JUMP_TO_END_SCROLL_GUARD_MS);
+  }, [clearJumpToEndScrollGuard]);
+
+  const handleJumpToEnd = useCallback(() => {
+    setShowJumpToEnd(false);
+    guardJumpToEndScroll();
+    onJumpToEnd?.();
+    void listRef.current?.scrollToEnd({ animated: false });
+  }, [guardJumpToEndScroll, onJumpToEnd]);
 
   if (!isLoadingPrevious) {
     loadingPreviousRef.current = false;
@@ -127,7 +159,7 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
     window.requestAnimationFrame(() => {
       void listRef.current?.scrollToEnd({ animated: false });
     });
-  }, [mode]);
+  }, [guardJumpToEndScroll, mode]);
 
   useEffect(
     () => () => {
@@ -185,27 +217,70 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
     }
   };
 
-  const handleJumpToEnd = () => {
-    setShowJumpToEnd(false);
-    guardJumpToEndScroll();
-    onJumpToEnd?.();
-    void listRef.current?.scrollToEnd({ animated: false });
-  };
+  const focusRow = useCallback((logId: string) => {
+    rowElementsRef.current.get(logId)?.focus({ preventScroll: true });
+  }, []);
 
-  const clearJumpToEndScrollGuard = () => {
-    if (jumpToEndScrollGuardRef.current === null) {
+  const moveSelection = useCallback((currentLogId: string, direction: -1 | 1) => {
+    const currentIndex = rowIds.indexOf(currentLogId);
+    if (currentIndex === -1) {
       return;
     }
-    clearTimeout(jumpToEndScrollGuardRef.current);
-    jumpToEndScrollGuardRef.current = null;
-  };
 
-  const guardJumpToEndScroll = () => {
-    clearJumpToEndScrollGuard();
-    jumpToEndScrollGuardRef.current = setTimeout(() => {
-      jumpToEndScrollGuardRef.current = null;
-    }, JUMP_TO_END_SCROLL_GUARD_MS);
-  };
+    const nextIndex = currentIndex + direction;
+    if (nextIndex < 0 || nextIndex >= rowIds.length) {
+      return;
+    }
+
+    const nextLogId = rowIds[nextIndex];
+    if (nextLogId === undefined) {
+      return;
+    }
+
+    onSelectLog?.(nextLogId);
+    const nextRow = rowElementsRef.current.get(nextLogId);
+    if (nextRow) {
+      nextRow.focus({ preventScroll: true });
+      keepRowVisible(nextRow, listRef.current);
+      return;
+    }
+
+    void listRef.current
+      ?.scrollToIndex({
+        animated: false,
+        index: nextIndex,
+        viewPosition: direction === 1 ? 1 : 0,
+      })
+      .then(() => {
+        window.requestAnimationFrame(() => {
+          focusRow(nextLogId);
+        });
+      });
+  }, [focusRow, onSelectLog, rowIds]);
+
+  const registerRowElement = useCallback((logId: string, element: HTMLButtonElement | null) => {
+    if (element) {
+      rowElementsRef.current.set(logId, element);
+    } else {
+      rowElementsRef.current.delete(logId);
+    }
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (!shouldShowJumpToEnd) return;
+      if (event.key.toLowerCase() !== "l") return;
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      handleJumpToEnd();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleJumpToEnd, shouldShowJumpToEnd]);
 
   // Closure-style render keeps per-render selection/click wiring co-located
   // with the rest of the table state. `extraData` forces LegendList to rerun
@@ -214,7 +289,13 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
   const renderRow = ({ item }: LegendListRenderItemProps<string>) => {
     const log = resolveRow(item);
     return log === null ? null : (
-      <LogRow isSelected={log.id === selectedLogId} log={log} onSelect={onSelectLog} />
+      <LogRow
+        isSelected={log.id === selectedLogId}
+        log={log}
+        onMoveSelection={moveSelection}
+        onRegister={registerRowElement}
+        onSelect={onSelectLog}
+      />
     );
   };
 
@@ -244,7 +325,7 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
           className="min-h-0 min-w-[75rem] flex-1"
           data={rowIds as Array<string>}
           estimatedItemSize={ROW_ESTIMATED_SIZE}
-          extraData={{ onSelectLog, resolveRow, selectedLogId }}
+          extraData={{ moveSelection, onSelectLog, registerRowElement, resolveRow, selectedLogId }}
           keyExtractor={extractLogKey}
           // Keep short log sets anchored to the top of the viewport; live-tail
           // following is handled separately by `maintainScrollAtEnd`.
@@ -282,6 +363,12 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
               <span className="inline-flex size-1.5 animate-pulse rounded-full bg-muted-foreground/60" />
             )}
             <span>{shouldShowJumpToEnd ? "Back to live" : "Waiting for telemetry"}</span>
+            {shouldShowJumpToEnd ? (
+              <KbdGroup className="shrink-0 gap-0.5 max-sm:hidden">
+                <Kbd className="h-4 min-w-4 px-1 text-[10px]">⌘</Kbd>
+                <Kbd className="h-4 min-w-4 px-1 text-[10px]">L</Kbd>
+              </KbdGroup>
+            ) : null}
           </Button>
         </div>
       ) : null}
@@ -359,10 +446,22 @@ function Header() {
 interface LogRowProps {
   log: TelemetryEntry;
   isSelected: boolean;
+  onMoveSelection: (logId: string, direction: -1 | 1) => void;
+  onRegister: (logId: string, element: HTMLButtonElement | null) => void;
   onSelect: ((logId: string) => void) | undefined;
 }
 
-function LogRow({ log, isSelected, onSelect }: LogRowProps) {
+function LogRow({ log, isSelected, onMoveSelection, onRegister, onSelect }: LogRowProps) {
+  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    onMoveSelection(log.id, event.key === "ArrowDown" ? 1 : -1);
+  };
+
   // Use a `button` element so the row is both keyboard-accessible and gets
   // the expected focus-visible ring for free. `text-left` and `w-full` are
   // needed to undo the browser defaults that would otherwise centre and
@@ -390,6 +489,7 @@ function LogRow({ log, isSelected, onSelect }: LogRowProps) {
       // Select on `mousedown` for a more responsive feel — the details panel
       // opens the instant the press lands instead of waiting for the release
       // that `onClick` would require.
+      onKeyDown={handleKeyDown}
       onMouseDown={(event) => {
         // Only left button; middle / right clicks should not select.
         if (event.button === 0) {
@@ -405,6 +505,7 @@ function LogRow({ log, isSelected, onSelect }: LogRowProps) {
           onSelect?.(log.id);
         }
       }}
+      ref={(element) => onRegister(log.id, element)}
       type="button"
     >
       <span className="truncate text-[11px] text-muted-foreground uppercase">
@@ -455,6 +556,22 @@ function LogRow({ log, isSelected, onSelect }: LogRowProps) {
 
 function BottomActionSpacer() {
   return <div aria-hidden className="h-8 sm:h-7" />;
+}
+
+function keepRowVisible(row: HTMLButtonElement, list: LegendListRef | null): void {
+  const scrollContainer = list?.getScrollableNode() as HTMLElement | null | undefined;
+  if (!scrollContainer) {
+    return;
+  }
+
+  const rowRect = row.getBoundingClientRect();
+  const containerRect = scrollContainer.getBoundingClientRect();
+
+  if (rowRect.top < containerRect.top) {
+    scrollContainer.scrollTop -= containerRect.top - rowRect.top;
+  } else if (rowRect.bottom > containerRect.bottom) {
+    scrollContainer.scrollTop += rowRect.bottom - containerRect.bottom;
+  }
 }
 
 function isNearBottom(list: LegendListRef | null): boolean {

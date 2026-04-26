@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { renderTemplate } from "~/integrations/template";
 import type { Snippet, TemplateVars } from "~/integrations/types";
+import { copyTextToClipboard } from "~/lib/clipboard";
 import { cn } from "~/lib/utils";
 import { useTheme } from "~/hooks/useTheme";
 
@@ -75,9 +76,11 @@ export function CodeBlock({ snippet, variables, className }: CodeBlockProps) {
     // The copy always uses the freshly rendered text so slug renames
     // take effect immediately, even if the component hasn't re-rendered
     // (the `rendered` closure is captured at click time via the ref).
-    void navigator.clipboard
-      .writeText(rendered)
-      .then(() => {
+    void copyTextToClipboard(rendered)
+      .then((success) => {
+        if (!success) {
+          return;
+        }
         setCopied(true);
         if (copyTimerRef.current !== null) {
           clearTimeout(copyTimerRef.current);
@@ -87,11 +90,7 @@ export function CodeBlock({ snippet, variables, className }: CodeBlockProps) {
           copyTimerRef.current = null;
         }, COPY_FEEDBACK_MS);
       })
-      .catch(() => {
-        // Clipboard can reject if the document isn't focused (Firefox) or
-        // the user denied permission. We silently ignore it — the snippet
-        // is still selectable in the DOM so users can copy manually.
-      });
+      .catch(() => {});
   }, [rendered]);
 
   return (

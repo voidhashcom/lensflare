@@ -4,6 +4,7 @@ import { useEffect, useMemo, type MouseEvent } from "react";
 
 import { LogoSymbol } from "~/components/Logo";
 import { Button } from "~/components/ui/button";
+import { Kbd, KbdGroup } from "~/components/ui/kbd";
 import { TopTabsItem, TopTabsList, TopTabsTrigger } from "~/components/ui/top-tabs";
 import { IconButtonTooltip } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
@@ -90,7 +91,17 @@ export function DatasetTabsTitlebar() {
             tab={tab}
           />
         ))}
-        <IconButtonTooltip label="New Telemetry tab">
+        <IconButtonTooltip
+          label={
+            <span className="inline-flex items-center gap-2">
+              New Telemetry tab
+              <KbdGroup aria-hidden className="gap-0.5">
+                <Kbd className="h-4 min-w-4 px-1 text-[10px]">⌘</Kbd>
+                <Kbd className="h-4 min-w-4 px-1 text-[10px]">T</Kbd>
+              </KbdGroup>
+            </span>
+          }
+        >
           <Button
             aria-label="New Telemetry tab"
             className="desktop-no-drag my-auto"
