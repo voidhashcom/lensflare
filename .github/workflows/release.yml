@@ -29,7 +29,7 @@ env:
 
 jobs:
   prepare:
-    runs-on: ubuntu-22.04
+    runs-on: blacksmith-4vcpu-ubuntu-2204
     outputs:
       channel: ${{ steps.release.outputs.channel }}
       prerelease: ${{ steps.release.outputs.prerelease }}
@@ -75,7 +75,7 @@ jobs:
 
   create-release:
     needs: prepare
-    runs-on: ubuntu-22.04
+    runs-on: blacksmith-4vcpu-ubuntu-2204
     env:
       GH_TOKEN: ${{ secrets.LENSFLARE_DESKTOP_UPDATE_GITHUB_TOKEN || github.token }}
       TAG: ${{ needs.prepare.outputs.tag }}
@@ -104,7 +104,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
+          - os: blacksmith-6vcpu-macos-15
             platform: mac
             arch: arm64
             target: dmg
@@ -171,7 +171,7 @@ jobs:
     needs:
       - prepare
       - build
-    runs-on: ubuntu-22.04
+    runs-on: blacksmith-4vcpu-ubuntu-2204
     env:
       GH_TOKEN: ${{ secrets.LENSFLARE_DESKTOP_UPDATE_GITHUB_TOKEN || github.token }}
       TAG: ${{ needs.prepare.outputs.tag }}
