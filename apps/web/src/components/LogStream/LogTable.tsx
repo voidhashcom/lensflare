@@ -5,7 +5,7 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from "@legendapp/list/react";
-import { forwardRef, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { ArrowDownIcon, ChevronUpIcon, ColumnsIcon, LoaderCircleIcon } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
@@ -17,6 +17,7 @@ import { SourceBadge } from "./SourceBadge";
 import type { TelemetryEntry } from "./types";
 
 const END_REACHED_TRESHOLD = 48;
+const JUMP_TO_END_SCROLL_GUARD_MS = 500;
 
 interface LogTableProps {
   rowIds: ReadonlyArray<string>;
@@ -63,6 +64,8 @@ const ROW_GRID_CLASS =
   "grid min-w-[75rem] grid-cols-[6rem_14rem_14rem_8rem_minmax(0,1fr)_7rem_auto] items-center gap-4 px-4";
 
 const ROW_ESTIMATED_SIZE = 40;
+const TABLE_ACTION_BUTTON_CLASS =
+  "w-full justify-center rounded-none !bg-card py-4 text-xs text-muted-foreground hover:!bg-accent hover:text-accent-foreground hover:opacity-100 active:!bg-accent data-pressed:!bg-accent disabled:!bg-card disabled:opacity-100 [&_svg]:opacity-100";
 
 /**
  * Virtualised log-stream table powered by `@legendapp/list`. The column
@@ -89,8 +92,11 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
 ) {
   const listRef = useRef<LegendListRef | null>(null);
   const loadingPreviousRef = useRef(false);
+  const jumpToEndScrollGuardRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previousModeRef = useRef(mode);
   const [showJumpToEnd, setShowJumpToEnd] = useState(false);
   const shouldShowJumpToEnd = mode === "history" || showJumpToEnd;
+  const shouldShowBottomAction = shouldShowJumpToEnd || waiting;
 
   if (!isLoadingPrevious) {
     loadingPreviousRef.current = false;
@@ -107,6 +113,28 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
         void listRef.current?.scrollToOffset({ offset: 0, animated: true });
       },
     }),
+    [],
+  );
+
+  useEffect(() => {
+    if (mode !== "live" || previousModeRef.current === "live") {
+      previousModeRef.current = mode;
+      return;
+    }
+
+    previousModeRef.current = mode;
+    guardJumpToEndScroll();
+    window.requestAnimationFrame(() => {
+      void listRef.current?.scrollToEnd({ animated: false });
+    });
+  }, [mode]);
+
+  useEffect(
+    () => () => {
+      if (jumpToEndScrollGuardRef.current !== null) {
+        clearTimeout(jumpToEndScrollGuardRef.current);
+      }
+    },
     [],
   );
 
@@ -140,6 +168,14 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const nearBottom = isNearBottomEvent(event);
+    if (jumpToEndScrollGuardRef.current !== null) {
+      setShowJumpToEnd(false);
+      if (nearBottom) {
+        clearJumpToEndScrollGuard();
+      }
+      return;
+    }
+
     setShowJumpToEnd(!nearBottom);
     if (!nearBottom && mode === "live" && rowIds.length > 0) {
       onLeaveLiveMode?.();
@@ -151,8 +187,24 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
 
   const handleJumpToEnd = () => {
     setShowJumpToEnd(false);
+    guardJumpToEndScroll();
     onJumpToEnd?.();
     void listRef.current?.scrollToEnd({ animated: false });
+  };
+
+  const clearJumpToEndScrollGuard = () => {
+    if (jumpToEndScrollGuardRef.current === null) {
+      return;
+    }
+    clearTimeout(jumpToEndScrollGuardRef.current);
+    jumpToEndScrollGuardRef.current = null;
+  };
+
+  const guardJumpToEndScroll = () => {
+    clearJumpToEndScrollGuard();
+    jumpToEndScrollGuardRef.current = setTimeout(() => {
+      jumpToEndScrollGuardRef.current = null;
+    }, JUMP_TO_END_SCROLL_GUARD_MS);
   };
 
   // Closure-style render keeps per-render selection/click wiring co-located
@@ -167,7 +219,12 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
   };
 
   return (
-    <div className={cn("relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden", className)}>
+    <div
+      className={cn(
+        "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden [container-type:inline-size]",
+        className,
+      )}
+    >
       {/*
        * Inner wrapper is the horizontal scroll container: the header and the
        * virtualised row list must pan together so columns stay aligned, which
@@ -200,7 +257,7 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
               <StartOfLogsHeader />
             ) : null
           }
-          ListFooterComponent={waiting ? <WaitingFooter /> : null}
+          ListFooterComponent={shouldShowBottomAction ? <BottomActionSpacer /> : null}
           onScroll={handleScroll}
           recycleItems
           maintainVisibleContentPosition={{ data: true }}
@@ -210,16 +267,21 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
           style={{ minHeight: 0, width: "100%" }}
         />
       </div>
-      {shouldShowJumpToEnd ? (
-        <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-4">
+      {shouldShowBottomAction ? (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center bg-background border-t border-border">
           <Button
-            className="pointer-events-auto"
+            className={cn("pointer-events-auto", TABLE_ACTION_BUTTON_CLASS)}
+            disabled={!shouldShowJumpToEnd}
             onClick={handleJumpToEnd}
             size="sm"
             variant="secondary"
           >
-            <ArrowDownIcon className="size-3.5" />
-            <span>Jump to end</span>
+            {shouldShowJumpToEnd ? (
+              <ArrowDownIcon className="size-3.5" />
+            ) : (
+              <span className="inline-flex size-1.5 animate-pulse rounded-full bg-muted-foreground/60" />
+            )}
+            <span>{shouldShowJumpToEnd ? "Back to live" : "Waiting for telemetry"}</span>
           </Button>
         </div>
       ) : null}
@@ -239,8 +301,15 @@ function LoadPreviousHeader({
   onClick: () => Promise<void> | void;
 }) {
   return (
-    <div className="flex items-center justify-center border-border/40 border-b py-3">
-      <Button disabled={loading} onClick={onClick} size="xs" variant="ghost">
+    <div className="sticky left-0 flex w-[100cqw] items-center justify-center border-border/40 border-b bg-background">
+      <Button
+        aria-busy={loading}
+        className={TABLE_ACTION_BUTTON_CLASS}
+        disabled={loading}
+        onClick={onClick}
+        size="sm"
+        variant="secondary"
+      >
         {loading ? (
           <LoaderCircleIcon className="size-3.5 animate-spin" />
         ) : (
@@ -384,13 +453,8 @@ function LogRow({ log, isSelected, onSelect }: LogRowProps) {
   );
 }
 
-function WaitingFooter() {
-  return (
-    <div className="flex items-center justify-center gap-2 py-4 text-muted-foreground/60 text-xs">
-      <span className="inline-flex size-1.5 animate-pulse rounded-full bg-muted-foreground/60" />
-      Waiting for telemetry…
-    </div>
-  );
+function BottomActionSpacer() {
+  return <div aria-hidden className="h-8 sm:h-7" />;
 }
 
 function isNearBottom(list: LegendListRef | null): boolean {
