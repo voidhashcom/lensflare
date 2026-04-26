@@ -1,5 +1,5 @@
 import { CircleSlashIcon, XIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Activity, useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import { ScrollArea } from "~/components/ui/scroll-area";
@@ -177,11 +177,12 @@ export function LogDetailsPanel({
         onToggleShowNullValues={setShowNullValues}
       />
 
-      {tab === "properties" ? (
+      <Activity mode={tab === "properties" ? "visible" : "hidden"} name="Log properties">
         <EventPropertiesTab log={log} showNullValues={showNullValues} />
-      ) : (
+      </Activity>
+      <Activity mode={tab === "raw" ? "visible" : "hidden"} name="Log raw data">
         <RawDataTab log={log} />
-      )}
+      </Activity>
     </div>
   );
 }

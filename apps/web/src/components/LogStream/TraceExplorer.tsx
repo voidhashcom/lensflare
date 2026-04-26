@@ -1,5 +1,6 @@
 import { ChevronDownIcon, ChevronUpIcon, CopyIcon, ListTreeIcon, SearchIcon } from "lucide-react";
 import {
+  Activity,
   useCallback,
   useEffect,
   useMemo,
@@ -614,13 +615,15 @@ function SpanDetailsPanel({ trace, selectedSpan, activeTab, onSelectTab }: SpanD
       <SpanIdentityFields span={selectedSpan} />
       <SpanDetailsTabs active={activeTab} onSelect={onSelectTab} span={selectedSpan} />
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        {activeTab === "fields" ? (
+        <Activity mode={activeTab === "fields" ? "visible" : "hidden"} name="Span fields">
           <SpanFieldsTab span={selectedSpan} trace={trace} />
-        ) : activeTab === "events" ? (
+        </Activity>
+        <Activity mode={activeTab === "events" ? "visible" : "hidden"} name="Span events">
           <SpanEventsTab span={selectedSpan} trace={trace} />
-        ) : (
+        </Activity>
+        <Activity mode={activeTab === "links" ? "visible" : "hidden"} name="Span links">
           <SpanLinksTab />
-        )}
+        </Activity>
       </div>
     </>
   );

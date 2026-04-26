@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Activity, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Sheet, SheetPopup } from "~/components/ui/sheet";
 import { readBackendTarget } from "~/data/backendTarget";
@@ -155,9 +155,8 @@ function TelemetryTabPanel({
   streamMetadata,
   tab,
 }: TelemetryTabPanelProps) {
-  // Keep telemetry tabs mounted so table, details state, and in-flight effects
-  // survive tab switches. React Activity preserves state but tears down effects
-  // while hidden, which would replay trace-loading skeletons when returning.
+  // Activity keeps tab state and DOM around while letting React suspend hidden
+  // tab effects, which matches the tab-strip lifecycle without manual hiding.
   const tableRef = useRef<LogTableHandle | null>(null);
   const stream = useDatasetStreamSnapshot(projectId, datasetId, tab.id, streamMetadata);
   const sheetCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -265,92 +264,93 @@ function TelemetryTabPanel({
   useEffect(() => clearSheetCloseTimer, [clearSheetCloseTimer]);
 
   return (
-    <div
-      className="flex min-h-0 min-w-0 flex-1 flex-col"
-      data-dataset-tab={`${datasetId}:${tab.id}`}
-      hidden={!active}
-    >
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <div className="flex min-h-0 flex-1">
-          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-            <LogStreamHeader
-              datasetId={datasetId}
-              datasetSlug={stream.metadata.datasetSlug}
-              filter={stream.filter}
-              filterSource={stream.filterSource}
-              projectId={projectId}
-              projectSlug={stream.metadata.projectSlug}
-              serverOrigin={serverOrigin}
-              viewId={tab.id}
-            />
-            {stream.errorMessage ? (
-              <div className="border-b border-rose-500/20 bg-rose-500/8 px-4 py-2 font-mono text-[11px] text-rose-600 dark:text-rose-200">
-                {stream.errorMessage}
-              </div>
-            ) : null}
-            <LogTable
-              hasPreviousPage={stream.pageInfo?.hasPreviousPage ?? false}
-              isLoadingPrevious={stream.isLoadingOlder}
-              logs={stream.logs}
-              onLoadPrevious={handleLoadOlder}
-              onSelectLog={(logId) =>
-                selectDatasetTelemetryEntry(projectId, datasetId, tab.id, logId)
-              }
-              ref={tableRef}
-              selectedLogId={stream.selectedLogId}
-              waiting={stream.errorMessage === null || stream.isInitialLoading}
-            />
-            {shouldShowGuide && stream.metadata.projectSlug && stream.metadata.datasetSlug ? (
-              <div
-                aria-live="polite"
-                className="pointer-events-auto absolute inset-0 z-10 flex flex-col overflow-hidden bg-background/95 backdrop-blur-sm transition-opacity duration-200 data-[state=exiting]:opacity-0"
-                data-state={isGuideExiting ? "exiting" : "idle"}
-              >
-                <EmptyDatasetGuide
-                  datasetSlug={stream.metadata.datasetSlug}
-                  projectSlug={stream.metadata.projectSlug}
-                  serverOrigin={serverOrigin}
-                  variant="overlay"
-                />
-              </div>
-            ) : null}
-          </div>
-          {showInlineDetails ? (
-            <LogDetailsPanel
-              datasetId={datasetId}
-              log={stream.selectedLog}
-              onClose={closeDetails}
-              projectId={projectId}
-              variant="inline"
-            />
-          ) : null}
-          <Sheet
-            onOpenChange={(open) => {
-              if (!open) {
-                closeSheetDetails();
-              }
-            }}
-            open={showSheetDetails}
-          >
-            <SheetPopup
-              className="w-[min(88vw,560px)] max-w-[560px] p-0"
-              showCloseButton={false}
-              side="right"
-            >
-              {sheetLog !== null ? (
-                <LogDetailsPanel
-                  datasetId={datasetId}
-                  log={sheetLog}
-                  onClose={closeSheetDetails}
-                  projectId={projectId}
-                  variant="sheet"
-                />
+    <Activity mode={active ? "visible" : "hidden"} name={`Telemetry ${tab.id}`}>
+      <div
+        className="flex min-h-0 min-w-0 flex-1 flex-col"
+        data-dataset-tab={`${datasetId}:${tab.id}`}
+      >
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="flex min-h-0 flex-1">
+            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+              <LogStreamHeader
+                datasetId={datasetId}
+                datasetSlug={stream.metadata.datasetSlug}
+                filter={stream.filter}
+                filterSource={stream.filterSource}
+                projectId={projectId}
+                projectSlug={stream.metadata.projectSlug}
+                serverOrigin={serverOrigin}
+                viewId={tab.id}
+              />
+              {stream.errorMessage ? (
+                <div className="border-b border-rose-500/20 bg-rose-500/8 px-4 py-2 font-mono text-[11px] text-rose-600 dark:text-rose-200">
+                  {stream.errorMessage}
+                </div>
               ) : null}
-            </SheetPopup>
-          </Sheet>
+              <LogTable
+                hasPreviousPage={stream.pageInfo?.hasPreviousPage ?? false}
+                isLoadingPrevious={stream.isLoadingOlder}
+                logs={stream.logs}
+                onLoadPrevious={handleLoadOlder}
+                onSelectLog={(logId) =>
+                  selectDatasetTelemetryEntry(projectId, datasetId, tab.id, logId)
+                }
+                ref={tableRef}
+                selectedLogId={stream.selectedLogId}
+                waiting={stream.errorMessage === null || stream.isInitialLoading}
+              />
+              {shouldShowGuide && stream.metadata.projectSlug && stream.metadata.datasetSlug ? (
+                <div
+                  aria-live="polite"
+                  className="pointer-events-auto absolute inset-0 z-10 flex flex-col overflow-hidden bg-background/95 backdrop-blur-sm transition-opacity duration-200 data-[state=exiting]:opacity-0"
+                  data-state={isGuideExiting ? "exiting" : "idle"}
+                >
+                  <EmptyDatasetGuide
+                    datasetSlug={stream.metadata.datasetSlug}
+                    projectSlug={stream.metadata.projectSlug}
+                    serverOrigin={serverOrigin}
+                    variant="overlay"
+                  />
+                </div>
+              ) : null}
+            </div>
+            {showInlineDetails ? (
+              <LogDetailsPanel
+                datasetId={datasetId}
+                log={stream.selectedLog}
+                onClose={closeDetails}
+                projectId={projectId}
+                variant="inline"
+              />
+            ) : null}
+            <Sheet
+              onOpenChange={(open) => {
+                if (!open) {
+                  closeSheetDetails();
+                }
+              }}
+              open={showSheetDetails}
+            >
+              <SheetPopup
+                className="w-[min(88vw,560px)] max-w-[560px] p-0"
+                showCloseButton={false}
+                side="right"
+              >
+                {sheetLog !== null ? (
+                  <LogDetailsPanel
+                    datasetId={datasetId}
+                    log={sheetLog}
+                    onClose={closeSheetDetails}
+                    projectId={projectId}
+                    variant="sheet"
+                  />
+                ) : null}
+              </SheetPopup>
+            </Sheet>
+          </div>
         </div>
       </div>
-    </div>
+    </Activity>
   );
 }
 
@@ -363,20 +363,21 @@ interface TraceTabPanelProps {
 
 function TraceTabPanel({ active, datasetId, projectId, tab }: TraceTabPanelProps) {
   return (
-    <div
-      className="flex min-h-0 min-w-0 flex-1 flex-col"
-      data-dataset-tab={`${datasetId}:${tab.id}`}
-      hidden={!active}
-    >
-      <div className="flex min-h-0 flex-1 flex-col">
-        <TraceExplorer
-          className="min-h-0 flex-1"
-          datasetId={datasetId}
-          projectId={projectId}
-          traceId={tab.traceId}
-          {...(tab.initialSpanId !== undefined ? { initialSpanId: tab.initialSpanId } : {})}
-        />
+    <Activity mode={active ? "visible" : "hidden"} name={`Trace ${tab.traceId}`}>
+      <div
+        className="flex min-h-0 min-w-0 flex-1 flex-col"
+        data-dataset-tab={`${datasetId}:${tab.id}`}
+      >
+        <div className="flex min-h-0 flex-1 flex-col">
+          <TraceExplorer
+            className="min-h-0 flex-1"
+            datasetId={datasetId}
+            projectId={projectId}
+            traceId={tab.traceId}
+            {...(tab.initialSpanId !== undefined ? { initialSpanId: tab.initialSpanId } : {})}
+          />
+        </div>
       </div>
-    </div>
+    </Activity>
   );
 }
