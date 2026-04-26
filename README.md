@@ -31,15 +31,15 @@ pnpm test
 
 ## Effect SDK
 
-The first public package is `@lensflare/effect`, an Effect layer for sending logs and traces to Lensflare during local development.
+The first public package is `@lensflare.dev/effect`, an Effect layer for sending logs and traces to Lensflare during local development.
 
 ```bash
-pnpm add effect @lensflare/effect
+pnpm add effect @lensflare.dev/effect
 ```
 
 ```ts
 import { Effect } from "effect";
-import { Lensflare } from "@lensflare/effect";
+import { Lensflare } from "@lensflare.dev/effect";
 
 const program = Effect.gen(function* () {
   yield* Effect.log("hello from Lensflare");

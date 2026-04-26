@@ -213,6 +213,41 @@ export const DatasetStorageStatsSchema = Schema.Struct({
 
 export type DatasetStorageStats = Schema.Schema.Type<typeof DatasetStorageStatsSchema>;
 
+export const AppSettingsSchema = Schema.Struct({
+  analyticsEnabled: Schema.Boolean,
+});
+
+export type AppSettings = Schema.Schema.Type<typeof AppSettingsSchema>;
+
+export const UpdateAppSettingsInputSchema = Schema.Struct({
+  analyticsEnabled: Schema.optional(Schema.Boolean),
+});
+
+export type UpdateAppSettingsInput = Schema.Schema.Type<typeof UpdateAppSettingsInputSchema>;
+
+export const AnalyticsBootstrapSchema = Schema.Struct({
+  enabled: Schema.Boolean,
+  distinctId: Schema.String,
+  host: Schema.String,
+  apiKey: Schema.optional(Schema.String),
+  debug: Schema.Boolean,
+});
+
+export type AnalyticsBootstrap = Schema.Schema.Type<typeof AnalyticsBootstrapSchema>;
+
+export const AppMetaSchema = Schema.Struct({
+  appName: Schema.String,
+  appVersion: Schema.String,
+  serverOrigin: Schema.String,
+  mode: AppModeSchema,
+  staticAssetMode: StaticAssetModeSchema,
+  sqliteDatabaseFile: Schema.String,
+  duckdbDatabaseFile: Schema.String,
+  analytics: AnalyticsBootstrapSchema,
+});
+
+export type AppMeta = Schema.Schema.Type<typeof AppMetaSchema>;
+
 export const ProjectSchema = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
@@ -654,12 +689,23 @@ class SubscribeDatasetEvents extends Rpc.make("SubscribeDatasetEvents", {
   stream: true,
 }) {}
 
+class GetAppSettings extends Rpc.make("GetAppSettings", {
+  success: AppSettingsSchema,
+}) {}
+
+class UpdateAppSettings extends Rpc.make("UpdateAppSettings", {
+  payload: UpdateAppSettingsInputSchema,
+  success: AppSettingsSchema,
+}) {}
+
 export const DatasetRpcGroup = RpcGroup.make(
   ListDatasets,
   GetDataset,
   ListDatasetStorageStats,
   ClearDatasetData,
   SubscribeDatasetEvents,
+  GetAppSettings,
+  UpdateAppSettings,
 );
 
 class SubscribeTelemetryLogEvents extends Rpc.make("SubscribeTelemetryLogEvents", {
@@ -748,4 +794,15 @@ export function formatDatasetError(error: unknown): string {
   }
 
   return "Request failed.";
+}
+
+const decodeAppSettingsSchema = Schema.decodeUnknownSync(AppSettingsSchema);
+const decodeAppMetaSchema = Schema.decodeUnknownSync(AppMetaSchema);
+
+export function decodeAppSettings(input: unknown): AppSettings {
+  return decodeAppSettingsSchema(input);
+}
+
+export function decodeAppMeta(input: unknown): AppMeta {
+  return decodeAppMetaSchema(input);
 }

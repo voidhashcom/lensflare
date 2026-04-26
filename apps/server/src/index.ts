@@ -17,6 +17,12 @@ async function main(): Promise<void> {
       projectSlug: config.otelProjectSlug,
       datasetSlug: config.otelDatasetSlug,
     },
+    analytics: {
+      enabled: config.posthogEnabled,
+      host: config.posthogHost,
+      debug: config.posthogDebug,
+      ...(config.posthogApiKey ? { apiKey: config.posthogApiKey } : {}),
+    },
     bootstrapOtelCatalog: config.lensflareDev,
   });
 

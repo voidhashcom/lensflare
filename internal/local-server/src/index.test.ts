@@ -4,6 +4,7 @@ import { describe, expect, it } from "@effect/vitest";
 import {
   DatasetRpcGroup,
   DEFAULT_PROJECT_ICON,
+  decodeAppMeta,
   decodeLensflareEnvironmentDescriptor,
   ProjectRpcGroup,
   TelemetryLogRpcGroup,
@@ -184,6 +185,69 @@ describe("startLocalServer", () => {
 
       expect(fetchedProject.datasets).toHaveLength(1);
       expect(fetchedProject.datasets[0]?.id).toBe(createdDataset?.id);
+    } finally {
+      await Promise.all([
+        clientRuntime.dispose(),
+        server.stop(),
+        rm(directory, { recursive: true, force: true }),
+      ]);
+    }
+  });
+
+  it("shares app settings and analytics bootstrap across RPC and /api/meta", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "lensflare-local-server-"));
+    const port = await getAvailablePort();
+
+    const server = await startLocalServer({
+      mode: "server",
+      host: "127.0.0.1",
+      port,
+      sqliteDatabaseFile: join(directory, "lensflare.sqlite"),
+      duckdbDatabaseFile: join(directory, "lensflare.duckdb"),
+      otel: otelDisabled,
+      analytics: {
+        enabled: true,
+        apiKey: "phc_test",
+        host: "https://eu.i.posthog.com",
+        debug: true,
+      },
+    });
+
+    const clientLayer = RpcClient.layerProtocolSocket().pipe(
+      Layer.provide(RpcSerialization.layerJson),
+      Layer.provide(NodeSocket.layerWebSocket(`${server.origin}/rpc`)),
+    );
+    const clientRuntime = ManagedRuntime.make(clientLayer, {
+      memoMap: Layer.makeMemoMapUnsafe(),
+    });
+
+    try {
+      const initialSettings = await clientRuntime.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const client = yield* RpcClient.make(CatalogRpcs);
+            return yield* client.GetAppSettings();
+          }),
+        ),
+      );
+      expect(initialSettings).toEqual({ analyticsEnabled: true });
+
+      const updatedSettings = await clientRuntime.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const client = yield* RpcClient.make(CatalogRpcs);
+            return yield* client.UpdateAppSettings({ analyticsEnabled: false });
+          }),
+        ),
+      );
+      expect(updatedSettings).toEqual({ analyticsEnabled: false });
+
+      const meta = decodeAppMeta(await fetch(`${server.origin}/api/meta`).then((response) => response.json()));
+      expect(meta.analytics.enabled).toBe(false);
+      expect(meta.analytics.apiKey).toBe("phc_test");
+      expect(meta.analytics.host).toBe("https://eu.i.posthog.com");
+      expect(meta.analytics.debug).toBe(true);
+      expect(meta.analytics.distinctId).toHaveLength(64);
     } finally {
       await Promise.all([
         clientRuntime.dispose(),

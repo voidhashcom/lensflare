@@ -1,6 +1,7 @@
 import { DatasetRpcGroup } from "@lensflare/contracts";
 import { Effect } from "effect";
 import { DatasetService } from "../services/datasetService.ts";
+import { AppSettingsService } from "../services/appSettingsService.ts";
 
 /**
  * RPC handlers for the dataset group.
@@ -19,6 +20,7 @@ import { DatasetService } from "../services/datasetService.ts";
 export const datasetRpcLayer = DatasetRpcGroup.toLayer(
   Effect.gen(function* () {
     const service = yield* DatasetService;
+    const appSettings = yield* AppSettingsService;
 
     return DatasetRpcGroup.of({
       ListDatasets: () => service.listDatasets().pipe(Effect.catchTag("SqlError", Effect.die)),
@@ -39,6 +41,8 @@ export const datasetRpcLayer = DatasetRpcGroup.toLayer(
             Effect.catchTag("DuckDbError", Effect.die),
           ),
       SubscribeDatasetEvents: () => service.stream,
+      GetAppSettings: () => appSettings.getSettings(),
+      UpdateAppSettings: (input) => appSettings.updateSettings(input),
     });
   }),
 );

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Lensflare, resolveLayerConfig } from "./index.ts";
 
-describe("@lensflare/effect", () => {
+describe("@lensflare.dev/effect", () => {
   it("is disabled in production by default", () => {
     expect(Lensflare.isEnabled({ env: { NODE_ENV: "production" } })).toBe(false);
   });

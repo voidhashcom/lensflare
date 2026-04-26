@@ -51,6 +51,8 @@ import { makeHttpRoutesLayer } from "./http/routes.ts";
 import { LensflareMcpToolsLayer } from "./mcp/server.ts";
 import { DatasetService } from "./services/datasetService.ts";
 import { ProjectService } from "./services/projectService.ts";
+import { AppSettingsService } from "./services/appSettingsService.ts";
+import { AppAnalyticsService } from "./services/appAnalyticsService.ts";
 
 export interface StartLocalServerOptions {
   readonly mode: "desktop" | "server";
@@ -71,6 +73,12 @@ export interface StartLocalServerOptions {
     readonly enabled: boolean;
     readonly projectSlug: string;
     readonly datasetSlug: string;
+  };
+  readonly analytics?: {
+    readonly enabled: boolean;
+    readonly host: string;
+    readonly apiKey?: string;
+    readonly debug: boolean;
   };
   /**
    * Creates the configured OTLP project/dataset on startup. This is intended
@@ -93,6 +101,11 @@ const defaultOtelConfig: NonNullable<StartLocalServerOptions["otel"]> = {
   enabled: false,
   projectSlug: "lensflare",
   datasetSlug: "lensflare",
+};
+const defaultAnalyticsConfig: NonNullable<StartLocalServerOptions["analytics"]> = {
+  enabled: true,
+  host: "https://us.i.posthog.com",
+  debug: false,
 };
 const defaultOtelProjectName = "Lensflare";
 
@@ -139,11 +152,21 @@ function makeObservabilityLayer(
 
 function ensureTelemetryCatalogTarget(
   otel: NonNullable<StartLocalServerOptions["otel"]>,
-): Effect.Effect<void, never, ProjectService | DatasetService> {
+): Effect.Effect<
+  {
+    readonly createdProject: boolean;
+    readonly createdDataset: boolean;
+  },
+  never,
+  ProjectService | DatasetService
+> {
   return Effect.orDie(
     Effect.gen(function* () {
       if (!otel.enabled) {
-        return;
+        return {
+          createdProject: false,
+          createdDataset: false,
+        };
       }
 
       const projects = yield* ProjectService;
@@ -152,13 +175,22 @@ function ensureTelemetryCatalogTarget(
       const existingProject = (yield* projects.listProjectEntities()).find(
         (project) => project.slug === otel.projectSlug,
       );
+      const createdProject = existingProject === undefined;
       const project =
         existingProject ??
         (yield* projects.createProject({
           name: defaultOtelProjectName,
           slug: otel.projectSlug,
         }));
+      const createdDataset =
+        (yield* datasets.listDatasets()).every(
+          (dataset) => dataset.projectId !== project.id || dataset.slug !== otel.datasetSlug,
+        );
       yield* datasets.ensureProjectDataset(project.id, project.name, otel.datasetSlug);
+      return {
+        createdProject,
+        createdDataset,
+      };
     }),
   );
 }
@@ -206,6 +238,7 @@ export async function startLocalServer(
   const serverInstanceId = randomUUID();
   const startedAt = new Date();
   const otel = options.otel ?? defaultOtelConfig;
+  const analytics = options.analytics ?? defaultAnalyticsConfig;
   const dataPaths = resolveDataPaths();
   const sqliteDatabaseFile = options.sqliteDatabaseFile ?? dataPaths.sqliteDatabaseFile;
   const duckdbDatabaseFile = options.duckdbDatabaseFile ?? dataPaths.duckdbDatabaseFile;
@@ -244,6 +277,14 @@ export async function startLocalServer(
   // the runtime's MemoMap collapses to a single SQLite connection.
   const sqliteDatabaseLayer = makeSqliteDatabaseLayer(sqliteDatabaseFile);
   const telemetryStoreLayer = TelemetryStore.layer(duckdbDatabaseFile);
+  const appSettingsLayer = AppSettingsService.layer({ analytics });
+  const appAnalyticsLayer = AppAnalyticsService.layer({
+    surface: "server",
+    mode: options.mode,
+    platform: process.platform,
+    devMode: options.mode === "desktop" ? false : Boolean(options.bootstrapOtelCatalog),
+    staticAssetMode: options.staticAssetMode ?? (options.staticDir ? "filesystem" : "none"),
+  }).pipe(Layer.provide(appSettingsLayer));
 
   // ProjectService depends on DatasetService for cascade-delete event
   // fan-out, so DatasetService is `provideMerge`-ed underneath it — that
@@ -267,6 +308,7 @@ export async function startLocalServer(
     Layer.provide(telemetryStoreLayer),
   );
   const ingestServicesLayer = LogIngestService.layer.pipe(
+    Layer.provide(appAnalyticsLayer),
     Layer.provide(telemetryLogEventLayer),
     Layer.provide(telemetryFilterCatalogLayer),
     Layer.provide(TelemetryLogsRepository.layer),
@@ -352,6 +394,8 @@ export async function startLocalServer(
     NodeHttpServer.layer(createServer, { host, port }),
   );
   const servicesLayer = Layer.mergeAll(
+    appSettingsLayer,
+    appAnalyticsLayer,
     catalogServicesLayer,
     ingestServicesLayer,
     telemetryQueryLayer,
@@ -369,10 +413,14 @@ export async function startLocalServer(
     HttpRouter.serve(routesLayer).pipe(Layer.provide(applicationLayer)),
   );
 
+  let bootstrapCatalogResult: {
+    readonly createdProject: boolean;
+    readonly createdDataset: boolean;
+  } | null = null;
   if (options.bootstrapOtelCatalog) {
     const bootstrapRuntime = ManagedRuntime.make(catalogServicesLayer);
     try {
-      await bootstrapRuntime.runPromise(ensureTelemetryCatalogTarget(otel));
+      bootstrapCatalogResult = await bootstrapRuntime.runPromise(ensureTelemetryCatalogTarget(otel));
     } finally {
       await bootstrapRuntime.dispose();
     }
@@ -403,6 +451,25 @@ export async function startLocalServer(
     ),
   );
 
+  await runtime.runPromise(
+    Effect.gen(function* () {
+      const analyticsService = yield* AppAnalyticsService;
+
+      yield* analyticsService.capture("server_started", {
+        mode: options.mode,
+        staticAssetMode: options.staticAssetMode ?? (options.staticDir ? "filesystem" : "none"),
+        otelEnabled: otel.enabled,
+      });
+
+      if (bootstrapCatalogResult?.createdProject || bootstrapCatalogResult?.createdDataset) {
+        yield* analyticsService.capture("server_bootstrap_catalog_created", {
+          createdProject: bootstrapCatalogResult.createdProject,
+          createdDataset: bootstrapCatalogResult.createdDataset,
+        });
+      }
+    }),
+  );
+
   return {
     origin,
     httpBaseUrl: origin,
@@ -410,7 +477,13 @@ export async function startLocalServer(
     serverInstanceId,
     descriptor,
     stop() {
-      return runtime.dispose();
+      return runtime.runPromise(
+        Effect.gen(function* () {
+          const analyticsService = yield* AppAnalyticsService;
+          yield* analyticsService.captureServerStop(startedAt.getTime());
+          yield* analyticsService.shutdown;
+        }),
+      ).finally(() => runtime.dispose());
     },
   };
 }

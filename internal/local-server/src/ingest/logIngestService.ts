@@ -1,5 +1,7 @@
 import { Context, Effect, Layer } from "effect";
+import { Ref } from "effect";
 import { SqlError } from "effect/unstable/sql";
+import { AppAnalyticsService } from "../services/appAnalyticsService.ts";
 import { UnknownDatasetSlug } from "./errors.ts";
 import { IngestTargetResolver } from "./targetResolver.ts";
 import { TelemetryFilterCatalogService } from "./telemetryFilterCatalogService.ts";
@@ -59,6 +61,8 @@ export class LogIngestService extends Context.Service<
       const spans = yield* TelemetrySpansRepository;
       const events = yield* TelemetryLogEventService;
       const filterCatalog = yield* TelemetryFilterCatalogService;
+      const analytics = yield* AppAnalyticsService;
+      const firstIngestRecordedRef = yield* Ref.make(false);
 
       const ingest = Effect.fn("LogIngestService.ingest")(function* (input: IngestInput) {
         const target = yield* resolver.resolve(input.datasetSlug);
@@ -85,6 +89,13 @@ export class LogIngestService extends Context.Service<
           const { batchId, records } = yield* spans.writeBatch(request);
           yield* filterCatalog.applySpanBatch(request);
           yield* events.publishSpanBatch(request, records);
+          const shouldRecordFirstIngest = !(yield* Ref.get(firstIngestRecordedRef));
+          if (shouldRecordFirstIngest) {
+            yield* Ref.set(firstIngestRecordedRef, true);
+            yield* analytics.capture("server_ingest_first_event", {
+              provider: input.batch.providerKind,
+            });
+          }
 
           return {
             batchId,
@@ -102,6 +113,13 @@ export class LogIngestService extends Context.Service<
         const { batchId, records } = yield* logs.writeBatch(request);
         yield* filterCatalog.applyLogBatch(request);
         yield* events.publishBatch(request, records);
+        const shouldRecordFirstIngest = !(yield* Ref.get(firstIngestRecordedRef));
+        if (shouldRecordFirstIngest) {
+          yield* Ref.set(firstIngestRecordedRef, true);
+          yield* analytics.capture("server_ingest_first_event", {
+            provider: input.batch.providerKind,
+          });
+        }
 
         return {
           batchId,

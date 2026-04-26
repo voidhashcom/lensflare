@@ -1,5 +1,5 @@
 {
-  "name": "@lensflare/effect",
+  "name": "@lensflare.dev/effect",
   "version": "4.0.0-beta.55",
   "description": "Effect observability layer for Lensflare local logs and traces.",
   "keywords": [

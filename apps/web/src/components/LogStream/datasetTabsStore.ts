@@ -1,4 +1,6 @@
 import { useSyncExternalStore } from "react";
+import { bucketCount } from "@lensflare/analytics";
+import { captureWebEvent } from "~/analytics";
 
 import {
   closeDatasetTab as closeDatasetTabReducer,
@@ -65,6 +67,15 @@ export function setActiveDatasetTab(datasetId: string, tabId: DatasetTabId): voi
 }
 
 export function openTelemetryTab(datasetId: string): void {
+  const current = snapshot[datasetId];
+  captureWebEvent("telemetry_tab_opened", {
+    existingTelemetryTabCount: bucketCount(
+      current?.tabs.filter((tab) => tab.kind === "telemetry").length ?? 0,
+    ),
+    tabOrdinalBucket: bucketCount(
+      (current?.tabs.filter((tab) => tab.kind === "telemetry").length ?? 0) + 1,
+    ),
+  });
   commit(openTelemetryTabReducer(snapshot, datasetId));
 }
 

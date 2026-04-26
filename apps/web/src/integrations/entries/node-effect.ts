@@ -1,7 +1,7 @@
 import type { Integration } from "../types";
 
 /**
- * Effect-ts via the `@lensflare/effect` SDK. The package is a tiny wrapper
+ * Effect-ts via the `@lensflare.dev/effect` SDK. The package is a tiny wrapper
  * over Effect's built-in OTLP tracer/logger layers and only enables itself in
  * development by default.
  *
@@ -28,7 +28,7 @@ const nodeEffect: Integration = {
       body: "The SDK composes Effect's built-in OTLP tracer and logger layers, so you do not need to wire exporters yourself.",
       snippet: {
         lang: "bash",
-        code: "pnpm add effect @lensflare/effect",
+        code: "pnpm add effect @lensflare.dev/effect",
       },
     },
     {
@@ -37,7 +37,7 @@ const nodeEffect: Integration = {
       snippet: {
         lang: "ts",
         filename: "tracing.ts",
-        code: `import { Lensflare } from "@lensflare/effect";
+        code: `import { Lensflare } from "@lensflare.dev/effect";
 import { Layer } from "effect";
 
 const isDevelopment = true;

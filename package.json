@@ -32,8 +32,8 @@
     "changeset": "changeset",
     "sync:effect-sdk-version": "tsx scripts/sync-effect-sdk-version.ts",
     "version-packages": "changeset version && pnpm sync:effect-sdk-version",
-    "release-packages": "pnpm sync:effect-sdk-version && pnpm --filter @lensflare/effect build && changeset publish",
-    "pack:effect": "pnpm --filter @lensflare/effect pack --pack-destination ../../dist/npm",
+    "release-packages": "pnpm sync:effect-sdk-version && pnpm --filter @lensflare.dev/effect build && changeset publish",
+    "pack:effect": "pnpm --filter @lensflare.dev/effect pack --pack-destination ../../dist/npm",
     "check": "vp check",
     "typecheck": "vp run -r typecheck",
     "test": "vp test --dir scripts --passWithNoTests && vp run -r test",
@@ -57,7 +57,9 @@
   "packageManager": "pnpm@10.18.3",
   "pnpm": {
     "onlyBuiltDependencies": [
-      "electron"
+      "core-js",
+      "electron",
+      "protobufjs"
     ]
   }
 }

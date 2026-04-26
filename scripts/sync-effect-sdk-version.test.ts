@@ -30,7 +30,7 @@ catalog:
     join(rootDir, "packages/effect/package.json"),
     `${JSON.stringify(
       {
-        name: "@lensflare/effect",
+        name: "@lensflare.dev/effect",
         version: "0.0.0",
         peerDependencies: {
           effect: "0.0.0",

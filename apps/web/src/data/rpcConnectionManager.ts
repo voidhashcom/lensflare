@@ -2,6 +2,7 @@ import type { DesktopLocalServerState } from "@lensflare/contracts";
 import { Cause, Effect, Exit } from "effect";
 import { RpcClientError } from "effect/unstable/rpc/RpcClientError";
 import { useSyncExternalStore } from "react";
+import { captureWebEvent } from "~/analytics";
 import { resolveBackendHttpUrl } from "./backendTarget";
 import {
   getDesktopLocalServerState,
@@ -249,6 +250,9 @@ async function performReconnect(options: ReconnectOptions): Promise<void> {
   rehydrateSubscriptions();
 
   updateState(() => initialState);
+  captureWebEvent("backend_connected", {
+    connectionSource: options.triggeredBy,
+  });
 
   if (options.triggeredBy === "manual") {
     // A manual retry that reaches this line means the user saw the modal

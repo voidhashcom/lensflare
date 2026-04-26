@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { captureWebEvent } from "~/analytics";
 
 export type Theme = "light" | "dark" | "system";
 export type ResolvedTheme = "light" | "dark";
@@ -211,6 +212,10 @@ export function useTheme() {
 
     localStorage.setItem(STORAGE_KEY, next);
     applyTheme(next, true);
+    captureWebEvent("theme_changed", {
+      surface: document.documentElement.dataset.runtime === "electron" ? "desktop" : "web",
+      theme: next,
+    });
     emitChange();
   }, []);
 

@@ -1,19 +1,19 @@
-# @lensflare/effect
+# @lensflare.dev/effect
 
 Effect observability layer for Lensflare local logs and traces.
 
 ## Install
 
 ```bash
-pnpm add effect @lensflare/effect
+pnpm add effect @lensflare.dev/effect
 ```
 
-`@lensflare/effect` follows Effect's version. Install matching versions unless a Lensflare-only hotfix release notes says otherwise.
+`@lensflare.dev/effect` follows Effect's version. Install matching versions unless a Lensflare-only hotfix release notes says otherwise.
 
 For example:
 
 ```bash
-pnpm add effect@4.0.0-beta.55 @lensflare/effect@4.0.0-beta.55
+pnpm add effect@4.0.0-beta.55 @lensflare.dev/effect@4.0.0-beta.55
 ```
 
 Lensflare-only emergency fixes use versions that still identify their target Effect release. During Effect beta releases, `4.0.0-beta.55-lensflare.1` targets `effect@4.0.0-beta.55`. For stable Effect releases, Lensflare hotfixes use the next patch version and keep the exact compatible Effect version in `peerDependencies`.
@@ -22,7 +22,7 @@ Lensflare-only emergency fixes use versions that still identify their target Eff
 
 ```ts
 import { Effect } from "effect";
-import { Lensflare } from "@lensflare/effect";
+import { Lensflare } from "@lensflare.dev/effect";
 
 const program = Effect.gen(function* () {
   yield* Effect.log("hello from Lensflare");
@@ -59,7 +59,7 @@ Effect.runPromise(program.pipe(Effect.provide(Lensflare.layer("dev"))));
 ## API
 
 ```ts
-import { Lensflare, layer, isEnabled, resolveLayerConfig } from "@lensflare/effect";
+import { Lensflare, layer, isEnabled, resolveLayerConfig } from "@lensflare.dev/effect";
 ```
 
 The package is ESM-only and publishes TypeScript declarations.

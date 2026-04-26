@@ -1,6 +1,7 @@
 import { Outlet, createRootRoute, useLocation } from "@tanstack/react-router";
 import { useEffect } from "react";
 
+import { recordCollectionOpened } from "~/analytics";
 import { AppSidebar } from "~/components/AppSidebar";
 import { DatasetTabsTitlebar } from "~/components/LogStream/DatasetTabsTitlebar";
 import { RpcConnectionModal } from "~/components/RpcConnectionModal";
@@ -33,6 +34,14 @@ function RootLayout() {
     return () => {
       window.cancelAnimationFrame(frame);
     };
+  }, [pathname]);
+
+  useEffect(() => {
+    const match = pathname.match(/^\/projects\/[^/]+\/collections\/[^/]+$/);
+    if (!match) {
+      return;
+    }
+    recordCollectionOpened("telemetry", "route");
   }, [pathname]);
 
   return (

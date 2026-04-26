@@ -15,6 +15,7 @@
     "@duckdb/node-api": "catalog:",
     "@effect/opentelemetry": "catalog:",
     "@effect/platform-node": "catalog:",
+    "@lensflare/analytics": "workspace:*",
     "@lensflare/contracts": "workspace:*",
     "@lensflare/query": "workspace:*",
     "@lensflare/shared": "workspace:*",

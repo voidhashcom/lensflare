@@ -2,6 +2,7 @@ import { DEFAULT_PROJECT_ICON, type Project } from "@lensflare/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 
+import { recordProjectCreated } from "~/analytics";
 import { createProject, updateProject } from "~/data/projectApi";
 
 export interface UseProjectDialogResult {
@@ -40,7 +41,7 @@ const initialState: ProjectDialogState = {
  * On successful create, navigates to the newly created project so the user
  * lands on it immediately.
  */
-export function useProjectDialog(): UseProjectDialogResult {
+export function useProjectDialog(projectCount: number): UseProjectDialogResult {
   const navigate = useNavigate();
   const [state, setState] = React.useState<ProjectDialogState>(initialState);
 
@@ -93,6 +94,7 @@ export function useProjectDialog(): UseProjectDialogResult {
             icon: DEFAULT_PROJECT_ICON,
             name: trimmedName,
           });
+          recordProjectCreated(projectCount + 1);
           await navigate({
             params: { projectId: project.id },
             to: "/projects/$projectId",
@@ -108,7 +110,7 @@ export function useProjectDialog(): UseProjectDialogResult {
         }));
       }
     },
-    [navigate, state.mode, state.name, state.projectId],
+    [navigate, projectCount, state.mode, state.name, state.projectId],
   );
 
   return {

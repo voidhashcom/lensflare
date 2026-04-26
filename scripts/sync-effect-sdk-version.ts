@@ -110,7 +110,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const hotfixLabel = hotfix === undefined ? "" : ` hotfix ${hotfix}`;
     const changedLabel = result.changed ? "updated" : "already up to date";
     console.log(
-      `@lensflare/effect ${changedLabel}: ${result.version} targets effect ${effectVersion}${hotfixLabel}.`,
+      `@lensflare.dev/effect ${changedLabel}: ${result.version} targets effect ${effectVersion}${hotfixLabel}.`,
     );
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));

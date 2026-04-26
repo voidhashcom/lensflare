@@ -7,6 +7,7 @@ import { createRoot } from "react-dom/client";
 import "./index.css";
 
 import { ToastProvider } from "~/components/ui/toast";
+import { ensureWebAnalyticsInitialized } from "./analytics";
 import { createAppRouter } from "./router";
 
 const root = document.getElementById("root");
@@ -24,6 +25,7 @@ document.documentElement.dataset.platform = userAgent.includes("Mac")
     : "linux";
 
 const router = createAppRouter();
+void ensureWebAnalyticsInitialized();
 
 createRoot(root).render(
   <StrictMode>

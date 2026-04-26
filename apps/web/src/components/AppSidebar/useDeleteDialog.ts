@@ -1,6 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 
+import { recordProjectDeleted } from "~/analytics";
 import { deleteProject } from "~/data/projectApi";
 
 import type { DeleteTarget } from "./types";
@@ -32,7 +33,10 @@ const initialState: DeleteDialogState = {
  * is the currently active route (project or dataset), navigates away so the
  * user isn't stranded on a stale URL pointing at nothing.
  */
-export function useDeleteDialog(activeProjectId: string | undefined): UseDeleteDialogResult {
+export function useDeleteDialog(
+  activeProjectId: string | undefined,
+  projectCount: number,
+): UseDeleteDialogResult {
   const navigate = useNavigate();
   const [state, setState] = React.useState<DeleteDialogState>(initialState);
 
@@ -57,6 +61,7 @@ export function useDeleteDialog(activeProjectId: string | undefined): UseDeleteD
 
     try {
       await deleteProject(target.projectId);
+      recordProjectDeleted(Math.max(0, projectCount - 1));
       if (activeProjectId === target.projectId) {
         await navigate({ to: "/" });
       }
@@ -69,7 +74,7 @@ export function useDeleteDialog(activeProjectId: string | undefined): UseDeleteD
         submitting: false,
       }));
     }
-  }, [activeProjectId, navigate, state.target]);
+  }, [activeProjectId, navigate, projectCount, state.target]);
 
   return {
     error: state.error,

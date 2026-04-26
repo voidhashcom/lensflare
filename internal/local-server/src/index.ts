@@ -11,3 +11,12 @@ export {
   startLocalServer,
 } from "./server.ts";
 export { LensflareMcpToolsLayer } from "./mcp/server.ts";
+export {
+  DEFAULT_APP_SETTINGS,
+  mergeAppSettings,
+  readHashedAnalyticsDistinctId,
+  readPersistedAppSettings,
+  resolveAnalyticsBootstrap,
+  resolveLocalAppStatePaths,
+  writePersistedAppSettings,
+} from "./appSettings.ts";

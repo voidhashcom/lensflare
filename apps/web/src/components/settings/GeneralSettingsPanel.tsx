@@ -1,8 +1,9 @@
-import type { Dataset, ProjectEntity } from "@lensflare/contracts";
+import type { AppSettings, Dataset, ProjectEntity } from "@lensflare/contracts";
 import { useLiveQuery } from "@tanstack/react-db";
 import { RefreshCwIcon, Trash2Icon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { captureWebEvent, refreshWebAnalytics } from "~/analytics";
 import { datasetsCollection } from "~/collections/datasetsCollection";
 import { projectsCollection } from "~/collections/projectsCollection";
 import {
@@ -24,6 +25,7 @@ import {
 } from "~/components/ui/select";
 import { IconButtonTooltip } from "~/components/ui/tooltip";
 import { clearDatasetData, listDatasetStorageStats } from "~/data/datasetApi";
+import { getAppSettings, updateAppSettings } from "~/data/appSettingsApi";
 import { useTheme, type Theme } from "~/hooks/useTheme";
 
 import {
@@ -32,6 +34,7 @@ import {
   SettingsRow,
   SettingsSection,
 } from "./settingsLayout";
+import { Switch } from "../ui/switch";
 
 const THEME_OPTIONS: ReadonlyArray<{ value: Theme; label: string }> = [
   { value: "system", label: "System" },
@@ -94,6 +97,8 @@ export function GeneralSettingsPanel() {
     project: ProjectEntity | null;
   } | null>(null);
   const [clearingDatasetId, setClearingDatasetId] = useState<string | null>(null);
+  const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
+  const [updatingAnalyticsPreference, setUpdatingAnalyticsPreference] = useState(false);
 
   const projectsQuery = useLiveQuery(selectProjects);
   const datasetsQuery = useLiveQuery(selectDatasets);
@@ -148,6 +153,14 @@ export function GeneralSettingsPanel() {
     void refreshStorageStats();
   }, [refreshStorageStats]);
 
+  useEffect(() => {
+    void getAppSettings()
+      .then(setAppSettings)
+      .catch(() => {
+        setAppSettings(null);
+      });
+  }, []);
+
   const confirmClearDataset = useCallback(async () => {
     if (!clearTarget) {
       return;
@@ -157,6 +170,9 @@ export function GeneralSettingsPanel() {
     setStorageError(null);
     try {
       await clearDatasetData(clearTarget.dataset.projectId, clearTarget.dataset.id);
+      captureWebEvent("dataset_storage_cleared", {
+        clearScope: "dataset",
+      });
       await refreshStorageStats();
       setClearTarget(null);
     } catch (error) {
@@ -165,6 +181,34 @@ export function GeneralSettingsPanel() {
       setClearingDatasetId(null);
     }
   }, [clearTarget, refreshStorageStats]);
+
+  const onAnalyticsEnabledChange = useCallback(async (next: boolean) => {
+    if (updatingAnalyticsPreference) {
+      return;
+    }
+
+    if (next === false) {
+      captureWebEvent("analytics_preference_changed", {
+        enabled: false,
+        surface: document.documentElement.dataset.runtime === "electron" ? "desktop" : "web",
+      });
+    }
+
+    setUpdatingAnalyticsPreference(true);
+    try {
+      const updated = await updateAppSettings({ analyticsEnabled: next });
+      setAppSettings(updated);
+      await refreshWebAnalytics();
+      if (next === true) {
+        captureWebEvent("analytics_preference_changed", {
+          enabled: true,
+          surface: document.documentElement.dataset.runtime === "electron" ? "desktop" : "web",
+        });
+      }
+    } finally {
+      setUpdatingAnalyticsPreference(false);
+    }
+  }, [updatingAnalyticsPreference]);
 
   return (
     <SettingsPageContainer>
@@ -200,6 +244,22 @@ export function GeneralSettingsPanel() {
             ) : undefined
           }
           title="Color theme"
+        />
+      </SettingsSection>
+
+      <SettingsSection title="Privacy">
+        <SettingsRow
+          control={
+            <Switch
+              checked={appSettings?.analyticsEnabled ?? true}
+              disabled={updatingAnalyticsPreference}
+              onCheckedChange={(checked) => {
+                void onAnalyticsEnabledChange(Boolean(checked));
+              }}
+            />
+          }
+          description="Share anonymous coarse-grained product analytics. Lensflare never sends project names, dataset names, queries, file paths, URLs, or telemetry contents."
+          title="Anonymous usage analytics"
         />
       </SettingsSection>
 

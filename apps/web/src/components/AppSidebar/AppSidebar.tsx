@@ -56,8 +56,8 @@ export function AppSidebar() {
         : null
     : null;
 
-  const projectDialog = useProjectDialog();
-  const deleteDialog = useDeleteDialog(activeProjectId);
+  const projectDialog = useProjectDialog(projects.length);
+  const deleteDialog = useDeleteDialog(activeProjectId, projects.length);
   const contextMenu = useSidebarContextMenu();
 
   const onContextMenuEdit = () => {

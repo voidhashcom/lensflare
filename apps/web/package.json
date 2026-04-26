@@ -14,6 +14,7 @@
   "dependencies": {
     "@base-ui/react": "catalog:",
     "@legendapp/list": "3.0.0-beta.44",
+    "@lensflare/analytics": "workspace:*",
     "@lensflare/contracts": "workspace:*",
     "@lensflare/query": "workspace:*",
     "@lensflare/shared": "workspace:*",

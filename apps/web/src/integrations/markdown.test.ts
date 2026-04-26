@@ -23,7 +23,7 @@ const BASE_INTEGRATION: Integration = {
       body: "Adds the wrapper plus its peer.",
       snippet: {
         lang: "bash",
-        code: "pnpm add @lensflare/effect",
+        code: "pnpm add @lensflare.dev/effect",
       },
     },
     {
@@ -32,7 +32,7 @@ const BASE_INTEGRATION: Integration = {
       snippet: {
         lang: "ts",
         filename: "tracing.ts",
-        code: 'import { Lensflare } from "@lensflare/effect";\n\nexport const Live = Lensflare.layer("{{datasetSlug}}");\n',
+        code: 'import { Lensflare } from "@lensflare.dev/effect";\n\nexport const Live = Lensflare.layer("{{datasetSlug}}");\n',
       },
       note: "Use `LENSFLARE_ENABLED=1` to force it on.",
     },
@@ -67,7 +67,7 @@ describe("integrationToMarkdown", () => {
     });
     expect(md).toContain("## 1. Install the SDK");
     expect(md).toContain("## 2. Provide the layer");
-    expect(md).toContain("```bash\npnpm add @lensflare/effect\n```");
+    expect(md).toContain("```bash\npnpm add @lensflare.dev/effect\n```");
     expect(md).toContain("```ts\nimport");
   });
 

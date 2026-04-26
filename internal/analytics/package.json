@@ -1,0 +1,27 @@
+{
+  "name": "@lensflare/analytics",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./browser": "./src/browser.ts",
+    "./node": "./src/node.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vp test --passWithNoTests"
+  },
+  "dependencies": {
+    "@lensflare/shared": "workspace:*",
+    "effect": "catalog:",
+    "posthog-js": "^1.260.2",
+    "posthog-node": "^5.10.0"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
+  }
+}

@@ -8,6 +8,8 @@ export const DEFAULT_SERVER_PORT = 43110;
 export const DEFAULT_WEB_DEV_PORT = 5173;
 export const DEFAULT_WINDOW_WIDTH = 1400;
 export const DEFAULT_WINDOW_HEIGHT = 920;
+export const DEFAULT_POSTHOG_HOST = "https://us.i.posthog.com";
+export const DEFAULT_POSTHOG_API_KEY = "phc_vSLZ2eVeL7eKkihBHXgK5SxomjwPx4yrf5Rj3wKwhaF2";
 
 export interface RuntimeConfig {
   host: string;
@@ -18,6 +20,10 @@ export interface RuntimeConfig {
   otelEnabled: boolean;
   otelProjectSlug: string;
   otelDatasetSlug: string;
+  posthogEnabled: boolean;
+  posthogApiKey?: string;
+  posthogHost: string;
+  posthogDebug: boolean;
 }
 
 function parsePort(rawValue: string | undefined, fallback: number): number {
@@ -56,6 +62,7 @@ export function readRuntimeConfigFromEnv(env: Record<string, string | undefined>
   const host = env.LENSFLARE_HOST?.trim() || DEFAULT_HOST;
   const desktopDev = parseBoolean(env.LENSFLARE_DESKTOP_DEV, false);
   const lensflareDev = parseBoolean(env.LENSFLARE_DEV, false) || desktopDev;
+  const posthogApiKey = env.LENSFLARE_POSTHOG_API_KEY?.trim() || DEFAULT_POSTHOG_API_KEY;
 
   return {
     host,
@@ -66,6 +73,10 @@ export function readRuntimeConfigFromEnv(env: Record<string, string | undefined>
     otelEnabled: parseBoolean(env.LENSFLARE_OTEL_ENABLED, lensflareDev),
     otelProjectSlug: env.LENSFLARE_OTEL_PROJECT_SLUG?.trim() || "lensflare",
     otelDatasetSlug: env.LENSFLARE_OTEL_DATASET_SLUG?.trim() || "dev",
+    posthogEnabled: parseBoolean(env.LENSFLARE_POSTHOG_ENABLED, true),
+    posthogApiKey,
+    posthogHost: env.LENSFLARE_POSTHOG_HOST?.trim() || DEFAULT_POSTHOG_HOST,
+    posthogDebug: parseBoolean(env.LENSFLARE_POSTHOG_DEBUG, false),
   };
 }
 

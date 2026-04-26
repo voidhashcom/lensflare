@@ -15,6 +15,7 @@ import {
 } from "../ingest/telemetryLogQueryService.ts";
 import { decodeTelemetryCursor, TelemetryQueryService } from "../ingest/telemetryQueryService.ts";
 import { renderFallbackApp, serveStaticFile } from "./static.ts";
+import { AppSettingsService } from "../services/appSettingsService.ts";
 
 export interface HttpRoutesOptions {
   readonly origin: string;
@@ -202,13 +203,18 @@ export function makeHttpRoutesLayer(options: HttpRoutesOptions) {
       yield* router.add(
         "GET",
         "/api/meta",
-        HttpServerResponse.jsonUnsafe({
-          appName: APP_NAME,
-          appVersion: APP_VERSION,
-          serverOrigin: options.origin,
-          mode: options.mode,
-          sqliteDatabaseFile: options.sqliteDatabaseFile,
-          duckdbDatabaseFile: options.duckdbDatabaseFile,
+        Effect.gen(function* () {
+          const appSettings = yield* AppSettingsService;
+          return HttpServerResponse.jsonUnsafe({
+            appName: APP_NAME,
+            appVersion: APP_VERSION,
+            serverOrigin: options.origin,
+            mode: options.mode,
+            staticAssetMode: options.snapshot().staticAssetMode,
+            sqliteDatabaseFile: options.sqliteDatabaseFile,
+            duckdbDatabaseFile: options.duckdbDatabaseFile,
+            analytics: yield* appSettings.getAnalyticsBootstrap(),
+          });
         }),
       );
 

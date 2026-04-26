@@ -7,6 +7,8 @@ import {
 } from "@lensflare/contracts";
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 
+import { bucketCount } from "@lensflare/analytics";
+import { captureWebEvent, recordTelemetryFirstDataSeen } from "~/analytics";
 import { preloadTelemetryFilterCatalog } from "~/collections/telemetryFilterCatalogCollection";
 import { listDatasetTelemetry, subscribeDatasetTelemetryEntries } from "~/data/logApi";
 
@@ -231,6 +233,11 @@ export function setDatasetStreamFilter(input: SetDatasetStreamFilterInput): void
   if (view.filterSource === input.source && sameFilter(view.filter, input.filter)) {
     return;
   }
+  if (input.filter !== null) {
+    captureWebEvent("filter_applied", {
+      filterKind: classifyFilterKind(input.source),
+    });
+  }
 
   unpinSelectedRecord(session, view);
   clearTelemetryHistoryRetention(session.projectId, session.datasetId, view.viewId);
@@ -329,6 +336,10 @@ export async function loadOlderDatasetTelemetry(
       }
 
       storeTelemetryRecords(projectId, datasetId, page.entries);
+      captureWebEvent("telemetry_history_loaded", {
+        hadCursor: true,
+        pageSizeBucket: bucketCount(page.entries.length),
+      });
       const pageIds = page.entries.map((entry) => entry.id);
       const latestPageInfo = view.pageInfo;
       view.rowIds = mergeUniqueRecordIds(projectId, datasetId, pageIds, view.rowIds);
@@ -374,6 +385,12 @@ export function selectDatasetTelemetryEntry(
   }
   view.selectedEntryId = logId;
   if (logId !== null) {
+    const selected = getTelemetryRecord(projectId, datasetId, logId);
+    if (selected) {
+      captureWebEvent("telemetry_entry_selected", {
+        recordKind: selected.kind,
+      });
+    }
     pinTelemetryRecord(projectId, datasetId, logId, SELECTED_RECORD_PIN);
   }
   commitView(session, view);
@@ -542,6 +559,9 @@ function applyLatestTelemetryPage(
   page: TelemetryRecordPage,
 ): void {
   storeTelemetryRecords(session.projectId, session.datasetId, page.entries);
+  if (page.entries.length > 0) {
+    recordTelemetryFirstDataSeen(page.entries);
+  }
   const pageIds = page.entries.map((entry) => entry.id);
   view.liveBackfillIds = pageIds;
   view.pageInfo = page.pageInfo;
@@ -550,6 +570,29 @@ function applyLatestTelemetryPage(
     retainTelemetryHistoryIds(session.projectId, session.datasetId, view.viewId, view.rowIds);
   }
   markRowsChanged(view);
+}
+
+function classifyFilterKind(source: string): string {
+  const normalized = source.trim().toLowerCase();
+  if (normalized.length === 0) {
+    return "text";
+  }
+  if (normalized.includes(" and ") || normalized.includes(" or ")) {
+    return "compound";
+  }
+  if (normalized.includes("level")) {
+    return "level";
+  }
+  if (normalized.includes("kind")) {
+    return "kind";
+  }
+  if (normalized.includes("time") || normalized.includes("timestamp")) {
+    return "time";
+  }
+  if (normalized.includes(".")) {
+    return "field";
+  }
+  return "text";
 }
 
 function ensureSubscription(session: DatasetStreamSession): void {

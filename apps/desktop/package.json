@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@duckdb/node-api": "catalog:",
+    "@lensflare/analytics": "workspace:*",
     "electron-updater": "^6.8.3"
   },
   "devDependencies": {

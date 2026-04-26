@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { Buffer } from "node:buffer";
 import { resolve } from "node:path";
+import { bucketDurationMs, classifyError, type AnalyticsEventName, type AnalyticsRecorder } from "@lensflare/analytics";
+import { createNodeAnalyticsRecorder } from "@lensflare/analytics/node";
 import {
   app,
   BrowserWindow,
@@ -21,7 +23,11 @@ import type {
   DesktopUpdateCheckResult,
   DesktopUpdateState,
 } from "@lensflare/contracts";
-import { type LocalServerHandle, startLocalServer } from "@lensflare/local-server";
+import {
+  type LocalServerHandle,
+  resolveAnalyticsBootstrap,
+  startLocalServer,
+} from "@lensflare/local-server";
 import {
   APP_NAME,
   APP_VERSION,
@@ -93,11 +99,68 @@ let updateCheckInFlight = false;
 let updateDownloadInFlight = false;
 let updateInstallInFlight = false;
 let updaterConfigured = false;
+let allowImmediateQuit = false;
+let quitCleanupPromise: Promise<void> | null = null;
 let updateState: DesktopUpdateState = createInitialDesktopUpdateState(
   app.getVersion(),
   desktopRuntimeInfo,
   "latest",
 );
+const desktopStartedAtMs = Date.now();
+
+let desktopAnalyticsSignature: string | null = null;
+let desktopAnalyticsRecorder: AnalyticsRecorder = {
+  enabled: false,
+  capture: () => {},
+  shutdown: async () => {},
+};
+
+function resolveDesktopStaticAssetMode(): "embedded" | "filesystem" | "proxy" | "none" {
+  if (config.desktopDev) {
+    return "proxy";
+  }
+  return resolveEmbeddedWebDir() ? "embedded" : "none";
+}
+
+async function resolveDesktopAnalyticsRecorder(): Promise<AnalyticsRecorder> {
+  const bootstrap = await resolveAnalyticsBootstrap(config);
+  const signature = JSON.stringify(bootstrap);
+  if (desktopAnalyticsSignature === signature) {
+    return desktopAnalyticsRecorder;
+  }
+
+  await Promise.resolve(desktopAnalyticsRecorder.shutdown());
+  desktopAnalyticsRecorder = createNodeAnalyticsRecorder(bootstrap, {
+    surface: "desktop",
+    mode: "desktop",
+    platform: `${process.platform}-${process.arch}`,
+    devMode: config.desktopDev || config.lensflareDev,
+    staticAssetMode: resolveDesktopStaticAssetMode(),
+  });
+  desktopAnalyticsSignature = signature;
+  return desktopAnalyticsRecorder;
+}
+
+async function captureDesktopEvent(
+  event: AnalyticsEventName,
+  properties?: Readonly<Record<string, unknown>>,
+): Promise<void> {
+  const recorder = await resolveDesktopAnalyticsRecorder();
+  await Promise.resolve(recorder.capture(event, properties));
+}
+
+function captureDesktopEventBestEffort(
+  event: AnalyticsEventName,
+  properties?: Readonly<Record<string, unknown>>,
+): void {
+  void captureDesktopEvent(event, properties).catch(() => {
+    // Analytics must not interrupt app behavior.
+  });
+}
+
+async function shutdownDesktopAnalytics(): Promise<void> {
+  await Promise.resolve(desktopAnalyticsRecorder.shutdown());
+}
 
 function resolveDevelopmentIconPath(): string | undefined {
   if (!config.desktopDev) {
@@ -313,6 +376,7 @@ async function checkForUpdates(reason: string): Promise<boolean> {
   }
 
   updateCheckInFlight = true;
+  captureDesktopEventBestEffort("desktop_update_check_requested", { reason });
   setUpdateState(reduceDesktopUpdateStateOnCheckStart(updateState, new Date().toISOString()));
   console.info(`[lensflare-updater] checking for updates (${reason})`);
 
@@ -321,6 +385,10 @@ async function checkForUpdates(reason: string): Promise<boolean> {
     return true;
   } catch (error) {
     const message = formatErrorMessage(error);
+    captureDesktopEventBestEffort("desktop_update_error", {
+      stage: "check",
+      reasonClass: classifyError(error),
+    });
     setUpdateState(
       reduceDesktopUpdateStateOnCheckFailure(updateState, message, new Date().toISOString()),
     );
@@ -377,6 +445,9 @@ async function downloadAvailableUpdate(): Promise<{ accepted: boolean; completed
   updateDownloadInFlight = true;
   autoUpdater.disableDifferentialDownload = isArm64HostRunningIntelBuild(desktopRuntimeInfo);
   setUpdateState(reduceDesktopUpdateStateOnDownloadStart(updateState));
+  captureDesktopEventBestEffort("desktop_update_download_started", {
+    channel: updateState.channel,
+  });
   console.info("[lensflare-updater] downloading update");
 
   try {
@@ -384,6 +455,10 @@ async function downloadAvailableUpdate(): Promise<{ accepted: boolean; completed
     return { accepted: true, completed: true };
   } catch (error) {
     const message = formatErrorMessage(error);
+    captureDesktopEventBestEffort("desktop_update_error", {
+      stage: "download",
+      reasonClass: classifyError(error),
+    });
     setUpdateState(reduceDesktopUpdateStateOnDownloadFailure(updateState, message));
     console.error(`[lensflare-updater] failed to download update: ${message}`);
     return { accepted: true, completed: false };
@@ -405,6 +480,10 @@ async function installDownloadedUpdate(stopCurrentServer: () => Promise<void>): 
   clearUpdateTimers();
 
   try {
+    await captureDesktopEvent("desktop_update_install_requested", {
+      channel: updateState.channel,
+    });
+    await shutdownDesktopAnalytics();
     await stopCurrentServer();
     for (const win of BrowserWindow.getAllWindows()) {
       win.destroy();
@@ -415,6 +494,10 @@ async function installDownloadedUpdate(stopCurrentServer: () => Promise<void>): 
     const message = formatErrorMessage(error);
     updateInstallInFlight = false;
     quitting = false;
+    captureDesktopEventBestEffort("desktop_update_error", {
+      stage: "install",
+      reasonClass: classifyError(error),
+    });
     setUpdateState(reduceDesktopUpdateStateOnInstallFailure(updateState, message));
     console.error(`[lensflare-updater] failed to install update: ${message}`);
     return { accepted: true, completed: false };
@@ -469,6 +552,10 @@ function configureAutoUpdater(): void {
         new Date().toISOString(),
       ),
     );
+    captureDesktopEventBestEffort("desktop_update_available", {
+      channel: updateState.channel,
+      releaseType: info.version.includes("-") ? "nightly" : "stable",
+    });
     lastLoggedDownloadMilestone = -1;
     console.info(`[lensflare-updater] update available: ${info.version}`);
   });
@@ -481,6 +568,15 @@ function configureAutoUpdater(): void {
 
   autoUpdater.on("error", (error) => {
     const message = formatErrorMessage(error);
+    const stage = updateInstallInFlight
+      ? "install"
+      : updateDownloadInFlight
+        ? "download"
+        : "check";
+    captureDesktopEventBestEffort("desktop_update_error", {
+      stage,
+      reasonClass: classifyError(error),
+    });
     if (updateInstallInFlight) {
       updateInstallInFlight = false;
       quitting = false;
@@ -524,6 +620,9 @@ function configureAutoUpdater(): void {
 
   autoUpdater.on("update-downloaded", (info) => {
     setUpdateState(reduceDesktopUpdateStateOnDownloadComplete(updateState, info.version));
+    captureDesktopEventBestEffort("desktop_update_download_completed", {
+      channel: updateState.channel,
+    });
     console.info(`[lensflare-updater] update downloaded: ${info.version}`);
   });
 
@@ -607,11 +706,17 @@ async function main(): Promise<void> {
     mode: "desktop",
     host: config.host,
     port: config.serverPort,
-    staticAssetMode: config.desktopDev ? "proxy" : embeddedWebDir ? "embedded" : "none",
+    staticAssetMode: resolveDesktopStaticAssetMode(),
     otel: {
       enabled: config.otelEnabled,
       projectSlug: config.otelProjectSlug,
       datasetSlug: config.otelDatasetSlug,
+    },
+    analytics: {
+      enabled: config.posthogEnabled,
+      host: config.posthogHost,
+      debug: config.posthogDebug,
+      ...(config.posthogApiKey ? { apiKey: config.posthogApiKey } : {}),
     },
     bootstrapOtelCatalog: config.lensflareDev,
     ...(embeddedWebDir ? { staticDir: embeddedWebDir } : {}),
@@ -822,11 +927,37 @@ async function main(): Promise<void> {
     }
   });
 
-  app.on("before-quit", () => {
+  app.on("before-quit", (event) => {
+    if (allowImmediateQuit || updateInstallInFlight) {
+      quitting = true;
+      readinessAbortController?.abort();
+      clearUpdateTimers();
+      void stopCurrentServer();
+      return;
+    }
+    if (quitCleanupPromise) {
+      event.preventDefault();
+      return;
+    }
+
+    event.preventDefault();
     quitting = true;
     readinessAbortController?.abort();
     clearUpdateTimers();
-    void stopCurrentServer();
+    quitCleanupPromise = (async () => {
+      try {
+        await captureDesktopEvent("app_closed", {
+          sessionDurationBucket: bucketDurationMs(Date.now() - desktopStartedAtMs),
+        });
+        await stopCurrentServer();
+        await shutdownDesktopAnalytics();
+      } catch (error) {
+        console.error("[lensflare] failed during quit cleanup", error);
+      } finally {
+        allowImmediateQuit = true;
+        app.quit();
+      }
+    })();
   });
 
   ipcMain.handle(GET_LOCAL_SERVER_STATE_CHANNEL, () => currentState);
@@ -917,6 +1048,9 @@ async function main(): Promise<void> {
   }
 
   await app.whenReady();
+  await captureDesktopEvent("app_opened", {
+    shell: "desktop",
+  });
   configureApplicationMenu();
   const developmentIconPath = resolveDevelopmentIconPath();
   if (developmentIconPath && process.platform === "darwin" && app.dock) {

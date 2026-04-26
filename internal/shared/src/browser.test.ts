@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
+  DEFAULT_POSTHOG_API_KEY,
+  DEFAULT_POSTHOG_HOST,
   DEFAULT_SERVER_PORT,
   DEFAULT_WEB_DEV_PORT,
   httpUrlToWsUrl,
@@ -28,6 +30,26 @@ describe("@lensflare/shared/browser", () => {
     expect(productionConfig.otelDatasetSlug).toBe("dev");
     expect(devConfig.lensflareDev).toBe(true);
     expect(devConfig.otelEnabled).toBe(true);
+  });
+
+  it("parses posthog config with defaults and overrides", () => {
+    const defaultConfig = readRuntimeConfigFromEnv({});
+    const configured = readRuntimeConfigFromEnv({
+      LENSFLARE_POSTHOG_ENABLED: "false",
+      LENSFLARE_POSTHOG_API_KEY: "phc_test",
+      LENSFLARE_POSTHOG_HOST: "https://eu.i.posthog.com",
+      LENSFLARE_POSTHOG_DEBUG: "true",
+    });
+
+    expect(defaultConfig.posthogEnabled).toBe(true);
+    expect(defaultConfig.posthogHost).toBe(DEFAULT_POSTHOG_HOST);
+    expect(defaultConfig.posthogApiKey).toBe(DEFAULT_POSTHOG_API_KEY);
+    expect(defaultConfig.posthogDebug).toBe(false);
+
+    expect(configured.posthogEnabled).toBe(false);
+    expect(configured.posthogApiKey).toBe("phc_test");
+    expect(configured.posthogHost).toBe("https://eu.i.posthog.com");
+    expect(configured.posthogDebug).toBe(true);
   });
 
   it("builds stable URLs", () => {
