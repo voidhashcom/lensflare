@@ -299,7 +299,7 @@ function durationUs(row: TelemetrySpanRow): number {
 function toTraceContext(
   traceId: string,
   rows: ReadonlyArray<TelemetrySpanRow>,
-  currentSpanId?: string | undefined,
+  currentSpanId?: string,
 ): TelemetryTraceContext | null {
   if (rows.length === 0) {
     return null;
@@ -528,7 +528,7 @@ export class TelemetryLogQueryService extends Context.Service<
       projectId: string,
       datasetId: string,
       traceId: string,
-      currentSpanId?: string | undefined,
+      currentSpanId?: string,
     ) => Effect.Effect<
       TelemetryTraceContext | null,
       DatasetNotFound | DuckDbError | SqlError.SqlError
@@ -579,7 +579,7 @@ export class TelemetryLogQueryService extends Context.Service<
           cursor_id: options?.cursor?.id ?? null,
           direction,
           limit: limit + 1,
-          ...(fragment?.params ?? {}),
+          ...fragment?.params,
         };
 
         const rows = yield* telemetry.queryRows<Record<string, unknown>>(datasetId, sql, params);
@@ -668,7 +668,7 @@ export class TelemetryLogQueryService extends Context.Service<
         projectId: string,
         datasetId: string,
         traceId: string,
-        currentSpanId?: string | undefined,
+        currentSpanId?: string,
       ) {
         const dataset = yield* datasets.findById(projectId, datasetId);
         if (dataset === undefined) {

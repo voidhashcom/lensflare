@@ -674,7 +674,11 @@ function SpanDetailsHeader({ span }: { span: TraceSpan }) {
           size="icon"
           variant="ghost"
         >
-          {copied ? <CheckIcon className="size-3.5 text-success" /> : <CopyIcon className="size-3.5" />}
+          {copied ? (
+            <CheckIcon className="size-3.5 text-success" />
+          ) : (
+            <CopyIcon className="size-3.5" />
+          )}
         </Button>
       </IconButtonTooltip>
     </div>

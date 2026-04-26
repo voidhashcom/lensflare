@@ -588,7 +588,7 @@ export class TelemetryQueryService extends Context.Service<
             cursor_id: options?.cursor?.id ?? null,
             direction,
             limit: limit + 1,
-            ...(fragment?.params ?? {}),
+            ...fragment?.params,
           };
 
           const rawRows = yield* telemetry.queryRows<Record<string, unknown>>(

@@ -4,14 +4,13 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const releasePackageFiles = [
+export const appReleasePackageFiles = [
   "apps/desktop/package.json",
   "apps/server/package.json",
   "apps/web/package.json",
   "internal/contracts/package.json",
   "internal/local-server/package.json",
   "internal/shared/package.json",
-  "packages/effect/package.json",
 ] as const;
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -23,7 +22,7 @@ export function updateReleasePackageVersions(
   const rootDir = resolve(options.rootDir ?? repoRoot);
   let changed = false;
 
-  for (const relativePath of releasePackageFiles) {
+  for (const relativePath of appReleasePackageFiles) {
     const filePath = join(rootDir, relativePath);
     const packageJson = JSON.parse(readFileSync(filePath, "utf8")) as Record<string, unknown>;
     if (packageJson.version !== version) {

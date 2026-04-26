@@ -191,11 +191,7 @@ export function LogPresetDropdown({
             />
           ))}
           <MenuSeparator />
-          <MenuItem
-            disabled={!hasActiveFilter}
-            className="min-h-7"
-            onClick={openSaveDialog}
-          >
+          <MenuItem disabled={!hasActiveFilter} className="min-h-7" onClick={openSaveDialog}>
             <PlusIcon className="size-4 shrink-0 text-muted-foreground/80" />
             <span className="min-w-0 truncate">Save preset</span>
           </MenuItem>
@@ -327,10 +323,7 @@ function PresetApplyRow({ preset, onApply, onEdit }: PresetApplyRowProps) {
 
   return (
     <div className="group/preset relative">
-      <MenuItem
-        className="min-h-7 w-full pr-8"
-        onClick={onApply}
-      >
+      <MenuItem className="min-h-7 w-full pr-8" onClick={onApply}>
         <PresetIcon className="size-4 shrink-0 text-muted-foreground/80" />
         <span className="min-w-0 truncate">{preset.name}</span>
       </MenuItem>

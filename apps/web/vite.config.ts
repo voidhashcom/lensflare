@@ -47,6 +47,8 @@ export default defineConfig({
       target: "react",
       routesDirectory: "src/routes",
       generatedRouteTree: "src/routeTree.gen.ts",
+      quoteStyle: "double",
+      semicolons: true,
       autoCodeSplitting: true,
     }),
     react({

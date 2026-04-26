@@ -221,42 +221,45 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
     rowElementsRef.current.get(logId)?.focus({ preventScroll: true });
   }, []);
 
-  const moveSelection = useCallback((currentLogId: string, direction: -1 | 1) => {
-    const currentIndex = rowIds.indexOf(currentLogId);
-    if (currentIndex === -1) {
-      return;
-    }
+  const moveSelection = useCallback(
+    (currentLogId: string, direction: -1 | 1) => {
+      const currentIndex = rowIds.indexOf(currentLogId);
+      if (currentIndex === -1) {
+        return;
+      }
 
-    const nextIndex = currentIndex + direction;
-    if (nextIndex < 0 || nextIndex >= rowIds.length) {
-      return;
-    }
+      const nextIndex = currentIndex + direction;
+      if (nextIndex < 0 || nextIndex >= rowIds.length) {
+        return;
+      }
 
-    const nextLogId = rowIds[nextIndex];
-    if (nextLogId === undefined) {
-      return;
-    }
+      const nextLogId = rowIds[nextIndex];
+      if (nextLogId === undefined) {
+        return;
+      }
 
-    onSelectLog?.(nextLogId);
-    const nextRow = rowElementsRef.current.get(nextLogId);
-    if (nextRow) {
-      nextRow.focus({ preventScroll: true });
-      keepRowVisible(nextRow, listRef.current);
-      return;
-    }
+      onSelectLog?.(nextLogId);
+      const nextRow = rowElementsRef.current.get(nextLogId);
+      if (nextRow) {
+        nextRow.focus({ preventScroll: true });
+        keepRowVisible(nextRow, listRef.current);
+        return;
+      }
 
-    void listRef.current
-      ?.scrollToIndex({
-        animated: false,
-        index: nextIndex,
-        viewPosition: direction === 1 ? 1 : 0,
-      })
-      .then(() => {
-        window.requestAnimationFrame(() => {
-          focusRow(nextLogId);
+      void listRef.current
+        ?.scrollToIndex({
+          animated: false,
+          index: nextIndex,
+          viewPosition: direction === 1 ? 1 : 0,
+        })
+        .then(() => {
+          window.requestAnimationFrame(() => {
+            focusRow(nextLogId);
+          });
         });
-      });
-  }, [focusRow, onSelectLog, rowIds]);
+    },
+    [focusRow, onSelectLog, rowIds],
+  );
 
   const registerRowElement = useCallback((logId: string, element: HTMLButtonElement | null) => {
     if (element) {

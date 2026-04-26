@@ -269,12 +269,12 @@ export class TelemetryLogEventService extends Context.Service<
     readonly streamDatasetLogs: (
       projectId: string,
       datasetId: string,
-      filter?: FilterNode | undefined,
+      filter?: FilterNode,
     ) => Stream.Stream<TelemetryLogEntry>;
     readonly streamDatasetTelemetry: (
       projectId: string,
       datasetId: string,
-      filter?: FilterNode | undefined,
+      filter?: FilterNode,
     ) => Stream.Stream<TelemetryRecord>;
   }
 >()("@lensflare/local-server/TelemetryLogEventService") {
@@ -374,11 +374,7 @@ export class TelemetryLogEventService extends Context.Service<
           );
         });
 
-        const streamDatasetLogs = (
-          projectId: string,
-          datasetId: string,
-          filter?: FilterNode | undefined,
-        ) => {
+        const streamDatasetLogs = (projectId: string, datasetId: string, filter?: FilterNode) => {
           const byDataset = stream.pipe(
             Stream.filter(
               (event) => event.projectId === projectId && event.datasetId === datasetId,
@@ -396,7 +392,7 @@ export class TelemetryLogEventService extends Context.Service<
         const streamDatasetTelemetry = (
           projectId: string,
           datasetId: string,
-          filter?: FilterNode | undefined,
+          filter?: FilterNode,
         ) => {
           const byDataset = stream.pipe(
             Stream.filter(

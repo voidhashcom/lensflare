@@ -364,7 +364,7 @@ export async function getLogTraceContext(
   projectId: string,
   datasetId: string,
   traceId: string,
-  spanId?: string | undefined,
+  spanId?: string,
 ): Promise<TraceContext | null> {
   try {
     const search = new URLSearchParams();
