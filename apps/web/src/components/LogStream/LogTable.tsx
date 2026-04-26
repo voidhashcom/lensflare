@@ -19,10 +19,14 @@ import type { TelemetryEntry } from "./types";
 const END_REACHED_TRESHOLD = 48;
 
 interface LogTableProps {
-  logs: ReadonlyArray<TelemetryEntry>;
+  rowIds: ReadonlyArray<string>;
+  resolveRow: (id: string) => TelemetryEntry | null;
+  mode: "live" | "history";
   hasPreviousPage?: boolean;
   isLoadingPrevious?: boolean;
   onLoadPrevious?: (() => Promise<void> | void) | undefined;
+  onLeaveLiveMode?: (() => void) | undefined;
+  onJumpToEnd?: (() => void) | undefined;
   /** Callback fired when a row is clicked. Enables the caller to open the
    *  log details panel. */
   onSelectLog?: (logId: string | null) => void;
@@ -68,10 +72,14 @@ const ROW_ESTIMATED_SIZE = 40;
  */
 export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTable(
   {
-    logs,
+    rowIds,
+    resolveRow,
+    mode,
     hasPreviousPage = false,
     isLoadingPrevious = false,
     onLoadPrevious,
+    onLeaveLiveMode,
+    onJumpToEnd,
     onSelectLog,
     selectedLogId = null,
     waiting = true,
@@ -111,7 +119,7 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
     return () => {
       window.cancelAnimationFrame(frameId);
     };
-  }, [logs, waiting]);
+  }, [rowIds, waiting]);
 
   const loadPreviousPage = async () => {
     if (!hasPreviousPage || isLoadingPrevious || loadingPreviousRef.current || !onLoadPrevious) {
@@ -142,7 +150,11 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
   };
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    setShowJumpToEnd(!isNearBottomEvent(event));
+    const nearBottom = isNearBottomEvent(event);
+    setShowJumpToEnd(!nearBottom);
+    if (!nearBottom && mode === "live" && rowIds.length > 0) {
+      onLeaveLiveMode?.();
+    }
     if (isNearTopEvent(event)) {
       void loadPreviousPage();
     }
@@ -150,7 +162,7 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
 
   const handleJumpToEnd = () => {
     setShowJumpToEnd(false);
-    onSelectLog?.(null);
+    onJumpToEnd?.();
     void listRef.current?.scrollToEnd({ animated: false });
   };
 
@@ -158,9 +170,12 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
   // with the rest of the table state. `extraData` forces LegendList to rerun
   // the renderer when these inputs change even though the data array itself
   // may be stable.
-  const renderRow = ({ item }: LegendListRenderItemProps<TelemetryEntry>) => (
-    <LogRow isSelected={item.id === selectedLogId} log={item} onSelect={onSelectLog} />
-  );
+  const renderRow = ({ item }: LegendListRenderItemProps<string>) => {
+    const log = resolveRow(item);
+    return log === null ? null : (
+      <LogRow isSelected={log.id === selectedLogId} log={log} onSelect={onSelectLog} />
+    );
+  };
 
   return (
     <div className={cn("relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden", className)}>
@@ -181,9 +196,9 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
           // internal scroll container is as wide as the rows it renders,
           // avoiding a second (inner) horizontal scrollbar.
           className="min-h-0 min-w-[75rem] flex-1"
-          data={logs as Array<TelemetryEntry>}
+          data={rowIds as Array<string>}
           estimatedItemSize={ROW_ESTIMATED_SIZE}
-          extraData={{ onSelectLog, selectedLogId }}
+          extraData={{ onSelectLog, resolveRow, selectedLogId }}
           keyExtractor={extractLogKey}
           // Keep short log sets anchored to the top of the viewport; live-tail
           // following is handled separately by `maintainScrollAtEnd`.
@@ -192,7 +207,7 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
           ListHeaderComponent={
             hasPreviousPage ? (
               <LoadPreviousHeader loading={isLoadingPrevious} onClick={loadPreviousPage} />
-            ) : logs.length > 0 ? (
+            ) : rowIds.length > 0 ? (
               <StartOfLogsHeader />
             ) : null
           }
@@ -223,8 +238,8 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
   );
 });
 
-function extractLogKey(item: TelemetryEntry): string {
-  return item.id;
+function extractLogKey(item: string): string {
+  return item;
 }
 
 function LoadPreviousHeader({

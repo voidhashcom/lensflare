@@ -12,13 +12,16 @@ import { LogDetailsPanel } from "./LogDetailsPanel";
 import { LogStreamHeader } from "./LogStreamHeader";
 import { LogTable, type LogTableHandle } from "./LogTable";
 import {
+  enterTelemetryHistoryMode,
   loadOlderDatasetTelemetry,
+  resolveTelemetryEntry,
+  returnTelemetryViewToLive,
   selectDatasetTelemetryEntry,
   useDatasetStreamSnapshot,
   type DatasetStreamMetadata,
 } from "./logStreamStore";
 import { TraceExplorer } from "./TraceExplorer";
-import type { SourceIconKind, TelemetryEntry } from "./types";
+import type { SourceIconKind } from "./types";
 
 /**
  * Below this viewport width we switch the log details panel from an inline
@@ -160,12 +163,12 @@ function TelemetryTabPanel({
   const tableRef = useRef<LogTableHandle | null>(null);
   const stream = useDatasetStreamSnapshot(projectId, datasetId, tab.id, streamMetadata);
   const sheetCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [closingSheetLog, setClosingSheetLog] = useState<TelemetryEntry | null>(null);
+  const [closingSheetLogId, setClosingSheetLogId] = useState<string | null>(null);
   const [isSheetClosing, setIsSheetClosing] = useState(false);
-  const showInlineDetails = stream.selectedLog !== null && !shouldUseDetailsSheet;
+  const showInlineDetails = stream.selectedEntryId !== null && !shouldUseDetailsSheet;
   const showSheetDetails =
-    active && stream.selectedLog !== null && shouldUseDetailsSheet && !isSheetClosing;
-  const sheetLog = stream.selectedLog ?? closingSheetLog;
+    active && stream.selectedEntryId !== null && shouldUseDetailsSheet && !isSheetClosing;
+  const sheetLogId = stream.selectedEntryId ?? closingSheetLogId;
   const closeDetails = useCallback(() => {
     selectDatasetTelemetryEntry(projectId, datasetId, tab.id, null);
   }, [datasetId, projectId, tab.id]);
@@ -174,18 +177,31 @@ function TelemetryTabPanel({
     await loadOlderDatasetTelemetry(projectId, datasetId, tab.id);
   }, [datasetId, projectId, tab.id]);
 
+  const handleLeaveLiveMode = useCallback(() => {
+    enterTelemetryHistoryMode(projectId, datasetId, tab.id);
+  }, [datasetId, projectId, tab.id]);
+
+  const handleJumpToEnd = useCallback(() => {
+    returnTelemetryViewToLive(projectId, datasetId, tab.id);
+  }, [datasetId, projectId, tab.id]);
+
+  const resolveRow = useCallback(
+    (id: string) => resolveTelemetryEntry(projectId, datasetId, id),
+    [datasetId, projectId],
+  );
+
   // "First event" latch. Once we've observed a single log we never
   // re-render the overlay for this mount — the user can always get back
   // to the guide via the header icon button. We also drive a short fade
   // exit via `isGuideExiting` before removing the overlay from the DOM
   // so the transition is visible rather than a hard cut.
-  const [hasEverReceivedLog, setHasEverReceivedLog] = useState(() => stream.logs.length > 0);
+  const [hasEverReceivedLog, setHasEverReceivedLog] = useState(() => stream.rowIds.length > 0);
   const [isGuideExiting, setIsGuideExiting] = useState(false);
-  const [showGuideOverlay, setShowGuideOverlay] = useState(() => stream.logs.length === 0);
+  const [showGuideOverlay, setShowGuideOverlay] = useState(() => stream.rowIds.length === 0);
   const guideExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!hasEverReceivedLog && stream.logs.length > 0) {
+    if (!hasEverReceivedLog && stream.rowIds.length > 0) {
       setHasEverReceivedLog(true);
       setIsGuideExiting(true);
       if (guideExitTimerRef.current !== null) {
@@ -197,7 +213,7 @@ function TelemetryTabPanel({
         guideExitTimerRef.current = null;
       }, EMPTY_GUIDE_EXIT_MS);
     }
-  }, [hasEverReceivedLog, stream.logs.length]);
+  }, [hasEverReceivedLog, stream.rowIds.length]);
 
   useEffect(() => {
     return () => {
@@ -216,7 +232,7 @@ function TelemetryTabPanel({
   const shouldShowGuide =
     showGuideOverlay &&
     !hasEverReceivedLog &&
-    stream.logs.length === 0 &&
+    stream.rowIds.length === 0 &&
     !stream.isInitialLoading &&
     stream.errorMessage === null &&
     stream.filter === null &&
@@ -235,31 +251,31 @@ function TelemetryTabPanel({
   const finishSheetClose = useCallback(() => {
     clearSheetCloseTimer();
     sheetCloseTimerRef.current = setTimeout(() => {
-      setClosingSheetLog(null);
+      setClosingSheetLogId(null);
       setIsSheetClosing(false);
       sheetCloseTimerRef.current = null;
     }, SHEET_EXIT_ANIMATION_MS);
   }, [clearSheetCloseTimer]);
 
   const closeSheetDetails = useCallback(() => {
-    if (stream.selectedLog !== null) {
-      setClosingSheetLog(stream.selectedLog);
+    if (stream.selectedEntryId !== null) {
+      setClosingSheetLogId(stream.selectedEntryId);
     }
 
     setIsSheetClosing(true);
     closeDetails();
     finishSheetClose();
-  }, [closeDetails, finishSheetClose, stream.selectedLog]);
+  }, [closeDetails, finishSheetClose, stream.selectedEntryId]);
 
   useEffect(() => {
-    if (stream.selectedLog === null) {
+    if (stream.selectedEntryId === null) {
       return;
     }
 
     clearSheetCloseTimer();
-    setClosingSheetLog(null);
+    setClosingSheetLogId(null);
     setIsSheetClosing(false);
-  }, [clearSheetCloseTimer, stream.selectedLog]);
+  }, [clearSheetCloseTimer, stream.selectedEntryId]);
 
   useEffect(() => clearSheetCloseTimer, [clearSheetCloseTimer]);
 
@@ -290,13 +306,17 @@ function TelemetryTabPanel({
               <LogTable
                 hasPreviousPage={stream.pageInfo?.hasPreviousPage ?? false}
                 isLoadingPrevious={stream.isLoadingOlder}
-                logs={stream.logs}
+                mode={stream.mode}
+                onJumpToEnd={handleJumpToEnd}
+                onLeaveLiveMode={handleLeaveLiveMode}
                 onLoadPrevious={handleLoadOlder}
                 onSelectLog={(logId) =>
                   selectDatasetTelemetryEntry(projectId, datasetId, tab.id, logId)
                 }
                 ref={tableRef}
-                selectedLogId={stream.selectedLogId}
+                resolveRow={resolveRow}
+                rowIds={stream.rowIds}
+                selectedLogId={stream.selectedEntryId}
                 waiting={stream.errorMessage === null || stream.isInitialLoading}
               />
               {shouldShowGuide && stream.metadata.projectSlug && stream.metadata.datasetSlug ? (
@@ -317,7 +337,7 @@ function TelemetryTabPanel({
             {showInlineDetails ? (
               <LogDetailsPanel
                 datasetId={datasetId}
-                log={stream.selectedLog}
+                logId={stream.selectedEntryId}
                 onClose={closeDetails}
                 projectId={projectId}
                 variant="inline"
@@ -336,10 +356,10 @@ function TelemetryTabPanel({
                 showCloseButton={false}
                 side="right"
               >
-                {sheetLog !== null ? (
+                {sheetLogId !== null ? (
                   <LogDetailsPanel
                     datasetId={datasetId}
-                    log={sheetLog}
+                    logId={sheetLogId}
                     onClose={closeSheetDetails}
                     projectId={projectId}
                     variant="sheet"

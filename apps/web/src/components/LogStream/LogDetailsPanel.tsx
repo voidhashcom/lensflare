@@ -1,5 +1,5 @@
 import { CircleSlashIcon, XIcon } from "lucide-react";
-import { Activity, useCallback, useEffect, useMemo, useState } from "react";
+import { Activity, useMemo, useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import { ScrollArea } from "~/components/ui/scroll-area";
@@ -7,19 +7,20 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { TopTabsItem, TopTabsList, TopTabsTrigger } from "~/components/ui/top-tabs";
 import { Toggle } from "~/components/ui/toggle";
 import { IconButtonTooltip } from "~/components/ui/tooltip";
-import { getLogTraceContext } from "~/data/logApi";
 import { useHorizontalResizablePanel } from "~/hooks/useHorizontalResizablePanel";
 import { cn } from "~/lib/utils";
 
 import { openTraceTab } from "./datasetTabsStore";
+import { resolveTelemetryEntry } from "./logStreamStore";
 import {
   buildLogDetailEntries,
   buildLogRawData,
   isNullLike,
   renderDetailValue,
 } from "./logDetailsFormat";
+import { useTraceContextSnapshot } from "./traceContextStore";
 import { TraceOverview } from "./TraceOverview";
-import type { TelemetryEntry, TraceContext } from "./types";
+import type { TelemetryEntry } from "./types";
 
 type LogDetailsTab = "properties" | "raw";
 
@@ -30,16 +31,10 @@ const LOG_DETAILS_MIN_REMAINING_WIDTH_PX = 520;
 const LOG_DETAILS_MIN_WIDTH_PX = 360;
 const LOG_DETAILS_WIDTH_STORAGE_KEY = "log_details_panel_width";
 
-type TraceLoadState =
-  | { readonly status: "idle" }
-  | { readonly status: "loading"; readonly traceId: string }
-  | { readonly status: "ready"; readonly trace: TraceContext }
-  | { readonly status: "unavailable"; readonly traceId: string };
-
 interface LogDetailsPanelProps {
   projectId: string;
   datasetId: string;
-  log: TelemetryEntry;
+  logId: string;
   onClose: () => void;
   /** `sheet` is used when the panel renders inside a modal sheet — we drop
    *  the left border so it sits flush with the sheet edge. */
@@ -56,16 +51,15 @@ interface LogDetailsPanelProps {
 export function LogDetailsPanel({
   projectId,
   datasetId,
-  log,
+  logId,
   onClose,
   variant = "inline",
   className,
 }: LogDetailsPanelProps) {
+  const log = resolveTelemetryEntry(projectId, datasetId, logId);
   const [tab, setTab] = useState<LogDetailsTab>("properties");
   const [showNullValues, setShowNullValues] = useState(false);
-  const [traceLoadState, setTraceLoadState] = useState<TraceLoadState>(() =>
-    log.traceId ? { status: "loading", traceId: log.traceId } : { status: "idle" },
-  );
+  const traceLoadState = useTraceContextSnapshot(projectId, datasetId, log?.traceId, log?.spanId);
   const { panelRef, resizeHandleProps, width } = useHorizontalResizablePanel<HTMLDivElement>({
     defaultWidth: LOG_DETAILS_DEFAULT_WIDTH_PX,
     edge: "left",
@@ -75,38 +69,36 @@ export function LogDetailsPanel({
     storageKey: LOG_DETAILS_WIDTH_STORAGE_KEY,
   });
 
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!log.traceId) {
-      setTraceLoadState({ status: "idle" });
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    const traceId = log.traceId;
-    setTraceLoadState({ status: "loading", traceId });
-
-    void getLogTraceContext(projectId, datasetId, traceId, log.spanId).then(
-      (trace) => {
-        if (!cancelled) {
-          setTraceLoadState(
-            trace !== null ? { status: "ready", trace } : { status: "unavailable", traceId },
-          );
-        }
-      },
-      () => {
-        if (!cancelled) {
-          setTraceLoadState({ status: "unavailable", traceId });
-        }
-      },
+  if (log === null) {
+    return (
+      <div
+        className={cn(
+          "flex h-full min-h-0 min-w-0 flex-col bg-background",
+          variant === "inline" && "relative shrink-0 border-l border-border/70",
+          className,
+        )}
+        ref={panelRef}
+        style={variant === "inline" ? { width } : undefined}
+      >
+        <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-4">
+          <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground text-sm">
+            Telemetry event is no longer available.
+          </span>
+          <IconButtonTooltip label="Close log details">
+            <Button
+              aria-label="Close log details"
+              className="desktop-no-drag shrink-0"
+              onClick={onClose}
+              size="icon"
+              variant="ghost"
+            >
+              <XIcon className="size-3.5" />
+            </Button>
+          </IconButtonTooltip>
+        </div>
+      </div>
     );
-
-    return () => {
-      cancelled = true;
-    };
-  }, [datasetId, log.spanId, log.traceId, projectId]);
+  }
 
   const traceContext =
     traceLoadState.status === "ready" && traceLoadState.trace.traceId === log.traceId
@@ -114,9 +106,10 @@ export function LogDetailsPanel({
       : null;
   const shouldShowTraceSlot =
     Boolean(log.traceId) &&
-    !(traceLoadState.status === "unavailable" && traceLoadState.traceId === log.traceId);
+    traceLoadState.status !== "unavailable" &&
+    traceLoadState.status !== "error";
 
-  const handleExploreTrace = useCallback(() => {
+  const handleExploreTrace = () => {
     if (!traceContext) return;
     // Title the tab after the root span — it's the most recognisable handle
     // for a trace and matches what users see at the top of the waterfall.
@@ -141,7 +134,7 @@ export function LogDetailsPanel({
     }
 
     openTrace();
-  }, [datasetId, log.spanId, onClose, traceContext, variant]);
+  };
 
   return (
     <div

@@ -2,6 +2,7 @@ import { ChevronDownIcon, ChevronUpIcon, CopyIcon, ListTreeIcon, SearchIcon } fr
 import {
   Activity,
   useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useState,
@@ -12,10 +13,10 @@ import {
 import { Button } from "~/components/ui/button";
 import { TopTabsItem, TopTabsList, TopTabsTrigger } from "~/components/ui/top-tabs";
 import { IconButtonTooltip } from "~/components/ui/tooltip";
-import { getLogTraceContext } from "~/data/logApi";
 import { useHorizontalResizablePanel } from "~/hooks/useHorizontalResizablePanel";
 import { cn } from "~/lib/utils";
 
+import { useTraceContextSnapshot, type TraceContextSnapshot } from "./traceContextStore";
 import type { TraceContext, TraceSpan } from "./types";
 
 /**
@@ -57,6 +58,20 @@ type LoadState =
   | { readonly status: "empty" }
   | { readonly status: "ready"; readonly trace: TraceContext };
 
+function toLoadState(snapshot: TraceContextSnapshot): LoadState {
+  switch (snapshot.status) {
+    case "ready":
+      return { status: "ready", trace: snapshot.trace };
+    case "error":
+      return { status: "error", message: snapshot.message };
+    case "unavailable":
+      return { status: "empty" };
+    case "idle":
+    case "loading":
+      return { status: "loading" };
+  }
+}
+
 /**
  * Full-screen distributed-trace explorer. Rendered when a trace tab is
  * active in the dataset tab strip. Shape mirrors the Axiom reference:
@@ -74,9 +89,11 @@ export function TraceExplorer({
   initialSpanId,
   className,
 }: TraceExplorerProps) {
-  const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
+  const traceSnapshot = useTraceContextSnapshot(projectId, datasetId, traceId, initialSpanId);
+  const loadState = useMemo(() => toLoadState(traceSnapshot), [traceSnapshot]);
   const [selectedSpanId, setSelectedSpanId] = useState<string | null>(initialSpanId ?? null);
   const [filter, setFilter] = useState("");
+  const deferredFilter = useDeferredValue(filter);
   const [detailsTab, setDetailsTab] = useState<DetailsTab>("fields");
   const { panelRef, resizeHandleProps, width } = useHorizontalResizablePanel<HTMLElement>({
     defaultWidth: DETAILS_PANEL_DEFAULT_WIDTH_PX,
@@ -86,33 +103,6 @@ export function TraceExplorer({
     minWidth: DETAILS_PANEL_MIN_WIDTH_PX,
     storageKey: DETAILS_PANEL_WIDTH_STORAGE_KEY,
   });
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoadState({ status: "loading" });
-
-    getLogTraceContext(projectId, datasetId, traceId, initialSpanId).then(
-      (trace) => {
-        if (cancelled) return;
-        if (trace === null) {
-          setLoadState({ status: "empty" });
-          return;
-        }
-        setLoadState({ status: "ready", trace });
-      },
-      (error: unknown) => {
-        if (cancelled) return;
-        setLoadState({
-          status: "error",
-          message: error instanceof Error ? error.message : "Failed to load trace.",
-        });
-      },
-    );
-
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, datasetId, traceId, initialSpanId]);
 
   // Pick a sensible initial selection once the trace loads. Prefer the span
   // the user came from, then the first error (most users open the explorer
@@ -135,7 +125,7 @@ export function TraceExplorer({
     return computeDepths(loadState.trace.spans);
   }, [loadState]);
 
-  const normalizedFilter = filter.trim().toLowerCase();
+  const normalizedFilter = deferredFilter.trim().toLowerCase();
   const filteredSpans = useMemo(() => {
     if (loadState.status !== "ready") return [] as ReadonlyArray<TraceSpan>;
     if (normalizedFilter.length === 0) return loadState.trace.spans;

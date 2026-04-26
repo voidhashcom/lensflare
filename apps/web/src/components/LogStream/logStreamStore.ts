@@ -12,13 +12,22 @@ import { listDatasetTelemetry, subscribeDatasetTelemetryEntries } from "~/data/l
 
 import type { DatasetTelemetryTabId } from "./datasetTabs";
 import {
-  mergeUniqueLogs,
-  normalizeTelemetrySortTimestamp,
-  toTelemetryEntry,
-} from "./telemetryEntry";
+  clearTelemetryDatasetCache,
+  clearTelemetryHistoryRetention,
+  getTelemetryRecord,
+  pinTelemetryRecord,
+  resetTelemetryEntityCacheForTests,
+  retainTelemetryHistoryIds,
+  retainTelemetryLiveIds,
+  storeTelemetryRecords,
+  unpinTelemetryRecord,
+} from "./telemetryEntityCache";
+import { normalizeTelemetrySortTimestamp, toTelemetryEntry } from "./telemetryEntry";
+import { resetTraceContextStoreForTests } from "./traceContextStore";
 import type { SourceIconKind, TelemetryEntry } from "./types";
 
 export type DatasetStreamKey = `${string}:${string}`;
+export type TelemetryTabMode = "live" | "history";
 
 export interface DatasetStreamIdentity {
   readonly projectId: string;
@@ -36,18 +45,19 @@ export interface DatasetStreamSnapshot {
   readonly projectId: string;
   readonly datasetId: string;
   readonly viewId: DatasetTelemetryTabId;
+  readonly mode: TelemetryTabMode;
   readonly metadata: DatasetStreamMetadata;
   readonly filterSource: string;
   readonly filter: FilterNode | null;
-  readonly logs: ReadonlyArray<TelemetryEntry>;
+  readonly rowIds: ReadonlyArray<string>;
   readonly pageInfo: TelemetryLogPageInfo | null;
-  readonly selectedLogId: string | null;
-  readonly selectedLog: TelemetryEntry | null;
+  readonly selectedEntryId: string | null;
   readonly isInitialLoading: boolean;
   readonly isRefreshing: boolean;
   readonly isLoadingOlder: boolean;
   readonly errorMessage: string | null;
   readonly hasLoadedOnce: boolean;
+  readonly rowsRevision: number;
 }
 
 interface ActivateDatasetStreamInput {
@@ -70,32 +80,37 @@ interface DatasetStreamSession {
   readonly projectId: string;
   readonly datasetId: string;
   metadata: DatasetStreamMetadata;
-  rawRecentRecords: ReadonlyArray<TelemetryRecord>;
+  liveIds: ReadonlyArray<string>;
   pendingLiveRecords: ReadonlyArray<TelemetryRecord>;
   views: Map<DatasetTelemetryTabId, DatasetStreamView>;
   activeCount: number;
   subscriptionCancel: (() => void) | undefined;
   pendingLiveFlushTimer: ReturnType<typeof setTimeout> | null;
   lastTouchedAt: number;
+  liveRevision: number;
+  errorMessage: string | null;
 }
 
 interface DatasetStreamView {
   readonly viewId: DatasetTelemetryTabId;
+  mode: TelemetryTabMode;
   filterSource: string;
   filter: FilterNode | null;
-  logs: ReadonlyArray<TelemetryEntry>;
+  rowIds: ReadonlyArray<string>;
+  liveBackfillIds: ReadonlyArray<string>;
   pageInfo: TelemetryLogPageInfo | null;
-  selectedLogId: string | null;
+  selectedEntryId: string | null;
   isInitialLoading: boolean;
   isRefreshing: boolean;
   isLoadingOlder: boolean;
   errorMessage: string | null;
   hasLoadedOnce: boolean;
-  initialLoadPromise: Promise<void> | null;
-  queuedInitialLoad: "initial" | "refresh" | null;
+  latestLoadPromise: Promise<void> | null;
+  queuedLatestLoad: "initial" | "refresh" | null;
   olderLoadPromise: Promise<void> | null;
   lastLoadedAt: number;
   loadGeneration: number;
+  rowsRevision: number;
   snapshot: DatasetStreamSnapshot;
 }
 
@@ -110,10 +125,12 @@ interface LogStreamStoreTestConfiguration extends Partial<LogStreamStoreDependen
 }
 
 const LOG_PAGE_SIZE = 100;
+const LIVE_VISIBLE_ROW_LIMIT = 100;
+const LIVE_RING_RECORD_LIMIT = 4_000;
 const MAX_INACTIVE_SESSIONS = 4;
-const MAX_RECENT_RECORDS_PER_SESSION = 10_000;
 const STALE_AFTER_MS = 30_000;
-const DEFAULT_LIVE_FLUSH_DELAY_MS = 125;
+const DEFAULT_LIVE_FLUSH_DELAY_MS = 100;
+const SELECTED_RECORD_PIN = "selected-detail";
 
 const listeners = new Set<() => void>();
 const sessions = new Map<DatasetStreamKey, DatasetStreamSession>();
@@ -124,12 +141,6 @@ let dependencies: LogStreamStoreDependencies = {
   preloadFilterCatalog: preloadTelemetryFilterCatalog,
 };
 let liveFlushDelayMs = DEFAULT_LIVE_FLUSH_DELAY_MS;
-
-function emit(): void {
-  for (const listener of listeners) {
-    listener();
-  }
-}
 
 export function subscribeDatasetStreamStore(listener: () => void): () => void {
   listeners.add(listener);
@@ -175,12 +186,12 @@ export function activateDatasetStream(input: ActivateDatasetStreamInput): void {
   void dependencies.preloadFilterCatalog(input.projectId, input.datasetId).catch(() => {});
 
   if (!view.hasLoadedOnce) {
-    void loadInitialDatasetTelemetry(session, view, "initial");
+    void loadLatestDatasetTelemetry(session, view, "initial");
     return;
   }
 
-  if (Date.now() - view.lastLoadedAt > STALE_AFTER_MS) {
-    void loadInitialDatasetTelemetry(session, view, "refresh");
+  if (view.mode === "live" && Date.now() - view.lastLoadedAt > STALE_AFTER_MS) {
+    void loadLatestDatasetTelemetry(session, view, "refresh");
   }
 
   evictInactiveSessions();
@@ -207,17 +218,61 @@ export function setDatasetStreamFilter(input: SetDatasetStreamFilterInput): void
     return;
   }
 
+  unpinSelectedRecord(session, view);
+  clearTelemetryHistoryRetention(session.projectId, session.datasetId, view.viewId);
+  view.mode = "live";
   view.filterSource = input.source;
   view.filter = input.filter;
+  view.rowIds = [];
+  view.liveBackfillIds = [];
   view.pageInfo = null;
-  view.logs = filterRecordsForView(view, session.rawRecentRecords).map((entry) =>
-    toTelemetryEntry(entry, session.metadata.datasetName, session.metadata.datasetIcon ?? "js"),
-  );
-  view.selectedLogId = selectedLogStillVisible(view) ? view.selectedLogId : null;
+  view.selectedEntryId = null;
   view.errorMessage = null;
   view.loadGeneration += 1;
+  markRowsChanged(view);
   commitView(session, view);
-  void loadInitialDatasetTelemetry(session, view, view.hasLoadedOnce ? "refresh" : "initial");
+  void loadLatestDatasetTelemetry(session, view, view.hasLoadedOnce ? "refresh" : "initial");
+}
+
+export function enterTelemetryHistoryMode(
+  projectId: string,
+  datasetId: string,
+  viewId: DatasetTelemetryTabId = "telemetry:1",
+): void {
+  const session = sessions.get(toDatasetStreamKey(projectId, datasetId));
+  const view = session?.views.get(viewId);
+  if (!session || !view || view.mode === "history") {
+    return;
+  }
+  view.mode = "history";
+  view.rowIds = deriveLiveRowIds(session, view);
+  retainTelemetryHistoryIds(projectId, datasetId, viewId, view.rowIds);
+  markRowsChanged(view);
+  commitView(session, view);
+}
+
+export function returnTelemetryViewToLive(
+  projectId: string,
+  datasetId: string,
+  viewId: DatasetTelemetryTabId = "telemetry:1",
+): void {
+  const session = sessions.get(toDatasetStreamKey(projectId, datasetId));
+  const view = session?.views.get(viewId);
+  if (!session || !view) {
+    return;
+  }
+  unpinSelectedRecord(session, view);
+  clearTelemetryHistoryRetention(projectId, datasetId, viewId);
+  view.mode = "live";
+  view.rowIds = [];
+  view.liveBackfillIds = [];
+  view.pageInfo = null;
+  view.selectedEntryId = null;
+  view.errorMessage = null;
+  view.loadGeneration += 1;
+  markRowsChanged(view);
+  commitView(session, view);
+  void loadLatestDatasetTelemetry(session, view, view.hasLoadedOnce ? "refresh" : "initial");
 }
 
 export async function loadOlderDatasetTelemetry(
@@ -232,6 +287,9 @@ export async function loadOlderDatasetTelemetry(
   const view = session.views.get(viewId);
   if (!view) {
     return;
+  }
+  if (view.mode === "live") {
+    enterTelemetryHistoryMode(projectId, datasetId, viewId);
   }
   if (view.olderLoadPromise) {
     return view.olderLoadPromise;
@@ -256,18 +314,19 @@ export async function loadOlderDatasetTelemetry(
         return;
       }
 
-      const entries = page.entries.map((entry) =>
-        toTelemetryEntry(entry, session.metadata.datasetName, session.metadata.datasetIcon ?? "js"),
-      );
+      storeTelemetryRecords(projectId, datasetId, page.entries);
+      const pageIds = page.entries.map((entry) => entry.id);
       const latestPageInfo = view.pageInfo;
-      view.logs = mergeUniqueLogs(entries, view.logs);
+      view.rowIds = mergeUniqueRecordIds(projectId, datasetId, pageIds, view.rowIds);
       view.pageInfo = {
         hasPreviousPage: page.pageInfo.hasPreviousPage,
         hasNextPage: latestPageInfo?.hasNextPage ?? page.pageInfo.hasNextPage,
         startCursor: page.pageInfo.startCursor ?? latestPageInfo?.startCursor ?? null,
         endCursor: latestPageInfo?.endCursor ?? page.pageInfo.endCursor,
       };
+      retainTelemetryHistoryIds(projectId, datasetId, viewId, view.rowIds);
       view.errorMessage = null;
+      markRowsChanged(view);
     })
     .catch((error: unknown) => {
       view.errorMessage = error instanceof Error ? error.message : "Failed to load telemetry.";
@@ -289,11 +348,29 @@ export function selectDatasetTelemetryEntry(
 ): void {
   const session = getOrCreateSession(projectId, datasetId);
   const view = getOrCreateView(session, viewId);
-  if (view.selectedLogId === logId) {
+  if (view.selectedEntryId === logId) {
     return;
   }
-  view.selectedLogId = logId;
+  unpinSelectedRecord(session, view);
+  if (logId !== null && view.mode === "live") {
+    view.mode = "history";
+    view.rowIds = deriveLiveRowIds(session, view);
+    retainTelemetryHistoryIds(projectId, datasetId, viewId, view.rowIds);
+    markRowsChanged(view);
+  }
+  view.selectedEntryId = logId;
+  if (logId !== null) {
+    pinTelemetryRecord(projectId, datasetId, logId, SELECTED_RECORD_PIN);
+  }
   commitView(session, view);
+}
+
+export function clearTelemetrySelection(
+  projectId: string,
+  datasetId: string,
+  viewId: DatasetTelemetryTabId = "telemetry:1",
+): void {
+  selectDatasetTelemetryEntry(projectId, datasetId, viewId, null);
 }
 
 export async function refreshDatasetTelemetry(
@@ -302,14 +379,14 @@ export async function refreshDatasetTelemetry(
   viewId: DatasetTelemetryTabId = "telemetry:1",
 ): Promise<void> {
   const session = sessions.get(toDatasetStreamKey(projectId, datasetId));
-  if (!session) {
+  const view = session?.views.get(viewId);
+  if (!session || !view) {
     return;
   }
-  const view = session.views.get(viewId);
-  if (!view) {
+  if (view.mode === "history") {
     return;
   }
-  return loadInitialDatasetTelemetry(session, view, view.hasLoadedOnce ? "refresh" : "initial");
+  return loadLatestDatasetTelemetry(session, view, view.hasLoadedOnce ? "refresh" : "initial");
 }
 
 export function invalidateDatasetTelemetry(projectId: string, datasetId: string): void {
@@ -320,8 +397,26 @@ export function invalidateDatasetTelemetry(projectId: string, datasetId: string)
   }
   session.subscriptionCancel?.();
   clearPendingLiveFlush(session);
+  clearTelemetryDatasetCache(projectId, datasetId);
   sessions.delete(key);
   emit();
+}
+
+export function resolveTelemetryEntry(
+  projectId: string,
+  datasetId: string,
+  entryId: string,
+): TelemetryEntry | null {
+  const session = sessions.get(toDatasetStreamKey(projectId, datasetId));
+  const record = getTelemetryRecord(projectId, datasetId, entryId);
+  if (!record) {
+    return null;
+  }
+  return toTelemetryEntry(
+    record,
+    session?.metadata.datasetName ?? "Dataset",
+    session?.metadata.datasetIcon ?? "js",
+  );
 }
 
 export function getDatasetStreamSnapshot(
@@ -343,38 +438,18 @@ export function getDatasetStreamSnapshot(
       projectId,
       datasetId,
       metadata: metadata ?? { datasetName: "Dataset" },
-      rawRecentRecords: [],
+      liveIds: [],
       pendingLiveRecords: [],
       views: new Map(),
       activeCount: 0,
       subscriptionCancel: undefined,
       pendingLiveFlushTimer: null,
       lastTouchedAt: 0,
+      liveRevision: 0,
+      errorMessage: null,
     },
     createInitialViewState(viewId),
   );
-}
-
-function createInitialViewState(viewId: DatasetTelemetryTabId): DatasetStreamView {
-  return {
-    viewId,
-    filterSource: "",
-    filter: null,
-    logs: [],
-    pageInfo: null,
-    selectedLogId: null,
-    isInitialLoading: true,
-    isRefreshing: false,
-    isLoadingOlder: false,
-    errorMessage: null,
-    hasLoadedOnce: false,
-    initialLoadPromise: null,
-    queuedInitialLoad: null,
-    olderLoadPromise: null,
-    lastLoadedAt: 0,
-    loadGeneration: 0,
-    snapshot: undefined as unknown as DatasetStreamSnapshot,
-  };
 }
 
 export function resetLogStreamStoreForTests(): void {
@@ -384,6 +459,8 @@ export function resetLogStreamStoreForTests(): void {
   }
   sessions.clear();
   listeners.clear();
+  resetTelemetryEntityCacheForTests();
+  resetTraceContextStoreForTests();
   dependencies = {
     listTelemetry: listDatasetTelemetry,
     subscribeTelemetry: subscribeDatasetTelemetryEntries,
@@ -409,14 +486,14 @@ export function getLogStreamStoreSessionCountForTests(): number {
   return sessions.size;
 }
 
-function loadInitialDatasetTelemetry(
+function loadLatestDatasetTelemetry(
   session: DatasetStreamSession,
   view: DatasetStreamView,
   mode: "initial" | "refresh",
 ): Promise<void> {
-  if (view.initialLoadPromise) {
-    view.queuedInitialLoad = mode;
-    return view.initialLoadPromise;
+  if (view.latestLoadPromise) {
+    view.queuedLatestLoad = mode;
+    return view.latestLoadPromise;
   }
 
   const generation = view.loadGeneration;
@@ -428,7 +505,7 @@ function loadInitialDatasetTelemetry(
   view.errorMessage = null;
   commitView(session, view);
 
-  view.initialLoadPromise = dependencies
+  view.latestLoadPromise = dependencies
     .listTelemetry(session.projectId, session.datasetId, {
       limit: LOG_PAGE_SIZE,
       filter: view.filter ?? undefined,
@@ -437,7 +514,7 @@ function loadInitialDatasetTelemetry(
       if (!sessions.has(session.key) || generation !== view.loadGeneration) {
         return;
       }
-      applyTelemetryPage(session, view, page);
+      applyLatestTelemetryPage(session, view, page);
       view.hasLoadedOnce = true;
       view.lastLoadedAt = Date.now();
       view.errorMessage = null;
@@ -446,44 +523,34 @@ function loadInitialDatasetTelemetry(
       view.errorMessage = error instanceof Error ? error.message : "Failed to load telemetry.";
     })
     .finally(() => {
-      const queuedInitialLoad = view.queuedInitialLoad;
-      view.queuedInitialLoad = null;
+      const queuedLatestLoad = view.queuedLatestLoad;
+      view.queuedLatestLoad = null;
       view.isInitialLoading = false;
       view.isRefreshing = false;
-      view.initialLoadPromise = null;
+      view.latestLoadPromise = null;
       commitView(session, view);
-      if (queuedInitialLoad !== null && sessions.has(session.key)) {
-        void loadInitialDatasetTelemetry(session, view, queuedInitialLoad);
+      if (queuedLatestLoad !== null && sessions.has(session.key)) {
+        void loadLatestDatasetTelemetry(session, view, queuedLatestLoad);
       }
     });
 
-  return view.initialLoadPromise;
+  return view.latestLoadPromise;
 }
 
-function applyTelemetryPage(
+function applyLatestTelemetryPage(
   session: DatasetStreamSession,
   view: DatasetStreamView,
   page: TelemetryRecordPage,
 ): void {
-  const pageEntries = page.entries.map((entry) =>
-    toTelemetryEntry(entry, session.metadata.datasetName, session.metadata.datasetIcon ?? "js"),
-  );
-  const matchingLiveRecords = filterRecordsForView(view, session.rawRecentRecords).map((entry) =>
-    toTelemetryEntry(entry, session.metadata.datasetName, session.metadata.datasetIcon ?? "js"),
-  );
-
-  view.logs = mergeUniqueLogs(view.logs, mergeUniqueLogs(pageEntries, matchingLiveRecords));
-  const previousPageInfo = view.pageInfo;
-  view.pageInfo =
-    view.hasLoadedOnce && previousPageInfo !== null
-      ? {
-          hasPreviousPage: previousPageInfo.hasPreviousPage,
-          hasNextPage: page.pageInfo.hasNextPage,
-          startCursor: previousPageInfo.startCursor ?? page.pageInfo.startCursor,
-          endCursor: page.pageInfo.endCursor ?? previousPageInfo.endCursor,
-        }
-      : page.pageInfo;
-  view.selectedLogId = selectedLogStillVisible(view) ? view.selectedLogId : null;
+  storeTelemetryRecords(session.projectId, session.datasetId, page.entries);
+  const pageIds = page.entries.map((entry) => entry.id);
+  view.liveBackfillIds = pageIds;
+  view.pageInfo = page.pageInfo;
+  if (view.mode === "history") {
+    view.rowIds = mergeUniqueRecordIds(session.projectId, session.datasetId, view.rowIds, pageIds);
+    retainTelemetryHistoryIds(session.projectId, session.datasetId, view.viewId, view.rowIds);
+  }
+  markRowsChanged(view);
 }
 
 function ensureSubscription(session: DatasetStreamSession): void {
@@ -501,9 +568,7 @@ function ensureSubscription(session: DatasetStreamSession): void {
       queueLiveTelemetryRecord(session, entry);
     },
     (error) => {
-      for (const view of session.views.values()) {
-        view.errorMessage = error.message;
-      }
+      session.errorMessage = error.message;
       commitSessionViews(session);
     },
   );
@@ -511,6 +576,7 @@ function ensureSubscription(session: DatasetStreamSession): void {
 
 function queueLiveTelemetryRecord(session: DatasetStreamSession, entry: TelemetryRecord): void {
   session.pendingLiveRecords = mergeUniqueRecords(session.pendingLiveRecords, [entry]);
+  session.errorMessage = null;
   for (const view of session.views.values()) {
     view.errorMessage = null;
   }
@@ -537,17 +603,24 @@ function flushPendingLiveRecords(session: DatasetStreamSession): void {
 
   const pendingRecords = session.pendingLiveRecords;
   session.pendingLiveRecords = [];
-  session.rawRecentRecords = trimNewestRecords(
-    mergeUniqueRecords(session.rawRecentRecords, pendingRecords),
-    MAX_RECENT_RECORDS_PER_SESSION,
+  storeTelemetryRecords(session.projectId, session.datasetId, pendingRecords);
+  session.liveIds = trimNewestRecordIds(
+    session.projectId,
+    session.datasetId,
+    mergeUniqueRecordIds(
+      session.projectId,
+      session.datasetId,
+      session.liveIds,
+      pendingRecords.map((record) => record.id),
+    ),
+    LIVE_RING_RECORD_LIMIT,
   );
+  session.liveRevision += 1;
+  retainTelemetryLiveIds(session.projectId, session.datasetId, session.liveIds);
 
   for (const view of session.views.values()) {
-    const matchingEntries = filterRecordsForView(view, pendingRecords).map((entry) =>
-      toTelemetryEntry(entry, session.metadata.datasetName, session.metadata.datasetIcon ?? "js"),
-    );
-    if (matchingEntries.length > 0) {
-      view.logs = mergeUniqueLogs(view.logs, matchingEntries);
+    if (view.mode === "live") {
+      markRowsChanged(view);
     }
     view.errorMessage = null;
   }
@@ -579,13 +652,15 @@ function getOrCreateSession(
     projectId,
     datasetId,
     metadata,
-    rawRecentRecords: [],
+    liveIds: [],
     pendingLiveRecords: [],
     views: new Map(),
     activeCount: 0,
     subscriptionCancel: undefined,
     pendingLiveFlushTimer: null,
     lastTouchedAt: Date.now(),
+    liveRevision: 0,
+    errorMessage: null,
   };
   sessions.set(key, session);
   return session;
@@ -606,6 +681,31 @@ function getOrCreateView(
   return view;
 }
 
+function createInitialViewState(viewId: DatasetTelemetryTabId): DatasetStreamView {
+  return {
+    viewId,
+    mode: "live",
+    filterSource: "",
+    filter: null,
+    rowIds: [],
+    liveBackfillIds: [],
+    pageInfo: null,
+    selectedEntryId: null,
+    isInitialLoading: true,
+    isRefreshing: false,
+    isLoadingOlder: false,
+    errorMessage: null,
+    hasLoadedOnce: false,
+    latestLoadPromise: null,
+    queuedLatestLoad: null,
+    olderLoadPromise: null,
+    lastLoadedAt: 0,
+    loadGeneration: 0,
+    rowsRevision: 0,
+    snapshot: undefined as unknown as DatasetStreamSnapshot,
+  };
+}
+
 function commitView(session: DatasetStreamSession, view: DatasetStreamView): void {
   view.snapshot = createSnapshot(session, view);
   emit();
@@ -622,27 +722,49 @@ function createSnapshot(
   session: DatasetStreamSession,
   view: DatasetStreamView,
 ): DatasetStreamSnapshot {
-  const selectedLog =
-    view.selectedLogId === null
-      ? null
-      : (view.logs.find((log) => log.id === view.selectedLogId) ?? null);
+  const rowIds = view.mode === "live" ? deriveLiveRowIds(session, view) : view.rowIds;
   return {
     projectId: session.projectId,
     datasetId: session.datasetId,
     viewId: view.viewId,
+    mode: view.mode,
     metadata: session.metadata,
     filterSource: view.filterSource,
     filter: view.filter,
-    logs: view.logs,
+    rowIds,
     pageInfo: view.pageInfo,
-    selectedLogId: view.selectedLogId,
-    selectedLog,
+    selectedEntryId: view.selectedEntryId,
     isInitialLoading: view.isInitialLoading,
     isRefreshing: view.isRefreshing,
     isLoadingOlder: view.isLoadingOlder,
-    errorMessage: view.errorMessage,
+    errorMessage: view.errorMessage ?? session.errorMessage,
     hasLoadedOnce: view.hasLoadedOnce,
+    rowsRevision: view.rowsRevision + (view.mode === "live" ? session.liveRevision : 0),
   };
+}
+
+function deriveLiveRowIds(
+  session: DatasetStreamSession,
+  view: DatasetStreamView,
+): ReadonlyArray<string> {
+  const matchingLiveIds =
+    view.filter === null
+      ? session.liveIds
+      : session.liveIds.filter((id) => {
+          const record = getTelemetryRecord(session.projectId, session.datasetId, id);
+          return record !== null && evaluateFilter(view.filter!, record);
+        });
+  return trimNewestRecordIds(
+    session.projectId,
+    session.datasetId,
+    mergeUniqueRecordIds(
+      session.projectId,
+      session.datasetId,
+      view.liveBackfillIds,
+      matchingLiveIds,
+    ),
+    LIVE_VISIBLE_ROW_LIMIT,
+  );
 }
 
 function updateMetadata(session: DatasetStreamSession, metadata: DatasetStreamMetadata): void {
@@ -674,21 +796,25 @@ function evictInactiveSessions(): void {
     }
     session.subscriptionCancel?.();
     clearPendingLiveFlush(session);
+    clearTelemetryDatasetCache(session.projectId, session.datasetId);
     sessions.delete(session.key);
   }
 }
 
-function selectedLogStillVisible(view: DatasetStreamView): boolean {
-  return view.selectedLogId === null || view.logs.some((log) => log.id === view.selectedLogId);
+function unpinSelectedRecord(session: DatasetStreamSession, view: DatasetStreamView): void {
+  if (view.selectedEntryId === null) {
+    return;
+  }
+  unpinTelemetryRecord(
+    session.projectId,
+    session.datasetId,
+    view.selectedEntryId,
+    SELECTED_RECORD_PIN,
+  );
 }
 
-function filterRecordsForView(
-  view: DatasetStreamView,
-  records: ReadonlyArray<TelemetryRecord>,
-): ReadonlyArray<TelemetryRecord> {
-  return view.filter === null
-    ? records
-    : records.filter((entry) => evaluateFilter(view.filter!, entry));
+function markRowsChanged(view: DatasetStreamView): void {
+  view.rowsRevision += 1;
 }
 
 function mergeUniqueRecords(
@@ -705,14 +831,36 @@ function mergeUniqueRecords(
   return [...byId.values()].sort(compareRecords);
 }
 
-function trimNewestRecords(
-  records: ReadonlyArray<TelemetryRecord>,
-  limit: number,
-): ReadonlyArray<TelemetryRecord> {
-  if (records.length <= limit) {
-    return records;
+function mergeUniqueRecordIds(
+  projectId: string,
+  datasetId: string,
+  first: ReadonlyArray<string>,
+  second: ReadonlyArray<string>,
+): ReadonlyArray<string> {
+  const ids = new Set<string>();
+  for (const id of first) {
+    if (getTelemetryRecord(projectId, datasetId, id) !== null) {
+      ids.add(id);
+    }
   }
-  return records.slice(records.length - limit);
+  for (const id of second) {
+    if (getTelemetryRecord(projectId, datasetId, id) !== null) {
+      ids.add(id);
+    }
+  }
+  return [...ids].sort((left, right) => compareRecordIds(projectId, datasetId, left, right));
+}
+
+function trimNewestRecordIds(
+  projectId: string,
+  datasetId: string,
+  ids: ReadonlyArray<string>,
+  limit: number,
+): ReadonlyArray<string> {
+  if (ids.length <= limit) {
+    return ids;
+  }
+  return ids.slice(ids.length - limit);
 }
 
 function compareRecords(left: TelemetryRecord, right: TelemetryRecord): number {
@@ -723,6 +871,26 @@ function compareRecords(left: TelemetryRecord, right: TelemetryRecord): number {
     return timestampComparison;
   }
   return left.id.localeCompare(right.id);
+}
+
+function compareRecordIds(
+  projectId: string,
+  datasetId: string,
+  leftId: string,
+  rightId: string,
+): number {
+  const left = getTelemetryRecord(projectId, datasetId, leftId);
+  const right = getTelemetryRecord(projectId, datasetId, rightId);
+  if (left === null || right === null) {
+    return leftId.localeCompare(rightId);
+  }
+  return compareRecords(left, right);
+}
+
+function emit(): void {
+  for (const listener of listeners) {
+    listener();
+  }
 }
 
 function toDatasetStreamKey(projectId: string, datasetId: string): DatasetStreamKey {
