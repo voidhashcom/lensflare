@@ -242,7 +242,9 @@ describe("startLocalServer", () => {
       );
       expect(updatedSettings).toEqual({ analyticsEnabled: false });
 
-      const meta = decodeAppMeta(await fetch(`${server.origin}/api/meta`).then((response) => response.json()));
+      const meta = decodeAppMeta(
+        await fetch(`${server.origin}/api/meta`).then((response) => response.json()),
+      );
       expect(meta.analytics.enabled).toBe(false);
       expect(meta.analytics.apiKey).toBe("phc_test");
       expect(meta.analytics.host).toBe("https://eu.i.posthog.com");

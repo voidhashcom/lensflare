@@ -182,10 +182,9 @@ function ensureTelemetryCatalogTarget(
           name: defaultOtelProjectName,
           slug: otel.projectSlug,
         }));
-      const createdDataset =
-        (yield* datasets.listDatasets()).every(
-          (dataset) => dataset.projectId !== project.id || dataset.slug !== otel.datasetSlug,
-        );
+      const createdDataset = (yield* datasets.listDatasets()).every(
+        (dataset) => dataset.projectId !== project.id || dataset.slug !== otel.datasetSlug,
+      );
       yield* datasets.ensureProjectDataset(project.id, project.name, otel.datasetSlug);
       return {
         createdProject,
@@ -420,7 +419,9 @@ export async function startLocalServer(
   if (options.bootstrapOtelCatalog) {
     const bootstrapRuntime = ManagedRuntime.make(catalogServicesLayer);
     try {
-      bootstrapCatalogResult = await bootstrapRuntime.runPromise(ensureTelemetryCatalogTarget(otel));
+      bootstrapCatalogResult = await bootstrapRuntime.runPromise(
+        ensureTelemetryCatalogTarget(otel),
+      );
     } finally {
       await bootstrapRuntime.dispose();
     }
@@ -477,13 +478,15 @@ export async function startLocalServer(
     serverInstanceId,
     descriptor,
     stop() {
-      return runtime.runPromise(
-        Effect.gen(function* () {
-          const analyticsService = yield* AppAnalyticsService;
-          yield* analyticsService.captureServerStop(startedAt.getTime());
-          yield* analyticsService.shutdown;
-        }),
-      ).finally(() => runtime.dispose());
+      return runtime
+        .runPromise(
+          Effect.gen(function* () {
+            const analyticsService = yield* AppAnalyticsService;
+            yield* analyticsService.captureServerStop(startedAt.getTime());
+            yield* analyticsService.shutdown;
+          }),
+        )
+        .finally(() => runtime.dispose());
     },
   };
 }

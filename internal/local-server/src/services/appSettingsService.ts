@@ -31,7 +31,9 @@ export class AppSettingsService extends Context.Service<
       AppSettingsService,
       Effect.gen(function* () {
         const paths = resolveLocalAppStatePaths();
-        const initialSettings = yield* Effect.promise(() => readPersistedAppSettings(paths.appSettingsFile));
+        const initialSettings = yield* Effect.promise(() =>
+          readPersistedAppSettings(paths.appSettingsFile),
+        );
         const distinctId = yield* Effect.promise(() =>
           readHashedAnalyticsDistinctId(paths.analyticsAnonymousIdFile),
         );

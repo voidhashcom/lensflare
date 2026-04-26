@@ -1,5 +1,10 @@
 import { PostHog } from "posthog-node";
-import type { AnalyticsBootstrap, AnalyticsContext, AnalyticsEventName, AnalyticsRecorder } from "./index.ts";
+import type {
+  AnalyticsBootstrap,
+  AnalyticsContext,
+  AnalyticsEventName,
+  AnalyticsRecorder,
+} from "./index.ts";
 import { withAnalyticsMetadata } from "./index.ts";
 
 export function createNodeAnalyticsRecorder(

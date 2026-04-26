@@ -1,7 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import { Buffer } from "node:buffer";
 import { resolve } from "node:path";
-import { bucketDurationMs, classifyError, type AnalyticsEventName, type AnalyticsRecorder } from "@lensflare/analytics";
+import {
+  bucketDurationMs,
+  classifyError,
+  type AnalyticsEventName,
+  type AnalyticsRecorder,
+} from "@lensflare/analytics";
 import { createNodeAnalyticsRecorder } from "@lensflare/analytics/node";
 import {
   app,
@@ -568,11 +573,7 @@ function configureAutoUpdater(): void {
 
   autoUpdater.on("error", (error) => {
     const message = formatErrorMessage(error);
-    const stage = updateInstallInFlight
-      ? "install"
-      : updateDownloadInFlight
-        ? "download"
-        : "check";
+    const stage = updateInstallInFlight ? "install" : updateDownloadInFlight ? "download" : "check";
     captureDesktopEventBestEffort("desktop_update_error", {
       stage,
       reasonClass: classifyError(error),

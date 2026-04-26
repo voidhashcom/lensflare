@@ -1,5 +1,10 @@
 import posthog from "posthog-js";
-import type { AnalyticsBootstrap, AnalyticsContext, AnalyticsEventName, AnalyticsRecorder } from "./index.ts";
+import type {
+  AnalyticsBootstrap,
+  AnalyticsContext,
+  AnalyticsEventName,
+  AnalyticsRecorder,
+} from "./index.ts";
 import { withAnalyticsMetadata } from "./index.ts";
 
 export function createBrowserAnalyticsRecorder(
@@ -45,4 +50,3 @@ export function createBrowserAnalyticsRecorder(
     },
   };
 }
-

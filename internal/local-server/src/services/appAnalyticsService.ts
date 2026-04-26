@@ -84,7 +84,9 @@ export class AppAnalyticsService extends Context.Service<
         });
 
         const shutdown = Ref.get(recorderRef).pipe(
-          Effect.flatMap((state) => Effect.promise(() => Promise.resolve(state.recorder.shutdown()))),
+          Effect.flatMap((state) =>
+            Effect.promise(() => Promise.resolve(state.recorder.shutdown())),
+          ),
         );
 
         return {

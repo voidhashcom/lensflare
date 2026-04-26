@@ -182,33 +182,36 @@ export function GeneralSettingsPanel() {
     }
   }, [clearTarget, refreshStorageStats]);
 
-  const onAnalyticsEnabledChange = useCallback(async (next: boolean) => {
-    if (updatingAnalyticsPreference) {
-      return;
-    }
+  const onAnalyticsEnabledChange = useCallback(
+    async (next: boolean) => {
+      if (updatingAnalyticsPreference) {
+        return;
+      }
 
-    if (next === false) {
-      captureWebEvent("analytics_preference_changed", {
-        enabled: false,
-        surface: document.documentElement.dataset.runtime === "electron" ? "desktop" : "web",
-      });
-    }
-
-    setUpdatingAnalyticsPreference(true);
-    try {
-      const updated = await updateAppSettings({ analyticsEnabled: next });
-      setAppSettings(updated);
-      await refreshWebAnalytics();
-      if (next === true) {
+      if (next === false) {
         captureWebEvent("analytics_preference_changed", {
-          enabled: true,
+          enabled: false,
           surface: document.documentElement.dataset.runtime === "electron" ? "desktop" : "web",
         });
       }
-    } finally {
-      setUpdatingAnalyticsPreference(false);
-    }
-  }, [updatingAnalyticsPreference]);
+
+      setUpdatingAnalyticsPreference(true);
+      try {
+        const updated = await updateAppSettings({ analyticsEnabled: next });
+        setAppSettings(updated);
+        await refreshWebAnalytics();
+        if (next === true) {
+          captureWebEvent("analytics_preference_changed", {
+            enabled: true,
+            surface: document.documentElement.dataset.runtime === "electron" ? "desktop" : "web",
+          });
+        }
+      } finally {
+        setUpdatingAnalyticsPreference(false);
+      }
+    },
+    [updatingAnalyticsPreference],
+  );
 
   return (
     <SettingsPageContainer>

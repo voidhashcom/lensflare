@@ -44,10 +44,7 @@ export async function writePersistedAppSettings(
   await rename(tempPath, filePath);
 }
 
-export function mergeAppSettings(
-  current: AppSettings,
-  input: UpdateAppSettingsInput,
-): AppSettings {
+export function mergeAppSettings(current: AppSettings, input: UpdateAppSettingsInput): AppSettings {
   return {
     analyticsEnabled: input.analyticsEnabled ?? current.analyticsEnabled,
   };
@@ -77,7 +74,10 @@ export async function readHashedAnalyticsDistinctId(
 }
 
 export async function resolveAnalyticsBootstrap(
-  runtimeConfig: Pick<RuntimeConfig, "posthogApiKey" | "posthogDebug" | "posthogEnabled" | "posthogHost">,
+  runtimeConfig: Pick<
+    RuntimeConfig,
+    "posthogApiKey" | "posthogDebug" | "posthogEnabled" | "posthogHost"
+  >,
   settingsPath: string = resolveLocalAppStatePaths().appSettingsFile,
   distinctIdPath: string = resolveLocalAppStatePaths().analyticsAnonymousIdFile,
 ): Promise<AnalyticsBootstrap> {
