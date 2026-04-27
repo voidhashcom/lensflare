@@ -188,7 +188,26 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.platform }}-${{ matrix.arch }}
-          path: release/**
+          # Only ship distributable installers, blockmaps, and update manifests.
+          # Excluding the unpacked `release/<platform>-<arch>/` app bundle keeps
+          # zero-byte files inside native dependencies (e.g. msgpackr-extract's
+          # `index.js`) from breaking `gh release upload` with HTTP 400.
+          path: |
+            release/*.dmg
+            release/*.dmg.blockmap
+            release/*.zip
+            release/*.zip.blockmap
+            release/*.exe
+            release/*.exe.blockmap
+            release/*.msi
+            release/*.msi.blockmap
+            release/*.AppImage
+            release/*.AppImage.blockmap
+            release/*.deb
+            release/*.rpm
+            release/*.snap
+            release/latest*.yml
+            release/nightly*.yml
           if-no-files-found: error
 
   publish:
@@ -220,7 +239,18 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-upload
-          find downloaded-artifacts -type f ! -name "latest-mac.yml" ! -name "nightly-mac.yml" -exec cp {} release-upload/ \;
+          # Copy only known distributable extensions so we never re-introduce
+          # the unpacked-app-bundle files that broke `gh release upload` with
+          # HTTP 400 on zero-byte assets like `index.js`. Per-platform update
+          # manifests are merged below, so they're excluded here.
+          find downloaded-artifacts -type f \
+            \( -name "*.dmg" -o -name "*.dmg.blockmap" \
+               -o -name "*.zip" -o -name "*.zip.blockmap" \
+               -o -name "*.exe" -o -name "*.exe.blockmap" \
+               -o -name "*.msi" -o -name "*.msi.blockmap" \
+               -o -name "*.AppImage" -o -name "*.AppImage.blockmap" \
+               -o -name "*.deb" -o -name "*.rpm" -o -name "*.snap" \) \
+            -exec cp {} release-upload/ \;
           mapfile -t MAC_MANIFESTS < <(find downloaded-artifacts -type f -name "${CHANNEL}-mac.yml" | sort)
           if [[ "${#MAC_MANIFESTS[@]}" -eq 1 ]]; then
             cp "${MAC_MANIFESTS[0]}" "release-upload/${CHANNEL}-mac.yml"
