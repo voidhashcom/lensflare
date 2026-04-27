@@ -26,25 +26,22 @@ const description =
   <main class="w-full">
     <section class="w-full border-b border-border">
       <div
-        class="mx-auto flex w-full max-w-[1152px] flex-col gap-6 border-x border-border px-8 py-16"
+        class="mx-auto flex w-full max-w-[1152px] flex-col border-x border-border px-8 pt-20 pb-16"
       >
-        <p
-          class="font-[family-name:var(--font-geist)] text-[11px] uppercase tracking-[0.08em] text-muted-foreground"
-        >
-          Docs / MCP
-        </p>
-        <h1
-          class="max-w-3xl text-[44px] leading-[1.05] tracking-[-0.03em] text-foreground"
-        >
-          Connect your agent to Lensflare
-        </h1>
-        <p class="max-w-2xl text-[16px] leading-[1.6] text-muted-foreground">
-          Lensflare ships a local Model Context Protocol server with the
-          desktop app at <code class="rounded bg-[#fafafa] px-1.5 py-0.5 text-[14px]"
-            >{DEFAULT_MCP_URL}</code
-          >. Once Lensflare is running, point your agent at it and ask
-          questions about your real telemetry — logs, spans, and traces.
-        </p>
+        <div class="flex max-w-[720px] flex-col gap-4">
+          <h1
+            class="text-[36px] font-medium leading-[120%] tracking-[-0.035em] text-foreground"
+          >
+            Lensflare MCP
+          </h1>
+          <p class="max-w-[620px] text-[14px] leading-[150%] text-muted-foreground">
+            Lensflare ships a local Model Context Protocol server with the
+            desktop app at <code class="rounded bg-[#fafafa] px-1.5 py-0.5 text-[13px]"
+              >{DEFAULT_MCP_URL}</code
+            >. Once Lensflare is running, point your agent at it and ask
+            questions about your real telemetry - logs, spans, and traces.
+          </p>
+        </div>
       </div>
     </section>
 
@@ -52,56 +49,44 @@ const description =
       <div
         class="mx-auto flex w-full max-w-[1152px] flex-col gap-4 border-x border-border px-8 py-12"
       >
-        <h2
-          class="text-[18px] leading-[1.3] tracking-[-0.02em] text-foreground"
-        >
-          Before you start
-        </h2>
-        <ol
-          class="flex list-decimal flex-col gap-2 pl-5 text-[15px] leading-[1.6] text-muted-foreground"
-        >
-          <li>
+        <div class="flex max-w-[720px] flex-col gap-3 text-[14px] leading-[150%] text-muted-foreground">
+          <p>
             <a class="text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground" href="/download"
               >Install the Lensflare desktop app</a
             > and open it. The MCP server starts automatically and binds
             loopback-only at the URL above.
-          </li>
-          <li>
+          </p>
+          <p>
             Pick your agent harness below and copy the install snippet into
             your config. Most harnesses also let you add an MCP server from
             their UI — the snippet shows the equivalent JSON.
-          </li>
-          <li>
+          </p>
+          <p>
             Verify the connection by asking your agent: <em
               >&ldquo;What datasets do I have in Lensflare?&rdquo;</em
-            > It should call the <code class="rounded bg-[#fafafa] px-1.5 py-0.5 text-[14px]">lensflare:listDatasets</code> tool.
-          </li>
-        </ol>
+            > It should call the <code class="rounded bg-[#fafafa] px-1.5 py-0.5 text-[13px]">lensflare:listDatasets</code> tool.
+          </p>
+        </div>
       </div>
     </section>
 
     {
       guides.map((guide) => (
         <section class="w-full border-b border-border" id={guide.id}>
-          <div class="mx-auto flex w-full max-w-[1152px] flex-col gap-6 border-x border-border px-8 py-12">
+          <div class="mx-auto flex w-full max-w-[1152px] flex-col gap-5 border-x border-border px-8 py-12">
             <header class="flex flex-col gap-2">
-              <p class="font-[family-name:var(--font-geist)] text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-                {guide.installMethod === "marketplace"
-                  ? "Marketplace install"
-                  : "Manual config"}
-              </p>
-              <h2 class="text-[24px] leading-[1.2] tracking-[-0.02em] text-foreground">
+              <h2 class="max-w-[720px] text-[24px] font-medium leading-[1.2] tracking-[-0.02em] text-foreground">
                 {guide.label}
               </h2>
-              <p class="max-w-2xl text-[15px] leading-[1.6] text-muted-foreground">
+              <p class="max-w-[720px] text-[14px] leading-[150%] text-muted-foreground">
                 {guide.summary}
               </p>
             </header>
 
-            <ol class="flex list-decimal flex-col gap-5 pl-5">
+            <div class="flex max-w-[720px] flex-col gap-5">
               {guide.steps.map((step) => (
-                <li class="flex flex-col gap-3 text-[15px] leading-[1.6] text-foreground">
-                  {step.body ? <p>{step.body}</p> : null}
+                <section class="flex flex-col gap-3 text-[14px] leading-[150%] text-foreground">
+                  {step.body ? <p class="text-muted-foreground">{step.body}</p> : null}
                   {step.snippet ? (
                     <CodeBlock
                       code={step.snippet.code}
@@ -109,17 +94,17 @@ const description =
                       language={step.snippet.kind}
                     />
                   ) : null}
-                </li>
+                </section>
               ))}
-            </ol>
+            </div>
 
-            <div class="flex flex-col gap-2 border-t border-border pt-4">
-              <p class="text-[14px] leading-[1.6] text-muted-foreground">
+            <div class="flex max-w-[720px] flex-col gap-2 border-t border-border pt-4">
+              <p class="text-[14px] leading-[150%] text-muted-foreground">
                 <strong class="font-medium text-foreground">Verify:</strong>{" "}
                 {guide.verification}
               </p>
               {guide.docsUrl ? (
-                <p class="text-[13px] leading-[1.6] text-muted-foreground">
+                <p class="text-[13px] leading-[150%] text-muted-foreground">
                   See also:{" "}
                   <a
                     class="text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground"
@@ -139,13 +124,10 @@ const description =
 
     <section class="w-full border-b border-border">
       <div
-        class="mx-auto flex w-full max-w-[1152px] flex-col gap-4 border-x border-border px-8 py-12"
+        class="mx-auto flex w-full max-w-[1152px] flex-col border-x border-border px-8 py-12"
       >
-        <h2 class="text-[18px] leading-[1.3] tracking-[-0.02em] text-foreground">
-          Source
-        </h2>
-        <p class="max-w-2xl text-[15px] leading-[1.6] text-muted-foreground">
-          The plugin manifests live in
+        <p class="max-w-[720px] text-[14px] leading-[150%] text-muted-foreground">
+          The plugin manifests live in{" "}
           <a
             class="text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground"
             href={`https://github.com/${PLUGIN_MARKETPLACE_REPO}`}

@@ -3,12 +3,11 @@ import {
   PLUGIN_MARKETPLACE_REPO,
   type McpClientGuide,
 } from "@lensflare/shared/mcp-clients";
-import { CheckIcon, CopyIcon, ExternalLinkIcon, RefreshCwIcon } from "lucide-react";
+import { CheckIcon, CopyIcon, ExternalLinkIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CodeBlock } from "~/components/CodeBlock/CodeBlock";
 import { Button } from "~/components/ui/button";
-import { restartDesktopLocalServer } from "~/data/desktopBridge";
 import { useLocalServerState } from "~/hooks/useLocalServerState";
 import { copyTextToClipboard } from "~/lib/clipboard";
 import { cn } from "~/lib/utils";
@@ -45,14 +44,14 @@ export function McpTab({ mcpUrl }: McpTabProps) {
   const guides = useMemo(() => buildMcpClientGuides(mcpUrl), [mcpUrl]);
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-6 py-8 sm:px-8 sm:py-10">
-      <header className="flex flex-col gap-2">
-        <h1 className="font-semibold text-2xl text-foreground tracking-tight">
-          Connect an AI agent to Lensflare
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-6 py-10 sm:px-8 sm:py-12">
+      <header className="flex flex-col gap-3 border-border/60 border-b pb-6">
+        <h1 className="font-semibold text-[28px] text-foreground leading-tight tracking-tight">
+          Lensflare MCP
         </h1>
-        <p className="text-[13px] text-muted-foreground/80 leading-relaxed">
-          Wire Claude Code, Cursor, Codex, and other agents to your local Lensflare server over MCP.
-          No cloud round-trip, no auth.
+        <p className="max-w-2xl text-muted-foreground text-sm leading-6">
+          Connect Claude Code, Cursor, Codex, and other agents to your local Lensflare server over
+          MCP. No cloud round-trip, no auth.
         </p>
       </header>
 
@@ -60,8 +59,8 @@ export function McpTab({ mcpUrl }: McpTabProps) {
 
       <McpClientGuides guides={guides} />
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-4">
-        <p className="text-[12px] text-muted-foreground/80 leading-relaxed">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-border/60 border-t pt-6">
+        <p className="max-w-xl text-muted-foreground text-sm leading-6">
           Need a harness that's not listed? File an issue at{" "}
           <a
             className="underline underline-offset-2 transition-colors hover:text-foreground"
@@ -87,7 +86,7 @@ interface McpStatusRowProps {
 }
 
 /**
- * URL + copy + status pill + restart action. Status mirrors the desktop
+ * URL + copy + status pill. Status mirrors the desktop
  * lifecycle so a port-in-use failure surfaces the same actionable line as
  * the main-process dialog.
  */
@@ -95,7 +94,6 @@ function McpStatusRow({ mcpUrl }: McpStatusRowProps) {
   const serverState = useLocalServerState();
   const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [restarting, setRestarting] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -121,19 +119,10 @@ function McpStatusRow({ mcpUrl }: McpStatusRowProps) {
       .catch(() => {});
   }, [mcpUrl]);
 
-  const handleRestart = useCallback(async () => {
-    setRestarting(true);
-    try {
-      await restartDesktopLocalServer();
-    } finally {
-      setRestarting(false);
-    }
-  }, []);
-
   return (
-    <section className="flex flex-col gap-3">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-        <code className="flex-1 select-all overflow-x-auto rounded-md border border-border/60 bg-muted/40 px-3 py-2 font-mono text-[12px] text-foreground">
+    <section className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <code className="flex-1 select-all overflow-x-auto rounded-md border border-border/60 bg-muted/40 px-3.5 py-2.5 font-mono text-[12px] text-foreground leading-6">
           {mcpUrl}
         </code>
         <div className="flex items-center gap-2">
@@ -145,15 +134,6 @@ function McpStatusRow({ mcpUrl }: McpStatusRowProps) {
           >
             {copied ? <CheckIcon /> : <CopyIcon />}
             {copied ? "Copied" : "Copy URL"}
-          </Button>
-          <Button
-            aria-label="Restart local server"
-            disabled={restarting || serverState === null}
-            onClick={handleRestart}
-            variant="ghost"
-          >
-            <RefreshCwIcon className={cn(restarting && "animate-spin")} />
-            Restart
           </Button>
         </div>
       </div>
@@ -169,7 +149,7 @@ interface McpStatusPillProps {
 function McpStatusPill({ state }: McpStatusPillProps) {
   const { tone, label, detail } = describeServerState(state);
   return (
-    <div className="flex items-center gap-2 text-[12px] leading-relaxed text-muted-foreground/80">
+    <div className="flex items-center gap-2 text-[12px] text-muted-foreground/80 leading-6">
       <span
         aria-hidden="true"
         className={cn(
@@ -223,31 +203,20 @@ interface McpClientGuidesProps {
 
 function McpClientGuides({ guides }: McpClientGuidesProps) {
   return (
-    <ol className="flex flex-col">
-      {guides.map((guide, index) => (
-        <li
-          className="flex flex-col gap-3 border-border/60 border-t pt-6 pb-2 first:border-t-0 first:pt-0"
+    <div className="flex flex-col">
+      {guides.map((guide) => (
+        <section
+          className="flex flex-col gap-4 border-border/60 border-t pt-8 pb-3 first:border-t-0 first:pt-0"
           key={guide.id}
         >
-          <div className="flex items-baseline gap-2.5">
-            <span
-              aria-hidden="true"
-              className="font-mono font-semibold text-[11px] text-muted-foreground/70 tabular-nums tracking-[0.08em]"
-            >
-              {String(index + 1).padStart(2, "0")}
-            </span>
-            <h3 className="font-semibold text-base text-foreground tracking-[-0.01em]">
-              {guide.label}
-            </h3>
-            <span className="ml-1 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground/60">
-              {guide.installMethod === "marketplace" ? "Marketplace" : "Manual"}
-            </span>
-          </div>
-          <p className="text-[13px] text-muted-foreground/80 leading-relaxed">{guide.summary}</p>
+          <h3 className="font-semibold text-[15px] text-foreground leading-6">
+            {guide.label}
+          </h3>
+          <p className="max-w-2xl text-muted-foreground text-sm leading-6">{guide.summary}</p>
           {guide.steps.map((step, stepIndex) => (
-            <div className="flex flex-col gap-2" key={`${guide.id}-step-${stepIndex}`}>
+            <div className="flex flex-col gap-3" key={`${guide.id}-step-${stepIndex}`}>
               {step.body ? (
-                <p className="whitespace-pre-line text-[13px] text-foreground/90 leading-relaxed">
+                <p className="max-w-2xl whitespace-pre-line text-foreground/75 text-sm leading-7">
                   {step.body}
                 </p>
               ) : null}
@@ -263,12 +232,12 @@ function McpClientGuides({ guides }: McpClientGuidesProps) {
               ) : null}
             </div>
           ))}
-          <p className="text-[12px] text-muted-foreground/70 leading-relaxed">
+          <p className="max-w-2xl text-muted-foreground text-sm leading-6">
             <strong className="font-medium text-foreground/90">Verify:</strong> {guide.verification}
           </p>
-        </li>
+        </section>
       ))}
-    </ol>
+    </div>
   );
 }
 

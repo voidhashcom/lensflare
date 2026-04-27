@@ -5,6 +5,8 @@
  * is intentional. The optional `filename` prop renders a small label above
  * the block so the user knows which config file the snippet should land in.
  */
+import { loadHighlighter, SHIKI_LIGHT_THEME } from "../../lib/shiki";
+
 interface Props {
   code: string;
   filename?: string | undefined;
@@ -12,18 +14,54 @@ interface Props {
 }
 
 const { code, filename, language } = Astro.props;
+const snippetLanguage = language === "shell" ? "bash" : "json";
+
+let html: string | null = null;
+
+try {
+  const highlighter = await loadHighlighter();
+  html = highlighter.codeToHtml(code, {
+    lang: snippetLanguage,
+    theme: SHIKI_LIGHT_THEME,
+  });
+} catch {
+  html = null;
+}
 ---
 
 <div class="flex flex-col gap-2">
   {
     filename ? (
-      <div class="flex items-center gap-2 font-[family-name:var(--font-geist)] text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+      <div class="font-[family-name:ui-monospace,_SFMono-Regular,_Menlo,_monospace] text-[12px] leading-[150%] text-muted-foreground">
         <span>{filename}</span>
-        {language ? <span class="opacity-60">/ {language}</span> : null}
       </div>
     ) : null
   }
-  <pre
-    class="overflow-x-auto rounded-md border border-border bg-[#fafafa] px-4 py-3 font-[family-name:ui-monospace,_SFMono-Regular,_Menlo,_monospace] text-[12.5px] leading-[1.55] text-foreground"
-  ><code>{code}</code></pre>
+  {
+    html ? (
+      <Fragment set:html={html} />
+    ) : (
+      <pre
+        class="overflow-x-auto rounded-md border border-border bg-[#fafafa] px-4 py-3 font-[family-name:ui-monospace,_SFMono-Regular,_Menlo,_monospace] text-[12.5px] leading-[1.55] text-foreground"
+      ><code>{code}</code></pre>
+    )
+  }
 </div>
+
+<style>
+  :global(pre.shiki) {
+    margin: 0;
+    overflow-x: auto;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #fafafa !important;
+    padding: 0.75rem 1rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12.5px;
+    line-height: 1.55;
+  }
+
+  :global(pre.shiki code) {
+    font-family: inherit;
+  }
+</style>

@@ -76,14 +76,14 @@ export function ConnectTab({ projectSlug, datasetSlug, serverOrigin }: ConnectTa
     selectedLanguage;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-6 py-8 sm:px-8 sm:py-10">
-      <header className="flex flex-col gap-2">
-        <h1 className="font-semibold text-2xl text-foreground tracking-tight">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-6 py-10 sm:px-8 sm:py-12">
+      <header className="flex flex-col gap-3 border-border/60 border-b pb-6">
+        <h1 className="font-semibold text-[28px] text-foreground leading-tight tracking-tight">
           Start sending telemetry to Lensflare
         </h1>
       </header>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
         <div className="flex-1">
           <IntegrationPicker
             onLanguageChange={handleLanguageChange}
@@ -100,18 +100,18 @@ export function ConnectTab({ projectSlug, datasetSlug, serverOrigin }: ConnectTa
       </div>
 
       {integration ? (
-        <section className="flex flex-col gap-6">
-          <div className="flex flex-col gap-1.5">
-            <p className="text-[13px] text-muted-foreground/80 leading-relaxed">
+        <section className="flex flex-col gap-8">
+          <div className="flex max-w-2xl flex-col gap-2">
+            <p className="text-muted-foreground text-sm leading-6">
               {integration.summary}
             </p>
-            <p className="font-mono text-[11px] text-muted-foreground/70 tracking-[0.04em]">
+            <p className="font-mono text-[11px] text-muted-foreground/70 uppercase tracking-[0.08em]">
               {[protocolLabel, ...integration.signals].filter(Boolean).join("  ·  ")}
             </p>
           </div>
           <IntegrationSteps integration={integration} variables={variables} />
           {integration.verifyHint ? (
-            <p className="border-border/60 border-t pt-4 text-muted-foreground/70 text-xs leading-relaxed">
+            <p className="border-border/60 border-t pt-6 text-muted-foreground text-sm leading-6">
               {integration.verifyHint}
             </p>
           ) : null}
