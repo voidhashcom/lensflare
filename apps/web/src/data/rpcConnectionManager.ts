@@ -58,6 +58,16 @@ interface ActiveSubscription {
   cancel: (() => void) | undefined;
 }
 
+type RecoverableRpcConnectionFailure =
+  | {
+      readonly reasonTag: "SocketOpenError" | "SocketCloseError";
+      readonly message: string;
+    }
+  | {
+      readonly reasonTag: "RpcClientError";
+      readonly message: string;
+    };
+
 const initialState: RpcConnectionState = {
   issue: null,
   retryError: null,
@@ -104,28 +114,28 @@ function delay(ms: number): Promise<void> {
   });
 }
 
-function formatIssue(error: RpcClientError): RpcConnectionIssue {
-  switch (error.reason._tag) {
+function formatConnectionIssue(failure: RecoverableRpcConnectionFailure): RpcConnectionIssue {
+  switch (failure.reasonTag) {
     case "SocketOpenError":
       return {
         title: "Local server unavailable",
         description:
           "Lensflare could not open its RPC socket to the local server. It will keep retrying automatically.",
-        detail: error.reason.message,
+        detail: failure.message,
       };
     case "SocketCloseError":
       return {
         title: "Local server connection lost",
         description:
           "Lensflare lost its RPC socket connection to the local server. It will keep retrying automatically.",
-        detail: error.reason.message,
+        detail: failure.message,
       };
     default:
       return {
         title: "RPC connection failed",
         description:
           "Lensflare cannot communicate with the local RPC server right now. It will keep retrying automatically.",
-        detail: error.message,
+        detail: failure.message,
       };
   }
 }
@@ -141,16 +151,56 @@ function isRecoverableRpcConnectionFailure(error: unknown): error is RpcClientEr
   return error instanceof RpcClientError && error.reason._tag !== "RpcClientDefect";
 }
 
-function extractRecoverableRpcFailure(error: unknown): RpcClientError | null {
+function extractRecoverableRpcFailure(error: unknown): RecoverableRpcConnectionFailure | null {
   if (isRecoverableRpcConnectionFailure(error)) {
-    return error;
+    return {
+      reasonTag:
+        error.reason._tag === "SocketOpenError" || error.reason._tag === "SocketCloseError"
+          ? error.reason._tag
+          : "RpcClientError",
+      message:
+        error.reason._tag === "SocketOpenError" || error.reason._tag === "SocketCloseError"
+          ? error.reason.message
+          : error.message,
+    };
+  }
+
+  const socketFailure = extractStringifiedSocketFailure(error);
+  if (socketFailure !== null) {
+    return socketFailure;
   }
 
   if (error instanceof Error) {
     const cause = (error as { cause?: unknown }).cause;
-    if (isRecoverableRpcConnectionFailure(cause)) {
-      return cause;
+    const causeFailure = extractRecoverableRpcFailure(cause);
+    if (causeFailure !== null) {
+      return causeFailure;
     }
+  }
+
+  return null;
+}
+
+function extractStringifiedSocketFailure(error: unknown): RecoverableRpcConnectionFailure | null {
+  const message =
+    typeof error === "string"
+      ? error
+      : error instanceof Error
+        ? `${error.name}: ${error.message}`
+        : "";
+
+  if (message.includes("SocketCloseError")) {
+    return {
+      reasonTag: "SocketCloseError",
+      message: message.replace(/^Error:\s*/, ""),
+    };
+  }
+
+  if (message.includes("SocketOpenError")) {
+    return {
+      reasonTag: "SocketOpenError",
+      message: message.replace(/^Error:\s*/, ""),
+    };
   }
 
   return null;
@@ -236,6 +286,7 @@ interface ReconnectOptions {
 }
 
 async function performReconnect(options: ReconnectOptions): Promise<void> {
+  clearAutoReconnectTimer();
   cancelAllSubscriptions();
 
   const serverHealthy = await checkServerHealth(800);
@@ -284,6 +335,15 @@ function scheduleAutoReconnect(): void {
   }, delayMs);
 }
 
+function clearAutoReconnectTimer(): void {
+  if (autoReconnectTimer === null) {
+    return;
+  }
+
+  window.clearTimeout(autoReconnectTimer);
+  autoReconnectTimer = null;
+}
+
 async function reconnect(options: ReconnectOptions): Promise<void> {
   if (reconnectPromise) {
     return reconnectPromise;
@@ -328,7 +388,7 @@ export function reportRpcConnectionFailure(error: unknown): void {
   if (state.issue === null) {
     updateState((current) => ({
       ...current,
-      issue: formatIssue(failure),
+      issue: formatConnectionIssue(failure),
     }));
   }
 
