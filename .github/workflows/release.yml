@@ -112,7 +112,7 @@ jobs:
             platform: mac
             arch: arm64
             target: dmg
-          - os: macos-13
+          - os: macos-15-intel
             platform: mac
             arch: x64
             target: dmg
@@ -165,6 +165,7 @@ jobs:
             printf "%s" "$APPLE_API_KEY" > "$APPLE_API_KEY_PATH"
             chmod 600 "$APPLE_API_KEY_PATH"
             export CSC_LINK="$CERTIFICATE_PATH"
+            export CSC_NAME="Developer ID Application"
             export APPLE_API_KEY="$APPLE_API_KEY_PATH"
             SIGNED_ARG="--signed"
           fi

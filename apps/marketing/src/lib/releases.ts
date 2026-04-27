@@ -8,6 +8,7 @@ interface GitHubReleaseAsset {
 interface GitHubRelease {
   readonly tag_name: string;
   readonly html_url: string;
+  readonly draft?: boolean;
   readonly assets: readonly GitHubReleaseAsset[];
 }
 
@@ -39,6 +40,25 @@ const fallbackReleaseDownloads: LatestReleaseDownloads = {
     macArm64: fallbackDownloadLink,
     macX64: fallbackDownloadLink,
   },
+};
+
+const SEMVER_RELEASE_TAG_PATTERN =
+  /^v?(?<version>\d+\.\d+\.\d+)(?:-(?<prerelease>[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+
+const isDownloadReleaseTag = (tagName: string): boolean => {
+  const match = SEMVER_RELEASE_TAG_PATTERN.exec(tagName);
+
+  if (!match) {
+    return false;
+  }
+
+  const prerelease = match.groups?.prerelease;
+
+  if (!prerelease) {
+    return true;
+  }
+
+  return !prerelease.split(".").some((identifier) => identifier.toLowerCase() === "nightly");
 };
 
 const findAssetUrl = (assets: readonly GitHubReleaseAsset[], suffix: string): DownloadLink => {
@@ -78,21 +98,23 @@ const fetchJson = async <T>(url: string, headers: Headers): Promise<T | null> =>
 
 const fetchLatestRelease = async (): Promise<GitHubRelease | null> => {
   const headers = createGitHubHeaders();
+  const releases = await fetchJson<readonly GitHubRelease[]>(
+    `https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=100`,
+    headers,
+  );
+
+  if (releases) {
+    return (
+      releases.find((release) => !release.draft && isDownloadReleaseTag(release.tag_name)) ?? null
+    );
+  }
+
   const latestRelease = await fetchJson<GitHubRelease>(
     `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,
     headers,
   );
 
-  if (latestRelease) {
-    return latestRelease;
-  }
-
-  const releases = await fetchJson<readonly GitHubRelease[]>(
-    `https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=10`,
-    headers,
-  );
-
-  return releases?.[0] ?? null;
+  return latestRelease && isDownloadReleaseTag(latestRelease.tag_name) ? latestRelease : null;
 };
 
 export async function getLatestReleaseDownloads(): Promise<LatestReleaseDownloads> {

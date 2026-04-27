@@ -248,6 +248,7 @@ function createBuildConfig(options: BuildOptions): Record<string, unknown> {
       ...(options.signed
         ? {
             type: "distribution",
+            identity: "Developer ID Application",
             forceCodeSigning: true,
           }
         : { identity: null }),
