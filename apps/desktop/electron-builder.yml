@@ -1,4 +1,4 @@
-appId: com.thespacecompany.lensflare
+appId: dev.lensflare.app
 productName: Lensflare
 directories:
   output: artifacts

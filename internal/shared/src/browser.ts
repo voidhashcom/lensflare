@@ -1,8 +1,8 @@
 import { Effect } from "effect";
 
 export const APP_NAME = "Lensflare";
-export const APP_VERSION = "0.1.0";
-export const APP_IDENTIFIER = "com.thespacecompany.lensflare";
+export const APP_VERSION = "0.0.1-alpha.1";
+export const APP_IDENTIFIER = "dev.lensflare.app";
 export const DEFAULT_HOST = "127.0.0.1";
 export const DEFAULT_SERVER_PORT = 43110;
 export const DEFAULT_WEB_DEV_PORT = 5173;

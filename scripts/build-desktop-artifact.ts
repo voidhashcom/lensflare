@@ -80,6 +80,10 @@ export function resolveDesktopUpdateChannel(version: string): "latest" | "nightl
   return /-nightly\.\d{8}\.\d+$/.test(version) ? "nightly" : "latest";
 }
 
+export function isDesktopPrereleaseVersion(version: string): boolean {
+  return version.includes("-");
+}
+
 export function resolveDesktopProductName(version: string): string {
   return resolveDesktopUpdateChannel(version) === "nightly" ? "Lensflare Nightly" : "Lensflare";
 }
@@ -112,7 +116,10 @@ export function resolveMockUpdateServerUrl(port: number): string {
   return `http://localhost:${port}`;
 }
 
-export function resolveGitHubPublishConfig(updateChannel: "latest" | "nightly"): {
+export function resolveGitHubPublishConfig(
+  version: string,
+  updateChannel: "latest" | "nightly",
+): {
   readonly provider: "github";
   readonly owner: string;
   readonly repo: string;
@@ -132,7 +139,7 @@ export function resolveGitHubPublishConfig(updateChannel: "latest" | "nightly"):
     provider: "github",
     owner,
     repo,
-    releaseType: updateChannel === "nightly" ? "prerelease" : "release",
+    releaseType: isDesktopPrereleaseVersion(version) ? "prerelease" : "release",
     ...(updateChannel === "nightly" ? { channel: "nightly" as const } : {}),
   };
 }
@@ -198,7 +205,7 @@ function run(
 function createBuildConfig(options: BuildOptions): Record<string, unknown> {
   const updateChannel = resolveDesktopUpdateChannel(options.version);
   const iconAssets = resolveDesktopBuildIconAssets(options.version);
-  const publishConfig = resolveGitHubPublishConfig(updateChannel);
+  const publishConfig = resolveGitHubPublishConfig(options.version, updateChannel);
   const publish = publishConfig
     ? [publishConfig]
     : options.mockUpdates
@@ -206,7 +213,7 @@ function createBuildConfig(options: BuildOptions): Record<string, unknown> {
       : undefined;
 
   const config: Record<string, unknown> = {
-    appId: "com.thespacecompany.lensflare",
+    appId: "dev.lensflare.app",
     productName: resolveDesktopProductName(options.version),
     artifactName: "Lensflare-${version}-${arch}.${ext}",
     directories: {

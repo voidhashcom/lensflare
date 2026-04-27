@@ -42,11 +42,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "${GITHUB_REF_TYPE:-}" == "tag" && "${GITHUB_REF_NAME:-}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" && "${GITHUB_REF_NAME:-}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
             CHANNEL="latest"
             TAG="${GITHUB_REF_NAME}"
-            PRERELEASE="false"
+            if [[ "$VERSION" == *-* ]]; then
+              PRERELEASE="true"
+            else
+              PRERELEASE="false"
+            fi
           elif [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.channel }}" == "stable" ]]; then
             VERSION="${{ inputs.version }}"
             if [[ -z "$VERSION" ]]; then
