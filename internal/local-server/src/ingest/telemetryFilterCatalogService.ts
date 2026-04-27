@@ -5,6 +5,7 @@ import {
 import { Context, Effect, Layer, Option, PubSub, Stream } from "effect";
 import { SqlError } from "effect/unstable/sql";
 import { datasetFromRow, DatasetsRepository } from "../repositories/datasetsRepository.ts";
+import { TelemetryFilterCatalogRepository } from "../repositories/telemetryFilterCatalogRepository.ts";
 import { DuckDbError, TelemetryStore } from "./telemetryStore.ts";
 import type {
   IngestWriteRequest,
@@ -78,6 +79,21 @@ function entrySnapshot(entry: MutableEntry): TelemetryFilterCatalogEntry {
     label: entry.label,
     kind: entry.kind,
     values: [...entry.values].sort(),
+    frequency: entry.frequency,
+    highCardinality: entry.highCardinality,
+    updatedAt: entry.updatedAt,
+  };
+}
+
+function mutableEntryFromSnapshot(entry: TelemetryFilterCatalogEntry): MutableEntry {
+  return {
+    id: entry.id,
+    projectId: entry.projectId,
+    datasetId: entry.datasetId,
+    path: entry.path,
+    label: entry.label,
+    kind: entry.kind,
+    values: new Set(entry.values),
     frequency: entry.frequency,
     highCardinality: entry.highCardinality,
     updatedAt: entry.updatedAt,
@@ -253,13 +269,15 @@ export class TelemetryFilterCatalogService extends Context.Service<
     readonly listDatasetCatalog: (
       projectId: string,
       datasetId: string,
-    ) => Effect.Effect<ReadonlyArray<TelemetryFilterCatalogEntry>>;
+    ) => Effect.Effect<ReadonlyArray<TelemetryFilterCatalogEntry>, SqlError.SqlError>;
     readonly streamDatasetCatalog: (
       projectId: string,
       datasetId: string,
     ) => Stream.Stream<TelemetryFilterCatalogChangeEvent>;
-    readonly applyLogBatch: (request: IngestWriteRequest) => Effect.Effect<void>;
-    readonly applySpanBatch: (request: SpanIngestWriteRequest) => Effect.Effect<void>;
+    readonly applyLogBatch: (request: IngestWriteRequest) => Effect.Effect<void, SqlError.SqlError>;
+    readonly applySpanBatch: (
+      request: SpanIngestWriteRequest,
+    ) => Effect.Effect<void, SqlError.SqlError>;
     readonly rebuildAll: () => Effect.Effect<void, DuckDbError | SqlError.SqlError>;
   }
 >()("@lensflare/local-server/TelemetryFilterCatalogService") {
@@ -267,14 +285,12 @@ export class TelemetryFilterCatalogService extends Context.Service<
     TelemetryFilterCatalogService,
     Effect.gen(function* () {
       const datasets = yield* DatasetsRepository;
+      const catalog = yield* TelemetryFilterCatalogRepository;
       const store = yield* TelemetryStore;
       const pubsub = yield* PubSub.unbounded<TelemetryFilterCatalogChangeEvent>();
       const byDataset = new Map<string, Map<string, MutableEntry>>();
 
-      const ensureDataset = (projectId: string, datasetId: string) => {
-        const existing = byDataset.get(datasetId);
-        if (existing) return existing;
-
+      const createDatasetFields = (projectId: string, datasetId: string) => {
         const next = new Map<string, MutableEntry>();
         const now = new Date().toISOString();
         for (const field of staticFields) {
@@ -292,9 +308,24 @@ export class TelemetryFilterCatalogService extends Context.Service<
             updatedAt: now,
           });
         }
-        byDataset.set(datasetId, next);
         return next;
       };
+
+      const loadDataset = (projectId: string, datasetId: string) =>
+        Effect.gen(function* () {
+          const existing = byDataset.get(datasetId);
+          if (existing) {
+            return existing;
+          }
+
+          const next = createDatasetFields(projectId, datasetId);
+          const persisted = yield* catalog.findByDataset(projectId, datasetId);
+          for (const entry of persisted) {
+            next.set(entry.id, mutableEntryFromSnapshot(entry));
+          }
+          byDataset.set(datasetId, next);
+          return next;
+        });
 
       const publish = (entry: MutableEntry) =>
         PubSub.publish(pubsub, {
@@ -302,67 +333,84 @@ export class TelemetryFilterCatalogService extends Context.Service<
           value: entrySnapshot(entry),
         }).pipe(Effect.asVoid);
 
+      const publishChanged = (changed: ReadonlySet<MutableEntry>) =>
+        Effect.forEach(changed, publish, { discard: true });
+
+      const persistChanged = (changed: ReadonlySet<MutableEntry>) =>
+        catalog.upsertMany([...changed].map(entrySnapshot));
+
+      const applyValuesToDataset = (
+        fields: Map<string, MutableEntry>,
+        projectId: string,
+        datasetId: string,
+        values: ReadonlyArray<FieldValue>,
+        changed: Set<MutableEntry>,
+      ) => {
+        const now = new Date().toISOString();
+
+        for (const item of values) {
+          const rendered = scalarValue(item.value);
+          if (rendered === null) continue;
+
+          const id = fieldId(datasetId, item.path);
+          let entry = fields.get(id);
+          if (!entry) {
+            entry = {
+              id,
+              projectId,
+              datasetId,
+              path: item.path,
+              label: fieldLabel(item.path),
+              kind: item.kind,
+              values: new Set(),
+              frequency: 0,
+              highCardinality: false,
+              updatedAt: now,
+            };
+            fields.set(id, entry);
+            changed.add(entry);
+          }
+
+          if (entry.kind !== "string" && item.kind === "string") {
+            entry.kind = "string";
+            changed.add(entry);
+          }
+          entry.frequency += 1;
+          entry.updatedAt = now;
+          changed.add(entry);
+          if (entry.values.size >= maxValuesPerField && !entry.values.has(rendered)) {
+            entry.highCardinality = true;
+            changed.add(entry);
+            continue;
+          }
+          if (!entry.values.has(rendered)) {
+            entry.values.add(rendered);
+            entry.updatedAt = now;
+            changed.add(entry);
+          }
+        }
+      };
+
       const applyValues = (
         projectId: string,
         datasetId: string,
         values: ReadonlyArray<FieldValue>,
       ) =>
         Effect.gen(function* () {
-          const fields = ensureDataset(projectId, datasetId);
+          const fields = yield* loadDataset(projectId, datasetId);
           const changed = new Set<MutableEntry>();
-          const now = new Date().toISOString();
-
-          for (const item of values) {
-            const rendered = scalarValue(item.value);
-            if (rendered === null) continue;
-
-            const id = fieldId(datasetId, item.path);
-            let entry = fields.get(id);
-            if (!entry) {
-              entry = {
-                id,
-                projectId,
-                datasetId,
-                path: item.path,
-                label: fieldLabel(item.path),
-                kind: item.kind,
-                values: new Set(),
-                frequency: 0,
-                highCardinality: false,
-                updatedAt: now,
-              };
-              fields.set(id, entry);
-              changed.add(entry);
-            }
-
-            if (entry.kind !== "string" && item.kind === "string") {
-              entry.kind = "string";
-              changed.add(entry);
-            }
-            entry.frequency += 1;
-            entry.updatedAt = now;
-            changed.add(entry);
-            if (entry.values.size >= maxValuesPerField && !entry.values.has(rendered)) {
-              entry.highCardinality = true;
-              changed.add(entry);
-              continue;
-            }
-            if (!entry.values.has(rendered)) {
-              entry.values.add(rendered);
-              entry.updatedAt = now;
-              changed.add(entry);
-            }
-          }
-
-          yield* Effect.forEach(changed, publish, { discard: true });
+          applyValuesToDataset(fields, projectId, datasetId, values, changed);
+          yield* persistChanged(changed);
+          yield* publishChanged(changed);
         });
 
       const listDatasetCatalog = (projectId: string, datasetId: string) =>
-        Effect.sync(() =>
-          [...ensureDataset(projectId, datasetId).values()]
+        Effect.gen(function* () {
+          const fields = yield* loadDataset(projectId, datasetId);
+          return [...fields.values()]
             .map(entrySnapshot)
-            .sort((left, right) => left.label.localeCompare(right.label)),
-        );
+            .sort((left, right) => left.label.localeCompare(right.label));
+        });
 
       const streamDatasetCatalog = (projectId: string, datasetId: string) =>
         Stream.fromPubSub(pubsub).pipe(
@@ -383,7 +431,9 @@ export class TelemetryFilterCatalogService extends Context.Service<
       const rebuildDataset = (projectId: string, datasetId: string, windowMs: number) =>
         Effect.gen(function* () {
           byDataset.delete(datasetId);
-          ensureDataset(projectId, datasetId);
+          const fields = createDatasetFields(projectId, datasetId);
+          byDataset.set(datasetId, fields);
+          const changed = new Set<MutableEntry>();
 
           const since = new Date(Date.now() - windowMs).toISOString();
           const logs = yield* store.queryRows<Record<string, unknown>>(
@@ -395,7 +445,11 @@ export class TelemetryFilterCatalogService extends Context.Service<
             `,
             { since },
           );
-          yield* applyValues(projectId, datasetId, logs.flatMap(rowLogValues));
+          yield* Effect.sync(() => {
+            for (const row of logs) {
+              applyValuesToDataset(fields, projectId, datasetId, rowLogValues(row), changed);
+            }
+          });
 
           const spans = yield* store.queryRows<Record<string, unknown>>(
             datasetId,
@@ -408,7 +462,18 @@ export class TelemetryFilterCatalogService extends Context.Service<
             `,
             { since },
           );
-          yield* applyValues(projectId, datasetId, spans.flatMap(rowSpanValues));
+          yield* Effect.sync(() => {
+            for (const row of spans) {
+              applyValuesToDataset(fields, projectId, datasetId, rowSpanValues(row), changed);
+            }
+          });
+
+          yield* catalog.replaceDataset(
+            projectId,
+            datasetId,
+            [...fields.values()].map(entrySnapshot),
+          );
+          yield* publishChanged(changed);
         });
 
       const rebuildDatasetWithFallback = (projectId: string, datasetId: string) =>

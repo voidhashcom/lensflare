@@ -44,6 +44,7 @@ import { TelemetryStore } from "./ingest/telemetryStore.ts";
 import { IngestTargetResolver } from "./ingest/targetResolver.ts";
 import { DatasetsRepository } from "./repositories/datasetsRepository.ts";
 import { ProjectsRepository } from "./repositories/projectsRepository.ts";
+import { TelemetryFilterCatalogRepository } from "./repositories/telemetryFilterCatalogRepository.ts";
 import { datasetRpcLayer } from "./rpc/datasetRpc.ts";
 import { projectRpcLayer } from "./rpc/projectRpc.ts";
 import { telemetryLogRpcLayer } from "./rpc/telemetryLogRpc.ts";
@@ -280,6 +281,11 @@ export async function startLocalServer(
   // the runtime's MemoMap collapses to a single SQLite connection.
   const sqliteDatabaseLayer = makeSqliteDatabaseLayer(sqliteDatabaseFile);
   const telemetryStoreLayer = TelemetryStore.layer(duckdbDatabaseFile);
+  const projectsRepositoryLayer = ProjectsRepository.layer.pipe(Layer.provide(sqliteDatabaseLayer));
+  const datasetsRepositoryLayer = DatasetsRepository.layer.pipe(Layer.provide(sqliteDatabaseLayer));
+  const telemetryFilterCatalogRepositoryLayer = TelemetryFilterCatalogRepository.layer.pipe(
+    Layer.provide(sqliteDatabaseLayer),
+  );
   const appSettingsLayer = AppSettingsService.layer({ analytics });
   const appAnalyticsLayer = AppAnalyticsService.layer({
     surface: "server",
@@ -296,9 +302,8 @@ export async function startLocalServer(
   // is sealed below the pair.
   const catalogServicesLayer = ProjectService.layer.pipe(
     Layer.provideMerge(DatasetService.layer),
-    Layer.provide(ProjectsRepository.layer),
-    Layer.provide(DatasetsRepository.layer),
-    Layer.provide(sqliteDatabaseLayer),
+    Layer.provide(projectsRepositoryLayer),
+    Layer.provide(datasetsRepositoryLayer),
     Layer.provide(telemetryStoreLayer),
   );
   // `LogIngestService` is provider-agnostic — its only deps are the catalog
@@ -306,8 +311,8 @@ export async function startLocalServer(
   // per-provider route layers where they're actually consumed.
   const telemetryLogEventLayer = TelemetryLogEventService.layer;
   const telemetryFilterCatalogLayer = TelemetryFilterCatalogService.layer.pipe(
-    Layer.provide(DatasetsRepository.layer),
-    Layer.provide(sqliteDatabaseLayer),
+    Layer.provide(telemetryFilterCatalogRepositoryLayer),
+    Layer.provide(datasetsRepositoryLayer),
     Layer.provide(telemetryStoreLayer),
   );
   const ingestServicesLayer = LogIngestService.layer.pipe(
@@ -317,19 +322,16 @@ export async function startLocalServer(
     Layer.provide(TelemetryLogsRepository.layer),
     Layer.provide(TelemetrySpansRepository.layer),
     Layer.provide(IngestTargetResolver.layer),
-    Layer.provide(ProjectsRepository.layer),
-    Layer.provide(DatasetsRepository.layer),
-    Layer.provide(sqliteDatabaseLayer),
+    Layer.provide(projectsRepositoryLayer),
+    Layer.provide(datasetsRepositoryLayer),
     Layer.provide(telemetryStoreLayer),
   );
   const telemetryQueryLayer = TelemetryLogQueryService.layer.pipe(
-    Layer.provide(DatasetsRepository.layer),
-    Layer.provide(sqliteDatabaseLayer),
+    Layer.provide(datasetsRepositoryLayer),
     Layer.provide(telemetryStoreLayer),
   );
   const unifiedTelemetryQueryLayer = TelemetryQueryService.layer.pipe(
-    Layer.provide(DatasetsRepository.layer),
-    Layer.provide(sqliteDatabaseLayer),
+    Layer.provide(datasetsRepositoryLayer),
     Layer.provide(telemetryStoreLayer),
   );
 
@@ -450,8 +452,6 @@ export async function startLocalServer(
     Effect.gen(function* () {
       const service = yield* ProjectService;
       yield* service.listProjects();
-      const filterCatalog = yield* TelemetryFilterCatalogService;
-      yield* filterCatalog.rebuildAll();
     }),
   );
 

@@ -26,13 +26,29 @@ async function main(): Promise<void> {
     bootstrapOtelCatalog: config.lensflareDev,
   });
 
-  const shutdown = async () => {
-    await server.stop();
-    process.exit(0);
+  let shutdownPromise: Promise<void> | null = null;
+  const shutdown = () => {
+    if (shutdownPromise) {
+      return shutdownPromise;
+    }
+
+    shutdownPromise = server
+      .stop()
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!message.includes("ManagedRuntime disposed")) {
+          throw error;
+        }
+      })
+      .finally(() => {
+        process.exit(0);
+      });
+
+    return shutdownPromise;
   };
 
-  process.on("SIGINT", () => void shutdown());
-  process.on("SIGTERM", () => void shutdown());
+  process.once("SIGINT", () => void shutdown());
+  process.once("SIGTERM", () => void shutdown());
 }
 
 void main().catch((error) => {

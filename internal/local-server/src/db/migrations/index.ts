@@ -2,6 +2,7 @@ import { SqliteMigrator } from "../sqliteNode.ts";
 import migration0001 from "./0001_create_catalog_tables.ts";
 import migration0002 from "./0002_add_slugs.ts";
 import migration0003 from "./0003_prefix_dataset_slugs.ts";
+import migration0004 from "./0004_create_telemetry_filter_catalog.ts";
 
 /**
  * Loader for catalog database migrations.
@@ -17,4 +18,5 @@ export const catalogMigrations = SqliteMigrator.fromRecord({
   "0001_create_catalog_tables": migration0001,
   "0002_add_slugs": migration0002,
   "0003_prefix_dataset_slugs": migration0003,
+  "0004_create_telemetry_filter_catalog": migration0004,
 });

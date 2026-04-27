@@ -14,7 +14,7 @@ export const telemetryLogRpcLayer = TelemetryLogRpcGroup.toLayer(
       SubscribeTelemetryEvents: ({ projectId, datasetId, filter }) =>
         service.streamDatasetTelemetry(projectId, datasetId, filter),
       ListTelemetryFilterCatalog: ({ projectId, datasetId }) =>
-        filterCatalog.listDatasetCatalog(projectId, datasetId),
+        filterCatalog.listDatasetCatalog(projectId, datasetId).pipe(Effect.orDie),
       SubscribeTelemetryFilterCatalogEvents: ({ projectId, datasetId }) =>
         filterCatalog.streamDatasetCatalog(projectId, datasetId),
     });

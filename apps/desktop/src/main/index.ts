@@ -167,6 +167,14 @@ async function shutdownDesktopAnalytics(): Promise<void> {
   await Promise.resolve(desktopAnalyticsRecorder.shutdown());
 }
 
+function destroyAllWindows(): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.destroy();
+    }
+  }
+}
+
 function resolveDevelopmentIconPath(): string | undefined {
   if (!config.desktopDev) {
     return undefined;
@@ -510,11 +518,8 @@ async function installDownloadedUpdate(stopCurrentServer: () => Promise<void>): 
     await captureDesktopEvent("desktop_update_install_requested", {
       channel: updateState.channel,
     });
-    await shutdownDesktopAnalytics();
-    await stopCurrentServer();
-    for (const win of BrowserWindow.getAllWindows()) {
-      win.destroy();
-    }
+    destroyAllWindows();
+    await Promise.all([shutdownDesktopAnalytics(), stopCurrentServer()]);
     autoUpdater.quitAndInstall(true, true);
     return { accepted: true, completed: false };
   } catch (error) {
@@ -978,11 +983,11 @@ async function main(): Promise<void> {
     clearUpdateTimers();
     quitCleanupPromise = (async () => {
       try {
-        await captureDesktopEvent("app_closed", {
+        captureDesktopEventBestEffort("app_closed", {
           sessionDurationBucket: bucketDurationMs(Date.now() - desktopStartedAtMs),
         });
-        await stopCurrentServer();
-        await shutdownDesktopAnalytics();
+        destroyAllWindows();
+        await Promise.all([stopCurrentServer(), shutdownDesktopAnalytics()]);
       } catch (error) {
         console.error("[lensflare] failed during quit cleanup", error);
       } finally {
