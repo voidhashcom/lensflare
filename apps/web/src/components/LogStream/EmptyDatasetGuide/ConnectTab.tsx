@@ -102,9 +102,7 @@ export function ConnectTab({ projectSlug, datasetSlug, serverOrigin }: ConnectTa
       {integration ? (
         <section className="flex flex-col gap-8">
           <div className="flex max-w-2xl flex-col gap-2">
-            <p className="text-muted-foreground text-sm leading-6">
-              {integration.summary}
-            </p>
+            <p className="text-muted-foreground text-sm leading-6">{integration.summary}</p>
             <p className="font-mono text-[11px] text-muted-foreground/70 uppercase tracking-[0.08em]">
               {[protocolLabel, ...integration.signals].filter(Boolean).join("  ·  ")}
             </p>

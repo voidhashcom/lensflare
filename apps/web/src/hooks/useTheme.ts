@@ -138,7 +138,7 @@ function applyTheme(theme: Theme, suppressTransitions = false): void {
   syncDesktopTheme(theme);
 
   if (suppressTransitions) {
-    document.documentElement.offsetHeight;
+    void document.documentElement.offsetHeight;
     requestAnimationFrame(() => {
       document.documentElement.classList.remove("no-transitions");
     });

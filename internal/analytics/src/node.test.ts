@@ -23,7 +23,7 @@ describe("createNodeAnalyticsRecorder", () => {
   });
 
   it("does not await PostHog capture during app flows", async () => {
-    let resolveCapture: (() => void) | null = null;
+    let resolveCapture!: () => void;
     captureMock.mockImplementation(
       () =>
         new Promise<void>((resolve) => {

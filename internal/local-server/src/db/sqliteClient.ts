@@ -97,7 +97,7 @@ export const make = (
         params: ReadonlyArray<unknown>,
         raw: boolean,
       ) =>
-        Effect.withFiber<ReadonlyArray<any> | unknown, SqlError>((fiber) => {
+        Effect.withFiber<unknown, SqlError>((fiber) => {
           statement.setReadBigInts(Context.get(fiber.context, Client.SafeIntegers));
 
           try {

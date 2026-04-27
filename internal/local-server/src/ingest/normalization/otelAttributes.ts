@@ -1,5 +1,21 @@
 import { Buffer } from "node:buffer";
 
+function scalarToString(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? String(value) : "";
+  }
+  if (typeof value === "boolean" || typeof value === "bigint") {
+    return String(value);
+  }
+  return "";
+}
+
 export function anyValueToOtelString(value: unknown): string {
   if (value === null || value === undefined) {
     return "";
@@ -21,9 +37,9 @@ export function anyValueToOtelString(value: unknown): string {
   }
 
   try {
-    return JSON.stringify(value) ?? String(value);
+    return JSON.stringify(value) ?? scalarToString(value);
   } catch {
-    return String(value);
+    return scalarToString(value);
   }
 }
 

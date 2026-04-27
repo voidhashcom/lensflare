@@ -186,7 +186,13 @@ function toNullableString(value: unknown): string | null {
   if (typeof value === "string") {
     return value;
   }
-  return value == null ? null : String(value);
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? String(value) : null;
+  }
+  if (typeof value === "boolean" || typeof value === "bigint") {
+    return String(value);
+  }
+  return null;
 }
 
 function toNullableNumber(value: unknown): number | null {
@@ -209,7 +215,7 @@ function parseMap(value: unknown): Readonly<Record<string, unknown>> {
     if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
       continue;
     }
-    const key = String((entry as { key?: unknown }).key ?? "");
+    const key = toNullableString((entry as { key?: unknown }).key) ?? "";
     if (key.length > 0) {
       out[key] = (entry as { value?: unknown }).value ?? "";
     }
@@ -218,12 +224,12 @@ function parseMap(value: unknown): Readonly<Record<string, unknown>> {
 }
 
 function decodeTelemetryRow(row: Record<string, unknown>): TelemetryRow {
-  const rawKind = String(row.kind ?? "log");
+  const rawKind = toNullableString(row.kind) ?? "log";
   const kind = rawKind === "span" || rawKind === "spanEvent" ? rawKind : "log";
   return {
-    id: String(row.id ?? ""),
+    id: toNullableString(row.id) ?? "",
     kind,
-    timestamp: String(row.timestamp ?? ""),
+    timestamp: toNullableString(row.timestamp) ?? "",
     sourceName: toNullableString(row.source_name),
     level: toNullableString(row.level),
     message: toNullableString(row.message),
@@ -243,11 +249,11 @@ function decodeTelemetryRow(row: Record<string, unknown>): TelemetryRow {
 
 function decodeSpanEventRow(row: Record<string, unknown>): SpanEventRow {
   return {
-    id: String(row.id ?? ""),
-    traceId: String(row.trace_id ?? ""),
-    spanId: String(row.span_id ?? ""),
-    timestamp: String(row.timestamp ?? ""),
-    name: String(row.name ?? ""),
+    id: toNullableString(row.id) ?? "",
+    traceId: toNullableString(row.trace_id) ?? "",
+    spanId: toNullableString(row.span_id) ?? "",
+    timestamp: toNullableString(row.timestamp) ?? "",
+    name: toNullableString(row.name) ?? "",
     attributes: parseMap(row.attributes_json),
   };
 }
@@ -663,8 +669,8 @@ export class TelemetryQueryService extends Context.Service<
 
         const attributeFields = rows
           .map((row) => ({
-            key: String(row.key ?? ""),
-            prefix: String(row.prefix ?? ""),
+            key: toNullableString(row.key) ?? "",
+            prefix: toNullableString(row.prefix) ?? "",
           }))
           .filter((row) => row.key.length > 0 && row.prefix.length > 0)
           .sort((left, right) =>

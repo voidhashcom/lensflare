@@ -26,7 +26,9 @@ const TelemetryFilterCatalogRowSchema = Schema.Struct({
 type TelemetryFilterCatalogRow = Schema.Schema.Type<typeof TelemetryFilterCatalogRowSchema>;
 
 const decodeTelemetryFilterCatalogRow = Schema.decodeUnknownSync(TelemetryFilterCatalogRowSchema);
-const decodeTelemetryFilterCatalogEntry = Schema.decodeUnknownSync(TelemetryFilterCatalogEntrySchema);
+const decodeTelemetryFilterCatalogEntry = Schema.decodeUnknownSync(
+  TelemetryFilterCatalogEntrySchema,
+);
 
 function entryFromRow(row: TelemetryFilterCatalogRow): TelemetryFilterCatalogEntry {
   return decodeTelemetryFilterCatalogEntry({
@@ -129,29 +131,29 @@ export class TelemetryFilterCatalogRepository extends Context.Service<
           return;
         }
 
-        yield* Effect.forEach(
-          entries,
-          (entry) => upsertEntrySql(sql, entry),
-          { discard: true },
-        ).pipe(sql.withTransaction);
+        yield* Effect.forEach(entries, (entry) => upsertEntrySql(sql, entry), {
+          discard: true,
+        }).pipe(sql.withTransaction);
       });
 
-      const replaceDataset = Effect.fn("TelemetryFilterCatalogRepository.replaceDataset")(function* (
-        projectId: string,
-        datasetId: string,
-        entries: ReadonlyArray<TelemetryFilterCatalogEntry>,
-      ) {
-        yield* Effect.gen(function* () {
-          yield* sql`
+      const replaceDataset = Effect.fn("TelemetryFilterCatalogRepository.replaceDataset")(
+        function* (
+          projectId: string,
+          datasetId: string,
+          entries: ReadonlyArray<TelemetryFilterCatalogEntry>,
+        ) {
+          yield* Effect.gen(function* () {
+            yield* sql`
             DELETE FROM telemetry_filter_catalog
             WHERE project_id = ${projectId}
               AND dataset_id = ${datasetId}
           `;
-          yield* Effect.forEach(entries, (entry) => upsertEntrySql(sql, entry), {
-            discard: true,
-          });
-        }).pipe(sql.withTransaction);
-      });
+            yield* Effect.forEach(entries, (entry) => upsertEntrySql(sql, entry), {
+              discard: true,
+            });
+          }).pipe(sql.withTransaction);
+        },
+      );
 
       return TelemetryFilterCatalogRepository.of({
         findByDataset,

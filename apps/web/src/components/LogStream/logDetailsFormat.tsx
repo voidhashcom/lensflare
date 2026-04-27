@@ -367,5 +367,11 @@ function renderJsonTokens(value: unknown, depth: number): ReactNode {
 
   // Fallback for exotic types (symbols, functions). Shouldn't happen with our
   // log shape but we want to render *something* instead of throwing.
-  return <span className="text-foreground/60">{String(value)}</span>;
+  const rendered =
+    typeof value === "function"
+      ? value.name || "function"
+      : typeof value === "symbol"
+        ? (value.description ?? value.toString())
+        : "";
+  return <span className="text-foreground/60">{rendered}</span>;
 }

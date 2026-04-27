@@ -31,9 +31,7 @@ export function IntegrationSteps({ integration, variables, className }: Integrat
             >
               {String(index + 1).padStart(2, "0")}
             </span>
-            <h3 className="font-semibold text-[15px] text-foreground leading-6">
-              {step.title}
-            </h3>
+            <h3 className="font-semibold text-[15px] text-foreground leading-6">{step.title}</h3>
           </div>
           {step.body ? (
             <p className="max-w-2xl whitespace-pre-line text-foreground/75 text-sm leading-7">

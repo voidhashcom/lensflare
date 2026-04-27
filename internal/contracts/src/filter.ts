@@ -241,7 +241,11 @@ function toComparable(value: unknown): number | string | boolean | null | undefi
   if (typeof value === "number" || typeof value === "string" || typeof value === "boolean") {
     return value;
   }
-  return String(value);
+  try {
+    return JSON.stringify(value) ?? undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function asNumber(value: unknown): number | undefined {

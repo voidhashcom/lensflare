@@ -75,11 +75,7 @@ export function withAnalyticsMetadata(
 
 export function classifyError(error: unknown): string {
   const message =
-    error instanceof Error
-      ? error.message
-      : typeof error === "string"
-        ? error
-        : String(error ?? "unknown");
+    error instanceof Error ? error.message : typeof error === "string" ? error : "unknown";
   const normalized = message.toLowerCase();
 
   if (normalized.includes("timeout") || normalized.includes("timed out")) {

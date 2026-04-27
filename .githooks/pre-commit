@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+set -eu
+
+tmp="${TMPDIR:-/tmp}/lensflare-staged-files.$$"
+trap 'rm -f "$tmp"' EXIT
+
+git diff --cached --name-only -z --diff-filter=ACMR > "$tmp"
+
+if [ ! -s "$tmp" ]; then
+  exit 0
+fi
+
+xargs -0 pnpm exec vp check --fix --no-lint --no-error-on-unmatched-pattern < "$tmp"
+xargs -0 git add -- < "$tmp"

@@ -52,7 +52,6 @@ export function TopTabsTrigger({
   leading,
   onClick,
   onMouseDown,
-  size = "compact",
   type = "button",
   ...props
 }: TopTabsTriggerProps) {

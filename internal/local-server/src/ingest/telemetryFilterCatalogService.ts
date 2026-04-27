@@ -113,7 +113,7 @@ function mapToObject(value: unknown): Readonly<Record<string, unknown>> {
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
       continue;
     }
-    const key = String((entry as { key?: unknown }).key ?? "");
+    const key = scalarValue((entry as { key?: unknown }).key) ?? "";
     if (key.length > 0) {
       out[key] = (entry as { value?: unknown }).value ?? "";
     }
@@ -138,7 +138,7 @@ function scalarValue(value: unknown): string | null {
   if (typeof value === "boolean") {
     return String(value);
   }
-  return String(value);
+  return null;
 }
 
 function attributeValues(
@@ -216,15 +216,15 @@ function spanFieldValues(record: NormalizedSpanRecord): ReadonlyArray<FieldValue
 
 function rowLogValues(row: Record<string, unknown>): ReadonlyArray<FieldValue> {
   return logFieldValues({
-    timestamp: String(row.Timestamp ?? ""),
+    timestamp: scalarValue(row.Timestamp) ?? "",
     observedTimestamp: null,
-    traceId: String(row.TraceId ?? ""),
-    spanId: String(row.SpanId ?? ""),
+    traceId: scalarValue(row.TraceId) ?? "",
+    spanId: scalarValue(row.SpanId) ?? "",
     traceFlags: Number(row.TraceFlags ?? 0),
     severityNumber: Number(row.SeverityNumber ?? 0),
-    severityText: String(row.SeverityText ?? ""),
-    serviceName: String(row.ServiceName ?? ""),
-    body: String(row.Body ?? ""),
+    severityText: scalarValue(row.SeverityText) ?? "",
+    serviceName: scalarValue(row.ServiceName) ?? "",
+    body: scalarValue(row.Body) ?? "",
     resourceSchemaUrl: "",
     resourceAttributes: {},
     scopeSchemaUrl: "",
@@ -239,24 +239,24 @@ function rowSpanValues(row: Record<string, unknown>): ReadonlyArray<FieldValue> 
   const eventNames = Array.isArray(row["Events.Name"]) ? row["Events.Name"] : [];
   const eventAttributes = Array.isArray(row["Events.Attributes"]) ? row["Events.Attributes"] : [];
   return spanFieldValues({
-    traceId: String(row.TraceId ?? ""),
-    spanId: String(row.SpanId ?? ""),
-    parentSpanId: String(row.ParentSpanId ?? ""),
+    traceId: scalarValue(row.TraceId) ?? "",
+    spanId: scalarValue(row.SpanId) ?? "",
+    parentSpanId: scalarValue(row.ParentSpanId) ?? "",
     traceState: "",
-    timestamp: String(row.Timestamp ?? ""),
-    spanName: String(row.SpanName ?? ""),
-    spanKind: String(row.SpanKind ?? ""),
-    serviceName: String(row.ServiceName ?? ""),
+    timestamp: scalarValue(row.Timestamp) ?? "",
+    spanName: scalarValue(row.SpanName) ?? "",
+    spanKind: scalarValue(row.SpanKind) ?? "",
+    serviceName: scalarValue(row.ServiceName) ?? "",
     resourceAttributes: {},
     scopeName: "",
     scopeVersion: "",
     spanAttributes: mapToObject(row.SpanAttributes) as Record<string, string>,
     durationNs: Number(row.Duration ?? 0),
-    statusCode: String(row.StatusCode ?? "Unset") as NormalizedSpanRecord["statusCode"],
-    statusMessage: String(row.StatusMessage ?? ""),
+    statusCode: (scalarValue(row.StatusCode) ?? "Unset") as NormalizedSpanRecord["statusCode"],
+    statusMessage: scalarValue(row.StatusMessage) ?? "",
     events: eventNames.map((name, index) => ({
       timestamp: "",
-      name: String(name ?? ""),
+      name: scalarValue(name) ?? "",
       attributes: mapToObject(eventAttributes[index]) as Record<string, string>,
     })),
     links: [],

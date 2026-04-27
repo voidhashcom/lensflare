@@ -152,7 +152,13 @@ function toNullableString(value: unknown): string | null {
   if (typeof value === "string") {
     return value;
   }
-  return value == null ? null : String(value);
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? String(value) : null;
+  }
+  if (typeof value === "boolean" || typeof value === "bigint") {
+    return String(value);
+  }
+  return null;
 }
 
 function toNullableNumber(value: unknown): number | null {
@@ -168,12 +174,12 @@ function toNullableNumber(value: unknown): number | null {
 
 function decodeTelemetryLogRow(row: Record<string, unknown>): TelemetryLogRow {
   return {
-    id: String(row.id ?? ""),
-    timestamp: String(row.timestamp ?? ""),
+    id: toNullableString(row.id) ?? "",
+    timestamp: toNullableString(row.timestamp) ?? "",
     severityNumber: toNullableNumber(row.severity_number) ?? 0,
     severityText: toNullableString(row.severity_text) ?? "",
     sourceName: toNullableString(row.source_name),
-    message: String(row.message ?? ""),
+    message: toNullableString(row.message) ?? "",
     serviceName: toNullableString(row.service_name) ?? "",
     traceId: toNullableString(row.trace_id) ?? "",
     spanId: toNullableString(row.span_id) ?? "",
@@ -183,16 +189,16 @@ function decodeTelemetryLogRow(row: Record<string, unknown>): TelemetryLogRow {
 
 function decodeTelemetrySpanRow(row: Record<string, unknown>): TelemetrySpanRow {
   return {
-    spanId: String(row.span_id ?? ""),
+    spanId: toNullableString(row.span_id) ?? "",
     parentSpanId: toNullableString(row.parent_span_id),
-    name: String(row.name ?? ""),
+    name: toNullableString(row.name) ?? "",
     serviceName: toNullableString(row.service_name),
-    startTime: String(row.start_time ?? ""),
+    startTime: toNullableString(row.start_time) ?? "",
     durationUs: toNullableNumber(row.duration_us) ?? 0,
-    statusCode: String(row.status_code ?? "Unset"),
+    statusCode: toNullableString(row.status_code) ?? "Unset",
     statusMessage: toNullableString(row.status_message),
     attributes: parseMap(row.attributes),
-    events: decodeInlineEvents(row, String(row.id ?? "")),
+    events: decodeInlineEvents(row, toNullableString(row.id) ?? ""),
   };
 }
 
@@ -245,7 +251,7 @@ function parseMap(value: unknown): Readonly<Record<string, unknown>> {
     if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
       continue;
     }
-    const key = String((entry as { key?: unknown }).key ?? "");
+    const key = toNullableString((entry as { key?: unknown }).key) ?? "";
     if (key.length > 0) {
       out[key] = (entry as { value?: unknown }).value ?? "";
     }
@@ -263,8 +269,8 @@ function decodeInlineEvents(
 
   return names.map((name, index) => ({
     id: `${spanRecordId}:event:${index}`,
-    timestamp: toTimestamp(String(timestamps[index] ?? "")),
-    name: String(name ?? "event"),
+    timestamp: toTimestamp(toNullableString(timestamps[index]) ?? ""),
+    name: toNullableString(name) ?? "event",
     attributes: parseMap(attributes[index]),
   }));
 }
@@ -617,7 +623,7 @@ export class TelemetryLogQueryService extends Context.Service<
         );
 
         const attributeFields: ReadonlyArray<TelemetryLogField> = rows
-          .map((row) => String(row.key ?? ""))
+          .map((row) => toNullableString(row.key) ?? "")
           .filter((key) => key.length > 0)
           .sort()
           .map((key) => ({

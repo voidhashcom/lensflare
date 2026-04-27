@@ -251,10 +251,6 @@ function normalizeStatusCode(value: unknown): OtelSpanStatusCode {
 
 function normalizeSpanEvents(
   span: Record<string, unknown>,
-  args: {
-    readonly traceId: string;
-    readonly spanId: string;
-  },
 ): ReadonlyArray<NormalizedSpanEventRecord> {
   const events: Array<NormalizedSpanEventRecord> = [];
   for (const event of toObjectArray(getRecordValue(span, "events"))) {
@@ -460,10 +456,7 @@ export function normalizeOtlpTraceDocument(
           spanAttributes: otelAttributeMap(getRecordValue(span, "attributes")),
           durationNs:
             durationNsFromNanos(startValue, endValue) ?? durationNsFromIso(startTime, endTime),
-          events: normalizeSpanEvents(span, {
-            traceId,
-            spanId,
-          }),
+          events: normalizeSpanEvents(span),
           links: normalizeSpanLinks(span),
         });
       }

@@ -121,7 +121,9 @@ export async function runTelemetryMigrations(connection: DuckDBConnection): Prom
     ORDER BY id ASC
   `);
   await existingReader.readAll();
-  const applied = new Set(existingReader.getRowObjectsJson().map((row) => String(row.id)));
+  const applied = new Set(
+    existingReader.getRowObjectsJson().map((row) => (typeof row.id === "string" ? row.id : "")),
+  );
 
   for (const migration of migrations) {
     if (applied.has(migration.id)) {

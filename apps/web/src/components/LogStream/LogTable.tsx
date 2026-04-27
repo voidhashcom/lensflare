@@ -115,8 +115,7 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
     rowIds.length === 0 ? "at-bottom" : "away",
   );
   const isMeasuredNearBottom = liveTailState === "at-bottom";
-  const shouldShowJumpToEnd =
-    mode === "history" || (!isMeasuredNearBottom && rowIds.length > 0);
+  const shouldShowJumpToEnd = mode === "history" || (!isMeasuredNearBottom && rowIds.length > 0);
   const shouldShowWaiting = waiting && mode === "live" && isMeasuredNearBottom;
   const shouldShowBottomAction = shouldShowJumpToEnd || shouldShowWaiting;
 

@@ -209,9 +209,7 @@ function McpClientGuides({ guides }: McpClientGuidesProps) {
           className="flex flex-col gap-4 border-border/60 border-t pt-8 pb-3 first:border-t-0 first:pt-0"
           key={guide.id}
         >
-          <h3 className="font-semibold text-[15px] text-foreground leading-6">
-            {guide.label}
-          </h3>
+          <h3 className="font-semibold text-[15px] text-foreground leading-6">{guide.label}</h3>
           <p className="max-w-2xl text-muted-foreground text-sm leading-6">{guide.summary}</p>
           {guide.steps.map((step, stepIndex) => (
             <div className="flex flex-col gap-3" key={`${guide.id}-step-${stepIndex}`}>
