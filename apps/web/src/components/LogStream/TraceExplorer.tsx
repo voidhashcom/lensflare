@@ -25,6 +25,7 @@ import { useHorizontalResizablePanel } from "~/hooks/useHorizontalResizablePanel
 import { copyTextToClipboard } from "~/lib/clipboard";
 import { cn } from "~/lib/utils";
 
+import { EventsButton, EventViewer } from "./EventViewer";
 import { FieldsTab } from "./FieldsTab";
 import { buildSpanAttributeEntries, buildSpanDetailEntries } from "./logDetailsFormat";
 import { useTraceContextSnapshot, type TraceContextSnapshot } from "./traceContextStore";
@@ -600,6 +601,18 @@ interface SpanDetailsPanelProps {
 }
 
 function SpanDetailsPanel({ trace, selectedSpan, activeTab, onSelectTab }: SpanDetailsPanelProps) {
+  // Index into `selectedSpan.events` when the user has drilled into a
+  // specific event from the Fields tab. Mirrors the same pattern used
+  // by the log-stream details panel — `null` means "no event selected"
+  // and the panel shows its normal header + tabs.
+  const [selectedEventIndex, setSelectedEventIndex] = useState<number | null>(null);
+  // Reset whenever the user picks a different span — otherwise we'd
+  // carry index 2 from the previous span over to a span that may have
+  // fewer (or zero) events.
+  useEffect(() => {
+    setSelectedEventIndex(null);
+  }, [selectedSpan?.id]);
+
   if (!selectedSpan) {
     return (
       <div className="flex h-full items-center justify-center px-4 text-center text-muted-foreground/70 text-xs">
@@ -608,27 +621,65 @@ function SpanDetailsPanel({ trace, selectedSpan, activeTab, onSelectTab }: SpanD
     );
   }
 
+  const isViewingEvent = selectedEventIndex !== null && selectedSpan.events.length > 0;
+
   return (
     <>
-      <SpanDetailsHeader span={selectedSpan} />
-      <SpanIdentityFields span={selectedSpan} />
-      <SpanDetailsTabs active={activeTab} onSelect={onSelectTab} span={selectedSpan} />
-      {/* Each tab manages its own scroll container — Fields uses the
-          shared `FieldsTab`'s ScrollArea, Events scrolls inside its own
-          `overflow-auto`, and Links is short static content. Wrapping
-          them in another scroll container would just produce nested
-          scrollbars. */}
-      <div className="flex min-h-0 flex-1 flex-col">
-        <Activity mode={activeTab === "fields" ? "visible" : "hidden"} name="Span fields">
-          <SpanFieldsTab span={selectedSpan} trace={trace} />
-        </Activity>
-        <Activity mode={activeTab === "events" ? "visible" : "hidden"} name="Span events">
-          <SpanEventsTab span={selectedSpan} trace={trace} />
-        </Activity>
-        <Activity mode={activeTab === "links" ? "visible" : "hidden"} name="Span links">
-          <SpanLinksTab />
-        </Activity>
+      {/* Normal content stays mounted while the EventViewer is open so
+          tab state, the Events tab's scroll position, and the shared
+          Fields tab's ScrollArea viewport survive the round-trip. The
+          overlay below paints opaquely on top, and `inert` prevents
+          Tab focus / clicks from leaking to the layer beneath. */}
+      <div className="contents" inert={isViewingEvent}>
+        <SpanDetailsHeader span={selectedSpan} />
+        <SpanIdentityFields span={selectedSpan} />
+        <SpanDetailsTabs active={activeTab} onSelect={onSelectTab} span={selectedSpan} />
+        {/* Each tab manages its own scroll container — Fields uses the
+            shared `FieldsTab`'s ScrollArea, Events scrolls inside its own
+            `overflow-auto`, and Links is short static content. Wrapping
+            them in another scroll container would just produce nested
+            scrollbars. */}
+        <div className="flex min-h-0 flex-1 flex-col">
+          <Activity mode={activeTab === "fields" ? "visible" : "hidden"} name="Span fields">
+            <SpanFieldsTab
+              onOpenEvents={() => setSelectedEventIndex(0)}
+              span={selectedSpan}
+              trace={trace}
+            />
+          </Activity>
+          <Activity mode={activeTab === "events" ? "visible" : "hidden"} name="Span events">
+            <SpanEventsTab span={selectedSpan} trace={trace} />
+          </Activity>
+          <Activity mode={activeTab === "links" ? "visible" : "hidden"} name="Span links">
+            <SpanLinksTab />
+          </Activity>
+        </div>
       </div>
+
+      {isViewingEvent ? (
+        // The parent `<aside>` in `TraceExplorer` is already
+        // `position: relative`, so this overlay anchors against the
+        // span-details column. `z-10` keeps it above the panel content
+        // but below the resize handle (`z-20`) so users can still grab
+        // the edge to resize while browsing events.
+        <div className="absolute inset-0 z-10 flex flex-col bg-background">
+          <EventViewer
+            events={selectedSpan.events}
+            onClose={() => setSelectedEventIndex(null)}
+            onSelectIndex={setSelectedEventIndex}
+            parent={{
+              traceId: trace.traceId,
+              spanId: selectedSpan.id,
+              serviceName: selectedSpan.serviceName,
+              // `TraceSpan` doesn't carry a separate `sourceName` — fall
+              // back to `serviceName` to mirror what the log-stream view
+              // shows for the same parent span.
+              sourceName: selectedSpan.serviceName,
+            }}
+            selectedIndex={selectedEventIndex}
+          />
+        </div>
+      ) : null}
     </>
   );
 }
@@ -757,8 +808,26 @@ interface SpanTabContentProps {
   trace: TraceContext;
 }
 
-function SpanFieldsTab({ span, trace }: SpanTabContentProps) {
-  const entries = useMemo(() => buildSpanDetailEntries(span, trace), [span, trace]);
+function SpanFieldsTab({
+  span,
+  trace,
+  onOpenEvents,
+}: SpanTabContentProps & { onOpenEvents: () => void }) {
+  const entries = useMemo(() => {
+    const baseEntries = buildSpanDetailEntries(span, trace);
+    if (span.events.length === 0) return baseEntries;
+    // Replace the `events` row's JSON dump with an inline button that
+    // hands off to the parent panel's event viewer — same pattern as
+    // `LogFieldsTab` so both surfaces stay visually consistent.
+    return baseEntries.map((entry) =>
+      entry.field === "events"
+        ? {
+            ...entry,
+            renderValue: <EventsButton count={span.events.length} onClick={onOpenEvents} />,
+          }
+        : entry,
+    );
+  }, [span, trace, onOpenEvents]);
   const attributeEntries = useMemo(() => buildSpanAttributeEntries(span), [span]);
 
   // Hide null-like values by default to mirror the log-stream details

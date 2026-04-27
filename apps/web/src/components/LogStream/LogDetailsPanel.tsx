@@ -1,5 +1,5 @@
 import { CircleSlashIcon, XIcon } from "lucide-react";
-import { Activity, useMemo, useState } from "react";
+import { Activity, useEffect, useMemo, useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import { ScrollArea } from "~/components/ui/scroll-area";
@@ -11,6 +11,7 @@ import { useHorizontalResizablePanel } from "~/hooks/useHorizontalResizablePanel
 import { cn } from "~/lib/utils";
 
 import { openTraceTab } from "./datasetTabsStore";
+import { EventsButton, EventViewer } from "./EventViewer";
 import { FieldsTab } from "./FieldsTab";
 import { resolveTelemetryEntry } from "./logStreamStore";
 import {
@@ -60,6 +61,16 @@ export function LogDetailsPanel({
   const log = resolveTelemetryEntry(projectId, datasetId, logId);
   const [tab, setTab] = useState<LogDetailsTab>("properties");
   const [showNullValues, setShowNullValues] = useState(false);
+  // Index into `log.events` when the user has drilled into a specific
+  // span event from the Fields tab. `null` means "no event selected" —
+  // the panel shows its normal header + tabs in that state.
+  const [selectedEventIndex, setSelectedEventIndex] = useState<number | null>(null);
+  // Reset the drill-in whenever the panel switches to a different log
+  // entry — otherwise we'd carry index 2 from the previous span over to
+  // a new span that may have fewer (or zero) events.
+  useEffect(() => {
+    setSelectedEventIndex(null);
+  }, [logId]);
   const traceLoadState = useTraceContextSnapshot(projectId, datasetId, log?.traceId, log?.spanId);
   const { panelRef, resizeHandleProps, width } = useHorizontalResizablePanel<HTMLDivElement>({
     defaultWidth: LOG_DETAILS_DEFAULT_WIDTH_PX,
@@ -137,11 +148,21 @@ export function LogDetailsPanel({
     openTrace();
   };
 
+  // Only spans carry events in our data model; treat any other kind as
+  // "no events" so the events button / drill-in state never appear for
+  // logs or spanEvents.
+  const events = log.kind === "span" ? log.events : null;
+  const isViewingEvent =
+    selectedEventIndex !== null && events !== null && events.length > 0;
+
   return (
     <div
       className={cn(
-        "flex h-full min-h-0 min-w-0 flex-col bg-background",
-        variant === "inline" && "relative shrink-0 border-l border-border/70",
+        // `relative` is required regardless of variant so the
+        // EventViewer overlay can use `absolute inset-0` — the inline
+        // variant adds the border/shrink rules on top.
+        "relative flex h-full min-h-0 min-w-0 flex-col bg-background",
+        variant === "inline" && "shrink-0 border-l border-border/70",
         className,
       )}
       ref={panelRef}
@@ -157,26 +178,54 @@ export function LogDetailsPanel({
           {...resizeHandleProps}
         />
       ) : null}
-      <LogDetailsHeader log={log} onClose={onClose} />
+      {/* Normal content stays mounted while the EventViewer is open so
+          scroll positions, Activity-preserved tab state, and the
+          ScrollArea viewports under it survive the round-trip. The
+          overlay below paints opaquely on top, and `inert` keeps Tab
+          focus / click handlers from leaking to the layer beneath. */}
+      <div className="contents" inert={isViewingEvent}>
+        <LogDetailsHeader log={log} onClose={onClose} />
 
-      {traceContext !== null ? (
-        <TraceOverview onExplore={handleExploreTrace} trace={traceContext} />
-      ) : shouldShowTraceSlot && log.traceId ? (
-        <PendingTraceOverview traceId={log.traceId} />
+        {traceContext !== null ? (
+          <TraceOverview onExplore={handleExploreTrace} trace={traceContext} />
+        ) : shouldShowTraceSlot && log.traceId ? (
+          <PendingTraceOverview traceId={log.traceId} />
+        ) : null}
+        <TabBar
+          activeTab={tab}
+          onSelect={setTab}
+          showNullValues={showNullValues}
+          onToggleShowNullValues={setShowNullValues}
+        />
+
+        <Activity mode={tab === "properties" ? "visible" : "hidden"} name="Log fields">
+          <LogFieldsTab
+            log={log}
+            onOpenEvents={() => setSelectedEventIndex(0)}
+            showNullValues={showNullValues}
+          />
+        </Activity>
+        <Activity mode={tab === "raw" ? "visible" : "hidden"} name="Log raw data">
+          <RawDataTab log={log} />
+        </Activity>
+      </div>
+
+      {isViewingEvent && events !== null ? (
+        <div className="absolute inset-0 z-10 flex flex-col bg-background">
+          <EventViewer
+            events={events}
+            onClose={() => setSelectedEventIndex(null)}
+            onSelectIndex={setSelectedEventIndex}
+            parent={{
+              traceId: log.traceId ?? null,
+              spanId: log.spanId ?? null,
+              serviceName: log.kind === "span" ? log.serviceName : null,
+              sourceName: log.sourceName,
+            }}
+            selectedIndex={selectedEventIndex}
+          />
+        </div>
       ) : null}
-      <TabBar
-        activeTab={tab}
-        onSelect={setTab}
-        showNullValues={showNullValues}
-        onToggleShowNullValues={setShowNullValues}
-      />
-
-      <Activity mode={tab === "properties" ? "visible" : "hidden"} name="Log fields">
-        <LogFieldsTab log={log} showNullValues={showNullValues} />
-      </Activity>
-      <Activity mode={tab === "raw" ? "visible" : "hidden"} name="Log raw data">
-        <RawDataTab log={log} />
-      </Activity>
     </div>
   );
 }
@@ -326,10 +375,31 @@ function TabBar({ activeTab, onSelect, showNullValues, onToggleShowNullValues }:
 interface LogFieldsTabProps {
   log: TelemetryEntry;
   showNullValues: boolean;
+  /**
+   * Invoked when the user clicks the "Events N" button on the events
+   * row. The parent panel uses this to enter the
+   * {@link EventViewer} drill-in state.
+   */
+  onOpenEvents: () => void;
 }
 
-function LogFieldsTab({ log, showNullValues }: LogFieldsTabProps) {
-  const entries = useMemo(() => buildLogDetailEntries(log), [log]);
+function LogFieldsTab({ log, showNullValues, onOpenEvents }: LogFieldsTabProps) {
+  const entries = useMemo(() => {
+    const baseEntries = buildLogDetailEntries(log);
+    if (log.kind !== "span" || log.events.length === 0) return baseEntries;
+    // Replace the JSON dump for `events` with an inline button that
+    // hands off to the parent panel's event viewer. We keep the
+    // underlying `value` so the row still survives the null-filter and
+    // so future copy/serialise affordances have something to read.
+    return baseEntries.map((entry) =>
+      entry.field === "events"
+        ? {
+            ...entry,
+            renderValue: <EventsButton count={log.events.length} onClick={onOpenEvents} />,
+          }
+        : entry,
+    );
+  }, [log, onOpenEvents]);
   const attributeEntries = useMemo(() => buildLogAttributeEntries(log), [log]);
 
   return (

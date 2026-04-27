@@ -48,7 +48,7 @@ export function FieldsTab({ entries, attributeEntries, showNullValues }: FieldsT
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <ScrollArea className="min-h-0 flex-1">
-        <table className="w-full border-collapse font-mono text-xs">
+        <table className="w-full border-collapse text-xs">
           <thead>
             <tr className="border-border/60 border-y bg-muted/30 text-[11px] text-muted-foreground/70 uppercase tracking-wide">
               <th className="w-[40%] px-4 py-2 text-left font-medium">Field</th>
@@ -94,14 +94,22 @@ export function FieldsTab({ entries, attributeEntries, showNullValues }: FieldsT
 function PropertyRow({ entry }: { entry: LogDetailEntry }) {
   // Pre-compute the copy payload so we can suppress the button entirely
   // for null-like values — a copy button that would put `""` on the
-  // clipboard isn't useful and just adds visual noise.
-  const copyText = useMemo(() => valueToCopyText(entry.value), [entry.value]);
+  // clipboard isn't useful and just adds visual noise. We also skip the
+  // copy affordance for entries with a custom `renderValue`: those rows
+  // render an interactive control (e.g. the "Events" button) where
+  // copying the underlying value isn't meaningful.
+  const copyText = useMemo(
+    () => (entry.renderValue !== undefined ? null : valueToCopyText(entry.value)),
+    [entry.renderValue, entry.value],
+  );
   return (
     <tr className="group border-border/40 border-b align-top last:border-b-0 hover:bg-foreground/[0.02]">
-      <td className="w-[40%] break-all px-4 py-2.5 text-foreground/80">{entry.field}</td>
+      <td className="w-[40%] break-all px-4 py-2.5 text-muted-foreground">{entry.field}</td>
       <td className="break-all px-4 py-2.5 leading-relaxed">
-        <div className="flex items-start gap-2">
-          <div className="min-w-0 flex-1">{renderDetailValue(entry.value)}</div>
+        <div className="flex items-start gap-2 font-mono">
+          <div className="min-w-0 flex-1">
+            {entry.renderValue !== undefined ? entry.renderValue : renderDetailValue(entry.value)}
+          </div>
           {copyText !== null ? <CopyValueButton text={copyText} /> : null}
         </div>
       </td>
@@ -152,7 +160,7 @@ function CopyValueButton({ text }: { text: string }) {
       <button
         aria-label={copied ? "Copied" : "Copy value"}
         className={cn(
-          "inline-flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground/60 opacity-0 transition-[color,background-color,opacity] hover:bg-foreground/[0.06] hover:text-foreground/90 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring group-hover:opacity-100",
+          "inline-flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground/60 opacity-0 transition-[color,background-color] hover:bg-foreground/[0.06] hover:text-foreground/90 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring group-hover:opacity-100",
           // Stay visible while the "Copied" feedback is on screen, even
           // if the cursor leaves the row — otherwise the checkmark
           // disappears the instant the user moves their mouse.

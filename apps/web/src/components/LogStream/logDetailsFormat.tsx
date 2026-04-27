@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import type { TelemetryEntry, TraceContext, TraceSpan } from "./types";
+import type { SpanEventSummary, TelemetryEntry, TraceContext, TraceSpan } from "./types";
 
 /**
  * Ordered list of fields surfaced on the Fields tab. Order is
@@ -33,6 +33,17 @@ const LOG_DETAIL_FIELDS: ReadonlyArray<string> = [
 export interface LogDetailEntry {
   readonly field: string;
   readonly value: unknown;
+  /**
+   * Optional override for how this entry's value renders. When set, the
+   * Fields tab uses this React node instead of the default type-aware
+   * renderer. Used by the `events` row to swap the array-as-JSON dump
+   * for a button that opens the events sub-panel.
+   *
+   * `value` is still consulted for null-filtering — if you want a row to
+   * always be visible regardless of `showNullValues`, set `value` to
+   * something non-null-like (e.g. the underlying source array).
+   */
+  readonly renderValue?: ReactNode;
 }
 
 /**
@@ -90,6 +101,11 @@ export function buildSpanDetailEntries(
     { field: "parent.span.id", value: span.parentSpanId },
     { field: "service.name", value: span.serviceName },
     { field: "status.message", value: span.statusMessage },
+    // Same shape as `buildLogDetailEntries`'s events row: emit an array
+    // for non-empty event lists so the consumer can `.map(…)` and swap
+    // the value for an "Events N" button. Empty arrays become null so
+    // the row drops out under the default null-filter.
+    { field: "events", value: span.events.length > 0 ? span.events : null },
   ];
 }
 
@@ -100,6 +116,48 @@ export function buildSpanDetailEntries(
  */
 export function buildSpanAttributeEntries(span: TraceSpan): ReadonlyArray<LogDetailEntry> {
   return Object.entries(span.attributes).map(([field, value]) => ({ field, value }));
+}
+
+/**
+ * Parent-span context an event needs to mirror the "spanEvent" fields
+ * surfaced on {@link TelemetryEntry}. The event itself only carries
+ * `id`/`timestamp`/`name`/`attributes`; the canonical fields like
+ * `trace.id`, `span.id`, `service.name` come from whichever span the
+ * event belongs to.
+ */
+export interface EventParentContext {
+  readonly traceId: string | null;
+  readonly spanId: string | null;
+  readonly serviceName: string | null;
+  readonly sourceName: string | null;
+}
+
+/**
+ * Builds Fields-tab entries for a single span event. Field set is
+ * intentionally aligned with the `spanEvent` projection of
+ * {@link TelemetryEntry} so the events sub-panel feels like a natural
+ * peer of the top-level details panel.
+ */
+export function buildEventDetailEntries(
+  event: SpanEventSummary,
+  parent: EventParentContext,
+): ReadonlyArray<LogDetailEntry> {
+  return [
+    { field: "kind", value: "spanEvent" },
+    { field: "id", value: event.id },
+    { field: "timestamp", value: event.timestamp.toISOString() },
+    { field: "name", value: event.name },
+    { field: "trace.id", value: parent.traceId },
+    { field: "span.id", value: parent.spanId },
+    { field: "source.name", value: parent.sourceName ?? parent.serviceName },
+    { field: "service.name", value: parent.serviceName },
+  ];
+}
+
+export function buildEventAttributeEntries(
+  event: SpanEventSummary,
+): ReadonlyArray<LogDetailEntry> {
+  return Object.entries(event.attributes).map(([field, value]) => ({ field, value }));
 }
 
 function getLogDetailValue(log: TelemetryEntry, field: string): unknown {
@@ -135,7 +193,11 @@ function getLogDetailValue(log: TelemetryEntry, field: string): unknown {
     case "status.message":
       return log.kind === "span" ? log.statusMessage : null;
     case "events":
-      return log.kind === "span" ? log.events : null;
+      // Treat empty arrays as null-like so the row drops out under the
+      // default "hide null values" filter. The Fields tab swaps this row
+      // for a button that opens the events sub-panel; an empty array
+      // would otherwise produce an "Events 0" button that does nothing.
+      return log.kind === "span" && log.events.length > 0 ? log.events : null;
     default:
       return null;
   }
