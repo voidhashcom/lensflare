@@ -93,7 +93,7 @@ export function LogDetailsPanel({
         style={variant === "inline" ? { width } : undefined}
       >
         <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-4">
-          <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground text-sm">
+          <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground text-xs">
             Telemetry event is no longer available.
           </span>
           <IconButtonTooltip label="Close log details">
@@ -152,8 +152,7 @@ export function LogDetailsPanel({
   // "no events" so the events button / drill-in state never appear for
   // logs or spanEvents.
   const events = log.kind === "span" ? log.events : null;
-  const isViewingEvent =
-    selectedEventIndex !== null && events !== null && events.length > 0;
+  const isViewingEvent = selectedEventIndex !== null && events !== null && events.length > 0;
 
   return (
     <div
@@ -193,9 +192,11 @@ export function LogDetailsPanel({
         ) : null}
         <TabBar
           activeTab={tab}
+          eventsCount={events?.length ?? 0}
+          onOpenEvents={() => setSelectedEventIndex(0)}
           onSelect={setTab}
-          showNullValues={showNullValues}
           onToggleShowNullValues={setShowNullValues}
+          showNullValues={showNullValues}
         />
 
         <Activity mode={tab === "properties" ? "visible" : "hidden"} name="Log fields">
@@ -300,12 +301,14 @@ function TraceSkeletonRow({ row }: { row: (typeof TRACE_SKELETON_ROWS)[number] }
 function LogDetailsHeader({ log, onClose }: { log: TelemetryEntry; onClose: () => void }) {
   const title = log.kind === "log" ? log.message : log.name;
   return (
-    <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-4">
-      <span className="font-mono text-muted-foreground/80 text-sm">
+    <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-4 pr-2">
+      <span className="font-mono text-muted-foreground/80 text-xs">
         {detailKindLabel(log.kind)}
       </span>
-      <span className="text-muted-foreground/50">—</span>
-      <span className="min-w-0 flex-1 truncate font-mono text-foreground text-sm" title={title}>
+      <span aria-hidden className="text-muted-foreground/50 text-xs">
+        ·
+      </span>
+      <span className="min-w-0 flex-1 truncate font-mono text-foreground text-xs" title={title}>
         {title}
       </span>
       <IconButtonTooltip label="Close log details">
@@ -339,9 +342,24 @@ interface TabBarProps {
   onSelect: (tab: LogDetailsTab) => void;
   showNullValues: boolean;
   onToggleShowNullValues: (next: boolean) => void;
+  /**
+   * Number of events on the underlying entry (zero for non-spans or
+   * spans without events). When zero the shortcut button is hidden so
+   * we don't render a misleading "Events 0" affordance.
+   */
+  eventsCount: number;
+  /** Opens the {@link EventViewer} overlay. */
+  onOpenEvents: () => void;
 }
 
-function TabBar({ activeTab, onSelect, showNullValues, onToggleShowNullValues }: TabBarProps) {
+function TabBar({
+  activeTab,
+  onSelect,
+  showNullValues,
+  onToggleShowNullValues,
+  eventsCount,
+  onOpenEvents,
+}: TabBarProps) {
   return (
     <TopTabsList aria-label="Log detail tabs">
       <TopTabsItem active={activeTab === "properties"}>
@@ -354,7 +372,12 @@ function TabBar({ activeTab, onSelect, showNullValues, onToggleShowNullValues }:
           Raw Data
         </TopTabsTrigger>
       </TopTabsItem>
-      <div className="ml-auto flex items-center pr-3">
+      <div className="ml-auto flex items-center gap-1.5 pr-3">
+        {/* Shortcut to the events overlay — peer of the inline button
+            on the Fields tab's `events` row, here for users who
+            reflexively reach for a tab-bar entry instead. Hidden when
+            there are no events to view. */}
+        {eventsCount > 0 ? <EventsButton count={eventsCount} onClick={onOpenEvents} /> : null}
         <IconButtonTooltip label={showNullValues ? "Hide null values" : "Show null values"}>
           <Toggle
             aria-label={showNullValues ? "Hide null values" : "Show null values"}

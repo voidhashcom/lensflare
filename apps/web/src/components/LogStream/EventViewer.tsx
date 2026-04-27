@@ -138,7 +138,7 @@ function EventViewerHeader({
   // Mirror `LogDetailsHeader` (height, border, padding) so the header
   // doesn't visually shift when the viewer takes over the panel.
   return (
-    <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-4">
+    <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-2">
       <IconButtonTooltip label="Back to span details">
         <Button
           aria-label="Back to span details"
@@ -150,8 +150,8 @@ function EventViewerHeader({
           <ArrowLeftIcon className="size-3.5" />
         </Button>
       </IconButtonTooltip>
-      <span className="font-mono text-muted-foreground/80 text-sm">Event</span>
-      <span className="min-w-0 flex-1 font-mono text-foreground text-sm tabular-nums">
+      <span className="font-mono text-muted-foreground/80 text-xs">Event</span>
+      <span className="min-w-0 flex-1 font-mono text-foreground text-xs tabular-nums">
         {position}
         <span className="text-muted-foreground/50"> / </span>
         {total}

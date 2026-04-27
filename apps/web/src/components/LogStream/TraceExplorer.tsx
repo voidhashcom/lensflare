@@ -51,7 +51,7 @@ const DETAILS_PANEL_MIN_REMAINING_WIDTH_PX = 520;
 const DETAILS_PANEL_MIN_WIDTH_PX = 320;
 const DETAILS_PANEL_WIDTH_STORAGE_KEY = "trace_explorer_details_panel_width";
 
-type DetailsTab = "fields" | "events" | "links";
+type DetailsTab = "fields" | "links";
 
 interface TraceExplorerProps {
   projectId: string;
@@ -633,12 +633,16 @@ function SpanDetailsPanel({ trace, selectedSpan, activeTab, onSelectTab }: SpanD
       <div className="contents" inert={isViewingEvent}>
         <SpanDetailsHeader span={selectedSpan} />
         <SpanIdentityFields span={selectedSpan} />
-        <SpanDetailsTabs active={activeTab} onSelect={onSelectTab} span={selectedSpan} />
+        <SpanDetailsTabs
+          active={activeTab}
+          onOpenEvents={() => setSelectedEventIndex(0)}
+          onSelect={onSelectTab}
+          span={selectedSpan}
+        />
         {/* Each tab manages its own scroll container — Fields uses the
-            shared `FieldsTab`'s ScrollArea, Events scrolls inside its own
-            `overflow-auto`, and Links is short static content. Wrapping
-            them in another scroll container would just produce nested
-            scrollbars. */}
+            shared `FieldsTab`'s ScrollArea and Links is short static
+            content. Wrapping them in another scroll container would
+            just produce nested scrollbars. */}
         <div className="flex min-h-0 flex-1 flex-col">
           <Activity mode={activeTab === "fields" ? "visible" : "hidden"} name="Span fields">
             <SpanFieldsTab
@@ -646,9 +650,6 @@ function SpanDetailsPanel({ trace, selectedSpan, activeTab, onSelectTab }: SpanD
               span={selectedSpan}
               trace={trace}
             />
-          </Activity>
-          <Activity mode={activeTab === "events" ? "visible" : "hidden"} name="Span events">
-            <SpanEventsTab span={selectedSpan} trace={trace} />
           </Activity>
           <Activity mode={activeTab === "links" ? "visible" : "hidden"} name="Span links">
             <SpanLinksTab />
@@ -718,10 +719,12 @@ function SpanDetailsHeader({ span }: { span: TraceSpan }) {
   }, [span.id]);
 
   return (
-    <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-4">
-      <span className="font-mono text-sm text-muted-foreground/80">Span</span>
-      <span className="text-muted-foreground/50">—</span>
-      <span className="min-w-0 flex-1 truncate font-mono text-foreground text-sm" title={span.id}>
+    <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-4 pr-2">
+      <span className="font-mono text-xs text-muted-foreground/80">Span</span>
+      <span aria-hidden className="text-muted-foreground/50 text-xs">
+        ·
+      </span>
+      <span className="min-w-0 flex-1 truncate font-mono text-foreground text-xs" title={span.id}>
         {span.id}
       </span>
       <IconButtonTooltip label={copied ? "Copied" : "Copy span id"}>
@@ -764,24 +767,30 @@ interface SpanDetailsTabsProps {
   active: DetailsTab;
   onSelect: (tab: DetailsTab) => void;
   span: TraceSpan;
+  /** Opens the {@link EventViewer} overlay for this span. */
+  onOpenEvents: () => void;
 }
 
-function SpanDetailsTabs({ active, onSelect, span }: SpanDetailsTabsProps) {
+function SpanDetailsTabs({ active, onSelect, span, onOpenEvents }: SpanDetailsTabsProps) {
   return (
     <TopTabsList aria-label="Span detail tabs" className="gap-1 px-2">
       <TabHeader active={active === "fields"} label="Fields" onClick={() => onSelect("fields")} />
-      <TabHeader
-        active={active === "events"}
-        badge={span.events.length}
-        label="Events"
-        onClick={() => onSelect("events")}
-      />
       <TabHeader
         active={active === "links"}
         badge={0}
         label="Links"
         onClick={() => onSelect("links")}
       />
+      {/* Events used to be a sibling tab; it now opens an overlay
+          driven by the same `onOpenEvents` callback as the inline
+          button on the Fields tab's `events` row. Keeping a shortcut
+          here means users who reflexively reach for the old tab still
+          have a one-click path to the events view. */}
+      {span.events.length > 0 ? (
+        <div className="ml-auto flex items-center pr-2">
+          <EventsButton count={span.events.length} onClick={onOpenEvents} />
+        </div>
+      ) : null}
     </TopTabsList>
   );
 }
@@ -835,50 +844,7 @@ function SpanFieldsTab({
   // explicit message would otherwise render an empty row, etc. There's
   // no toggle in the trace explorer yet; we default to the same
   // behaviour both panels show on first load.
-  return (
-    <FieldsTab attributeEntries={attributeEntries} entries={entries} showNullValues={false} />
-  );
-}
-
-function SpanEventsTab({ span }: SpanTabContentProps) {
-  if (span.events.length > 0) {
-    // `flex-1` so this tab fills the panel — without it the parent's
-    // outer-scroll wrapper used to take care of overflow, but the shared
-    // Fields tab now provides its own ScrollArea so each tab is
-    // expected to size itself.
-    return (
-      <div className="flex min-h-0 flex-1 flex-col overflow-auto font-mono text-xs">
-        {span.events.map((event) => (
-          <div className="border-b border-border/40 px-4 py-3 last:border-b-0" key={event.id}>
-            <div className="flex items-center gap-2">
-              <span className="truncate text-foreground">{event.name}</span>
-              <time
-                className="shrink-0 text-[11px] text-muted-foreground/70"
-                dateTime={event.timestamp.toISOString()}
-              >
-                {event.timestamp.toISOString()}
-              </time>
-            </div>
-            <pre className="mt-2 whitespace-pre-wrap break-all text-muted-foreground/80">
-              {JSON.stringify(event.attributes, null, 2)}
-            </pre>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-2 px-4 py-4 font-mono text-muted-foreground/70 text-xs">
-      <p>No events recorded for this span.</p>
-      {span.status === "error" ? (
-        <p className="text-muted-foreground/50">
-          Span finished with an error — once exception events are sent by the collector they will
-          appear here.
-        </p>
-      ) : null}
-    </div>
-  );
+  return <FieldsTab attributeEntries={attributeEntries} entries={entries} showNullValues={false} />;
 }
 
 function SpanLinksTab() {
