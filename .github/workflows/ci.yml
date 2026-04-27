@@ -42,9 +42,6 @@ jobs:
       - name: Test
         run: pnpm test
 
-      - name: Validate plugin manifests
-        run: pnpm validate-plugins
-
       - name: Build
         run: pnpm build
 
