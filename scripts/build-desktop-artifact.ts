@@ -245,7 +245,12 @@ function createBuildConfig(options: BuildOptions): Record<string, unknown> {
       target: options.target === "dmg" ? ["dmg", "zip"] : [options.target],
       icon: resolve(repoRoot, iconAssets.macIconIcns),
       category: "public.app-category.developer-tools",
-      ...(options.signed ? {} : { identity: null }),
+      ...(options.signed
+        ? {
+            type: "distribution",
+            forceCodeSigning: true,
+          }
+        : { identity: null }),
     };
   }
 

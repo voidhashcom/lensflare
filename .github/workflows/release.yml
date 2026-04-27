@@ -153,6 +153,15 @@ jobs:
             APPLE_API_KEY_PATH="${RUNNER_TEMP}/AuthKey_${APPLE_API_KEY_ID}.p8"
             printf "%s" "$CSC_CONTENT" | base64 --decode > "$CERTIFICATE_PATH" 2>/dev/null || \
               printf "%s" "$CSC_CONTENT" | base64 -D > "$CERTIFICATE_PATH"
+            if ! CERTIFICATE_SUBJECT="$(openssl pkcs12 -in "$CERTIFICATE_PATH" -nokeys -clcerts -passin "pass:${CSC_KEY_PASSWORD}" 2>/dev/null | openssl x509 -noout -subject)"; then
+              echo "CSC_CONTENT could not be opened with CSC_KEY_PASSWORD."
+              exit 1
+            fi
+            if [[ "$CERTIFICATE_SUBJECT" != *"Developer ID Application"* ]]; then
+              echo "CSC_CONTENT must contain a Developer ID Application certificate for macOS notarization."
+              echo "Found certificate subject: ${CERTIFICATE_SUBJECT:-unknown}"
+              exit 1
+            fi
             printf "%s" "$APPLE_API_KEY" > "$APPLE_API_KEY_PATH"
             chmod 600 "$APPLE_API_KEY_PATH"
             export CSC_LINK="$CERTIFICATE_PATH"
