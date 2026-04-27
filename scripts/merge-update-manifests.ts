@@ -66,13 +66,13 @@ export function mergeUpdateManifestFiles(
   writeFileSync(outputPath, serializePlatformUpdateManifest(platform, merged), "utf8");
 }
 
-function parseArgs(argv: readonly string[]): {
+export function parseArgs(argv: readonly string[]): {
   readonly platform: UpdateManifestPlatform;
   readonly primaryPath: string;
   readonly secondaryPath: string;
   readonly outputPath?: string;
 } {
-  const args = [...argv];
+  const args = argv.filter((arg) => arg !== "--");
   const platformFlagIndex = args.indexOf("--platform");
   if (platformFlagIndex < 0) {
     throw new Error("Missing required --platform mac|win option.");

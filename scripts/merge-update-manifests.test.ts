@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   mergePlatformUpdateManifests,
   mergeUpdateManifestFiles,
+  parseArgs,
   parsePlatformUpdateManifest,
   serializePlatformUpdateManifest,
 } from "./merge-update-manifests.ts";
@@ -25,6 +26,24 @@ function makeTempDir(): string {
 }
 
 describe("merge-update-manifests", () => {
+  it("accepts a package-manager argument separator before CLI options", () => {
+    expect(
+      parseArgs([
+        "--",
+        "--platform",
+        "mac",
+        "downloaded-artifacts/desktop-mac-arm64/latest-mac.yml",
+        "downloaded-artifacts/desktop-mac-x64/latest-mac.yml",
+        "release-upload/latest-mac.yml",
+      ]),
+    ).toEqual({
+      platform: "mac",
+      primaryPath: "downloaded-artifacts/desktop-mac-arm64/latest-mac.yml",
+      secondaryPath: "downloaded-artifacts/desktop-mac-x64/latest-mac.yml",
+      outputPath: "release-upload/latest-mac.yml",
+    });
+  });
+
   it("merges arm64 and x64 macOS update manifests into one multi-arch manifest", () => {
     const arm64 = parsePlatformUpdateManifest(
       "mac",

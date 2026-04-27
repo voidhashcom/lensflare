@@ -112,7 +112,7 @@ jobs:
             platform: mac
             arch: arm64
             target: dmg
-          - os: macos-15-intel
+          - os: blacksmith-6vcpu-macos-15
             platform: mac
             arch: x64
             target: dmg
@@ -141,6 +141,16 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      - name: Configure macOS multi-arch optional dependencies
+        if: matrix.platform == 'mac'
+        shell: bash
+        run: |
+          {
+            echo "supported-architectures.os[]=darwin"
+            echo "supported-architectures.os[]=current"
+            echo "supported-architectures.cpu[]=x64"
+            echo "supported-architectures.cpu[]=arm64"
+          } >> .npmrc
       - run: pnpm install --frozen-lockfile
       - run: pnpm run release:update-package-versions -- "${{ needs.prepare.outputs.version }}"
       - name: Build desktop artifact
