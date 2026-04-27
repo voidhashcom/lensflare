@@ -52,6 +52,8 @@ interface TelemetrySpanRow {
   readonly startTime: string;
   readonly durationUs: number;
   readonly statusCode: string;
+  readonly statusMessage: string | null;
+  readonly attributes: Readonly<Record<string, unknown>>;
   readonly events: ReadonlyArray<TelemetryTraceContext["spans"][number]["events"][number]>;
 }
 
@@ -130,6 +132,8 @@ const selectTraceSpansSql = `
     CAST(Timestamp AS VARCHAR) AS start_time,
     CAST(floor(Duration / 1000) AS BIGINT) AS duration_us,
     StatusCode AS status_code,
+    NULLIF(StatusMessage, '') AS status_message,
+    SpanAttributes AS attributes,
     "Events.Timestamp" AS event_timestamps,
     "Events.Name" AS event_names,
     "Events.Attributes" AS event_attributes
@@ -186,6 +190,8 @@ function decodeTelemetrySpanRow(row: Record<string, unknown>): TelemetrySpanRow 
     startTime: String(row.start_time ?? ""),
     durationUs: toNullableNumber(row.duration_us) ?? 0,
     statusCode: String(row.status_code ?? "Unset"),
+    statusMessage: toNullableString(row.status_message),
+    attributes: parseMap(row.attributes),
     events: decodeInlineEvents(row, String(row.id ?? "")),
   };
 }
@@ -330,6 +336,8 @@ function toTraceContext(
       startOffsetUs,
       durationUs: spanDurationUs,
       status: toTraceSpanStatus(row.statusCode),
+      statusMessage: row.statusMessage,
+      attributes: row.attributes,
       events: row.events,
     };
   });

@@ -86,6 +86,12 @@ export interface TraceSpan {
   readonly durationUs: number;
   /** Span outcome — controls the colour of the timeline bar. */
   readonly status: "ok" | "error" | "unset";
+  /** Free-form status text — populated by some collectors when `status === "error"`. */
+  readonly statusMessage: string | null;
+  /** Span attributes (OTel `SpanAttributes`). Mirrors the shape on
+   *  {@link TelemetryEntry}'s `span` variant so the same Fields tab can
+   *  render either source. */
+  readonly attributes: Readonly<Record<string, unknown>>;
   readonly events: ReadonlyArray<SpanEventSummary>;
 }
 

@@ -452,6 +452,11 @@ export const TelemetryTraceSpanSchema = Schema.Struct({
   startOffsetUs: Schema.Number,
   durationUs: Schema.Number,
   status: TelemetryTraceSpanStatusSchema,
+  // Extra metadata mirrored from `TelemetrySpanRecordSchema` so the trace
+  // explorer's "Fields" tab can show the same level of detail as the log
+  // stream's details panel without a second round trip per span.
+  statusMessage: Schema.NullOr(Schema.String),
+  attributes: Schema.Record(Schema.String, Schema.Unknown),
   events: Schema.Array(TelemetrySpanEventSchema),
 });
 

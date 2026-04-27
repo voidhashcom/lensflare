@@ -395,6 +395,12 @@ describe("HTTP ingest", () => {
             startOffsetUs: 10_000,
             durationUs: 75_000,
             status: "error",
+            // Surfaced through `TelemetryTraceSpanSchema` so the trace
+            // explorer's Fields tab can render the same level of detail
+            // as the log-stream details panel — see
+            // `apps/web/src/components/LogStream/FieldsTab.tsx`.
+            statusMessage: "timeout",
+            attributes: {},
           }),
           expect.objectContaining({
             id: grandchildSpanId,

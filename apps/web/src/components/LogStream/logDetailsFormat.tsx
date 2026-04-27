@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 
-import type { TelemetryEntry } from "./types";
+import type { TelemetryEntry, TraceContext, TraceSpan } from "./types";
 
 /**
- * Ordered list of fields surfaced on the Event Properties tab. Order is
+ * Ordered list of fields surfaced on the Fields tab. Order is
  * chosen to mirror the reference log-details sheet: primitive scalars first,
  * then compound data near the bottom. Each entry points at a value extracted
  * from the log by {@link getLogDetailValue}.
@@ -27,7 +27,6 @@ const LOG_DETAIL_FIELDS: ReadonlyArray<string> = [
   "parent.span.id",
   "service.name",
   "status.message",
-  "attributes",
   "events",
 ];
 
@@ -43,6 +42,64 @@ export interface LogDetailEntry {
  */
 export function buildLogDetailEntries(log: TelemetryEntry): ReadonlyArray<LogDetailEntry> {
   return LOG_DETAIL_FIELDS.map((field) => ({ field, value: getLogDetailValue(log, field) }));
+}
+
+/**
+ * Returns each entry on `log.attributes` as its own field/value pair so the
+ * Fields tab can render attributes alongside the canonical fields instead of
+ * as a nested JSON blob. Iteration order matches the source object
+ * — we deliberately don't sort keys so the UI stays stable across renders and
+ * mirrors the order produced by the SDK.
+ */
+export function buildLogAttributeEntries(log: TelemetryEntry): ReadonlyArray<LogDetailEntry> {
+  return Object.entries(log.attributes).map(([field, value]) => ({ field, value }));
+}
+
+/**
+ * Builds field/value pairs for a {@link TraceSpan} so the trace explorer can
+ * feed the same Fields tab as {@link buildLogDetailEntries}. The set of
+ * fields is intentionally aligned with the canonical span entries surfaced
+ * for {@link TelemetryEntry}, with two differences:
+ *
+ * 1. We add `start.offset.us` because the trace context expresses each span
+ *    as an offset from the trace start, and seeing that offset is useful
+ *    while exploring a waterfall.
+ * 2. We omit fields that the trace context schema doesn't carry (the
+ *    LensflareRecordId-style `id`, source icon, log-only `level`/`message`).
+ *
+ * `timestamp` is derived from `trace.startTime + span.startOffsetUs` so the
+ * value matches what the log-stream details panel shows for the same span.
+ */
+export function buildSpanDetailEntries(
+  span: TraceSpan,
+  trace: TraceContext,
+): ReadonlyArray<LogDetailEntry> {
+  const startTime = new Date(
+    trace.startTime.getTime() + span.startOffsetUs / 1_000,
+  ).toISOString();
+  return [
+    { field: "kind", value: "span" },
+    { field: "timestamp", value: startTime },
+    { field: "status", value: span.status },
+    { field: "source.name", value: span.serviceName },
+    { field: "name", value: span.name },
+    { field: "duration.us", value: span.durationUs },
+    { field: "start.offset.us", value: span.startOffsetUs },
+    { field: "trace.id", value: trace.traceId },
+    { field: "span.id", value: span.id },
+    { field: "parent.span.id", value: span.parentSpanId },
+    { field: "service.name", value: span.serviceName },
+    { field: "status.message", value: span.statusMessage },
+  ];
+}
+
+/**
+ * Same idea as {@link buildLogAttributeEntries} but reading from a
+ * {@link TraceSpan}. Kept as a separate helper so the call sites read
+ * naturally — the underlying shape is the same `Record<string, unknown>`.
+ */
+export function buildSpanAttributeEntries(span: TraceSpan): ReadonlyArray<LogDetailEntry> {
+  return Object.entries(span.attributes).map(([field, value]) => ({ field, value }));
 }
 
 function getLogDetailValue(log: TelemetryEntry, field: string): unknown {
@@ -77,8 +134,6 @@ function getLogDetailValue(log: TelemetryEntry, field: string): unknown {
       return log.kind === "span" || log.kind === "spanEvent" ? log.serviceName : null;
     case "status.message":
       return log.kind === "span" ? log.statusMessage : null;
-    case "attributes":
-      return log.attributes;
     case "events":
       return log.kind === "span" ? log.events : null;
     default:

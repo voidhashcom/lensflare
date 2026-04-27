@@ -11,11 +11,12 @@ import { useHorizontalResizablePanel } from "~/hooks/useHorizontalResizablePanel
 import { cn } from "~/lib/utils";
 
 import { openTraceTab } from "./datasetTabsStore";
+import { FieldsTab } from "./FieldsTab";
 import { resolveTelemetryEntry } from "./logStreamStore";
 import {
+  buildLogAttributeEntries,
   buildLogDetailEntries,
   buildLogRawData,
-  isNullLike,
   renderDetailValue,
 } from "./logDetailsFormat";
 import { useTraceContextSnapshot } from "./traceContextStore";
@@ -170,8 +171,8 @@ export function LogDetailsPanel({
         onToggleShowNullValues={setShowNullValues}
       />
 
-      <Activity mode={tab === "properties" ? "visible" : "hidden"} name="Log properties">
-        <EventPropertiesTab log={log} showNullValues={showNullValues} />
+      <Activity mode={tab === "properties" ? "visible" : "hidden"} name="Log fields">
+        <LogFieldsTab log={log} showNullValues={showNullValues} />
       </Activity>
       <Activity mode={tab === "raw" ? "visible" : "hidden"} name="Log raw data">
         <RawDataTab log={log} />
@@ -296,7 +297,7 @@ function TabBar({ activeTab, onSelect, showNullValues, onToggleShowNullValues }:
     <TopTabsList aria-label="Log detail tabs">
       <TopTabsItem active={activeTab === "properties"}>
         <TopTabsTrigger active={activeTab === "properties"} onClick={() => onSelect("properties")}>
-          Event Properties
+          Fields
         </TopTabsTrigger>
       </TopTabsItem>
       <TopTabsItem active={activeTab === "raw"}>
@@ -322,61 +323,28 @@ function TabBar({ activeTab, onSelect, showNullValues, onToggleShowNullValues }:
   );
 }
 
-interface EventPropertiesTabProps {
+interface LogFieldsTabProps {
   log: TelemetryEntry;
   showNullValues: boolean;
 }
 
-function EventPropertiesTab({ log, showNullValues }: EventPropertiesTabProps) {
+function LogFieldsTab({ log, showNullValues }: LogFieldsTabProps) {
   const entries = useMemo(() => buildLogDetailEntries(log), [log]);
-  const visibleEntries = useMemo(
-    () => (showNullValues ? entries : entries.filter((entry) => !isNullLike(entry.value))),
-    [entries, showNullValues],
-  );
+  const attributeEntries = useMemo(() => buildLogAttributeEntries(log), [log]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <ScrollArea className="min-h-0 flex-1">
-        <table className="w-full border-collapse font-mono text-xs">
-          <thead>
-            <tr className="border-border/60 border-y bg-muted/30 text-[11px] text-muted-foreground/70 uppercase tracking-wide">
-              <th className="w-[40%] px-4 py-2 text-left font-medium">Field</th>
-              <th className="px-4 py-2 text-left font-medium">Value</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibleEntries.length === 0 ? (
-              <tr>
-                <td className="px-4 py-6 text-center text-muted-foreground/60 text-xs" colSpan={2}>
-                  No properties to display.
-                </td>
-              </tr>
-            ) : (
-              visibleEntries.map((entry) => (
-                <tr
-                  className="border-border/40 border-b align-top last:border-b-0"
-                  key={entry.field}
-                >
-                  <td className="w-[40%] break-all px-4 py-2.5 text-foreground/80">
-                    {entry.field}
-                  </td>
-                  <td className="break-all px-4 py-2.5 leading-relaxed">
-                    {renderDetailValue(entry.value)}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </ScrollArea>
-    </div>
+    <FieldsTab
+      attributeEntries={attributeEntries}
+      entries={entries}
+      showNullValues={showNullValues}
+    />
   );
 }
 
 function RawDataTab({ log }: { log: TelemetryEntry }) {
   // `renderDetailValue` already pretty-prints objects with syntax
   // highlighting, so reusing it here keeps the Raw Data tab visually in sync
-  // with the coloured JSON blocks on the Event Properties tab.
+  // with the coloured JSON blocks on the Fields tab.
   const renderedRaw = useMemo(() => renderDetailValue(buildLogRawData(log)), [log]);
 
   return (

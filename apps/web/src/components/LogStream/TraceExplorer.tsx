@@ -25,6 +25,8 @@ import { useHorizontalResizablePanel } from "~/hooks/useHorizontalResizablePanel
 import { copyTextToClipboard } from "~/lib/clipboard";
 import { cn } from "~/lib/utils";
 
+import { FieldsTab } from "./FieldsTab";
+import { buildSpanAttributeEntries, buildSpanDetailEntries } from "./logDetailsFormat";
 import { useTraceContextSnapshot, type TraceContextSnapshot } from "./traceContextStore";
 import type { TraceContext, TraceSpan } from "./types";
 
@@ -611,7 +613,12 @@ function SpanDetailsPanel({ trace, selectedSpan, activeTab, onSelectTab }: SpanD
       <SpanDetailsHeader span={selectedSpan} />
       <SpanIdentityFields span={selectedSpan} />
       <SpanDetailsTabs active={activeTab} onSelect={onSelectTab} span={selectedSpan} />
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      {/* Each tab manages its own scroll container — Fields uses the
+          shared `FieldsTab`'s ScrollArea, Events scrolls inside its own
+          `overflow-auto`, and Links is short static content. Wrapping
+          them in another scroll container would just produce nested
+          scrollbars. */}
+      <div className="flex min-h-0 flex-1 flex-col">
         <Activity mode={activeTab === "fields" ? "visible" : "hidden"} name="Span fields">
           <SpanFieldsTab span={selectedSpan} trace={trace} />
         </Activity>
@@ -660,7 +667,7 @@ function SpanDetailsHeader({ span }: { span: TraceSpan }) {
   }, [span.id]);
 
   return (
-    <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-4 py-3">
+    <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-4">
       <span className="font-mono text-sm text-muted-foreground/80">Span</span>
       <span className="text-muted-foreground/50">—</span>
       <span className="min-w-0 flex-1 truncate font-mono text-foreground text-sm" title={span.id}>
@@ -751,37 +758,27 @@ interface SpanTabContentProps {
 }
 
 function SpanFieldsTab({ span, trace }: SpanTabContentProps) {
-  const rows: ReadonlyArray<{ label: string; value: string }> = [
-    { label: "span.id", value: span.id },
-    { label: "trace.id", value: trace.traceId },
-    { label: "parent.span.id", value: span.parentSpanId ?? "—" },
-    { label: "status", value: span.status },
-    { label: "start.offset", value: formatDuration(span.startOffsetUs) },
-    { label: "duration", value: formatDuration(span.durationUs) },
-  ];
+  const entries = useMemo(() => buildSpanDetailEntries(span, trace), [span, trace]);
+  const attributeEntries = useMemo(() => buildSpanAttributeEntries(span), [span]);
 
+  // Hide null-like values by default to mirror the log-stream details
+  // panel — root spans never have a parent, span statuses without an
+  // explicit message would otherwise render an empty row, etc. There's
+  // no toggle in the trace explorer yet; we default to the same
+  // behaviour both panels show on first load.
   return (
-    <dl className="flex flex-col font-mono text-xs">
-      {rows.map((row) => (
-        <div
-          className="grid gap-3 border-b border-border/40 px-4 py-2.5 last:border-b-0"
-          key={row.label}
-          style={{ gridTemplateColumns: "40% 1fr" }}
-        >
-          <dt className="truncate text-muted-foreground/70" title={row.label}>
-            {row.label}
-          </dt>
-          <dd className="break-all text-foreground/90">{row.value}</dd>
-        </div>
-      ))}
-    </dl>
+    <FieldsTab attributeEntries={attributeEntries} entries={entries} showNullValues={false} />
   );
 }
 
 function SpanEventsTab({ span }: SpanTabContentProps) {
   if (span.events.length > 0) {
+    // `flex-1` so this tab fills the panel — without it the parent's
+    // outer-scroll wrapper used to take care of overflow, but the shared
+    // Fields tab now provides its own ScrollArea so each tab is
+    // expected to size itself.
     return (
-      <div className="flex min-h-0 flex-col overflow-auto font-mono text-xs">
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto font-mono text-xs">
         {span.events.map((event) => (
           <div className="border-b border-border/40 px-4 py-3 last:border-b-0" key={event.id}>
             <div className="flex items-center gap-2">
