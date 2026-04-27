@@ -137,6 +137,26 @@ describe("startLocalServer", () => {
       expect(queryTelemetry?.description).toMatch(/usage\.nextPageCursor/);
       const getTrace = tools.find((tool) => tool.name === "getTrace");
       expect(getTrace?.description).toMatch(/Returns null/);
+
+      const listDatasetsCallResponse = await fetch(`${server.origin}/mcp`, {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+          "mcp-session-id": sessionId ?? "",
+        },
+        body: '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"listDatasets","arguments":{}}}',
+      });
+
+      expect(listDatasetsCallResponse.status).toBe(200);
+      const listDatasetsCallBody = (await listDatasetsCallResponse.json()) as {
+        readonly result?: {
+          readonly structuredContent?: {
+            readonly datasets?: ReadonlyArray<unknown>;
+          };
+        };
+      };
+      expect(listDatasetsCallBody.result?.structuredContent).toEqual({ datasets: [] });
     } finally {
       await Promise.all([server.stop(), rm(directory, { recursive: true, force: true })]);
     }

@@ -1,4 +1,8 @@
-import { type TelemetryRecordPage, type TelemetryTraceContext } from "@lensflare/contracts";
+import {
+  DatasetSchema,
+  type TelemetryRecordPage,
+  type TelemetryTraceContext,
+} from "@lensflare/contracts";
 import { Effect, Layer, Schema } from "effect";
 import { McpServer, Tool, Toolkit } from "effect/unstable/ai";
 import { TelemetryLogQueryService } from "../ingest/telemetryLogQueryService.ts";
@@ -8,6 +12,10 @@ import { parseTelemetryQuery, QueryLanguageError } from "@lensflare/query";
 
 const JsonResult = Schema.Any;
 const ToolFailure = Schema.Any;
+
+const ListDatasetsResult = Schema.Struct({
+  datasets: Schema.Array(DatasetSchema),
+});
 
 const Limit = Schema.optional(
   Schema.Number.check(Schema.isInt(), Schema.isBetween({ minimum: 1, maximum: 500 })).annotate({
@@ -42,7 +50,7 @@ const ListDatasets = readOnlyLocalTool(
   Tool.make("listDatasets", {
     description:
       "List all datasets available to this local Lensflare server. Use the returned dataset id in queryTelemetry and getTrace.",
-    success: JsonResult,
+    success: ListDatasetsResult,
     failure: ToolFailure,
     dependencies: [DatasetService],
   }),
@@ -146,7 +154,9 @@ export const LensflareMcpToolsLayer = Layer.effectDiscard(
       listDatasets: () =>
         Effect.gen(function* () {
           const datasets = yield* DatasetService;
-          return yield* datasets.listDatasets();
+          return {
+            datasets: yield* datasets.listDatasets(),
+          };
         }),
       queryTelemetry: ({ datasetId, query, limit, cursor, direction }) =>
         Effect.gen(function* () {
