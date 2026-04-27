@@ -7,10 +7,16 @@ import type { ReactNode } from "react";
 export function Footer(): ReactNode {
   return (
     <footer className="w-full border-b border-border">
-      <div className="mx-auto flex max-w-[1152px] flex-col gap-[42px] border-x border-border px-8 py-4">
+      <div className="mx-auto flex max-w-[1152px] flex-row items-center justify-between gap-4 border-x border-border px-8 py-4">
         <p className="text-[14px] leading-[150%] tracking-[-0.03em] text-muted-foreground">
           Voidhash s.r.o.
         </p>
+        <a
+          href="/docs/mcp"
+          className="text-[14px] leading-[150%] tracking-[-0.03em] text-muted-foreground transition-colors hover:text-foreground"
+        >
+          MCP docs
+        </a>
       </div>
     </footer>
   );

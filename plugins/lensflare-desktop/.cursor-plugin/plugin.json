@@ -1,0 +1,16 @@
+{
+  "name": "lensflare-desktop",
+  "displayName": "Lensflare",
+  "version": "0.1.0",
+  "description": "Query your local Lensflare datasets — logs, spans, and traces — from Cursor.",
+  "author": {
+    "name": "Lensflare",
+    "url": "https://lensflare.dev"
+  },
+  "license": "MIT",
+  "keywords": ["lensflare", "observability", "telemetry", "otel", "mcp", "cursor", "plugin"],
+  "logo": "../assets/logo.svg",
+  "homepage": "https://lensflare.dev/docs/mcp",
+  "mcpServers": "../mcp.json",
+  "rules": "../rules"
+}

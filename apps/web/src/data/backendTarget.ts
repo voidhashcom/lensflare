@@ -24,6 +24,13 @@ export interface BackendTarget {
   readonly source: "desktop-managed" | "configured" | "window-origin";
   readonly httpBaseUrl: string;
   readonly wsBaseUrl: string;
+  /**
+   * Canonical MCP HTTP endpoint exposed by this backend. Derived from
+   * `httpBaseUrl` so it always matches the path the local server mounts
+   * (`McpServer.layerHttp({ path: "/mcp" })`); the same URL appears in
+   * `LensflareEnvironmentDescriptor.mcpUrl` for external consumers.
+   */
+  readonly mcpUrl: string;
   readonly serverInstanceId?: string;
 }
 
@@ -75,6 +82,15 @@ function trimToUndefined(value: string | undefined | null): string | undefined {
 }
 
 /**
+ * Build the canonical `/mcp` URL for this backend. `httpBaseUrl` is always
+ * normalised to a trailing slash by `normalizeBaseUrl`, so we can append
+ * `mcp` directly without worrying about double slashes.
+ */
+function deriveMcpUrl(httpBaseUrl: string): string {
+  return new URL("mcp", httpBaseUrl).toString();
+}
+
+/**
  * Pure resolution — no `window` access, no env access. Exposed primarily
  * so the resolution rules can be exercised by unit tests without having
  * to stub a JSDOM environment.
@@ -90,10 +106,12 @@ export function resolveBackendTarget(inputs: BackendTargetInputs): BackendTarget
       );
     }
 
+    const normalizedHttpBaseUrl = normalizeBaseUrl(httpBaseUrl, base);
     return {
       source: "desktop-managed",
-      httpBaseUrl: normalizeBaseUrl(httpBaseUrl, base),
+      httpBaseUrl: normalizedHttpBaseUrl,
       wsBaseUrl: normalizeBaseUrl(wsBaseUrl, base),
+      mcpUrl: deriveMcpUrl(normalizedHttpBaseUrl),
       serverInstanceId,
     };
   }
@@ -113,6 +131,7 @@ export function resolveBackendTarget(inputs: BackendTargetInputs): BackendTarget
       source: "configured",
       httpBaseUrl,
       wsBaseUrl,
+      mcpUrl: deriveMcpUrl(httpBaseUrl),
     };
   }
 
@@ -121,6 +140,7 @@ export function resolveBackendTarget(inputs: BackendTargetInputs): BackendTarget
     source: "window-origin",
     httpBaseUrl,
     wsBaseUrl: httpUrlToWsUrl(httpBaseUrl),
+    mcpUrl: deriveMcpUrl(httpBaseUrl),
   };
 }
 

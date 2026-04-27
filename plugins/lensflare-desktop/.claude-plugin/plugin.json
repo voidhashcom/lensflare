@@ -1,0 +1,15 @@
+{
+  "name": "lensflare-desktop",
+  "version": "0.1.0",
+  "description": "Query Lensflare's local telemetry datasets from Claude Code.",
+  "author": {
+    "name": "Lensflare",
+    "url": "https://lensflare.dev"
+  },
+  "homepage": "https://lensflare.dev/docs/mcp",
+  "repository": "https://github.com/voidhashcom/lensflare",
+  "license": "MIT",
+  "keywords": ["lensflare", "observability", "logs", "traces", "telemetry", "otel", "mcp"],
+  "skills": "./skills",
+  "mcpServers": "./mcp.json"
+}

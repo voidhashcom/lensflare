@@ -120,11 +120,76 @@ describe("startLocalServer", () => {
       expect(toolsResponse.status).toBe(200);
       const toolsBody = (await toolsResponse.json()) as {
         readonly result?: {
-          readonly tools?: ReadonlyArray<{ readonly name: string }>;
+          readonly tools?: ReadonlyArray<{
+            readonly name: string;
+            readonly description?: string;
+          }>;
         };
       };
-      const toolNames = toolsBody.result?.tools?.map((tool) => tool.name) ?? [];
+      const tools = toolsBody.result?.tools ?? [];
+      const toolNames = tools.map((tool) => tool.name);
       expect(toolNames).toEqual(["listDatasets", "queryTelemetry", "getTrace"]);
+
+      // Pin the description tweaks shipped with the MCP rollout so an
+      // accidental rephrase that strips the pagination / null-trace hints
+      // is caught before it makes it to a published plugin.
+      const queryTelemetry = tools.find((tool) => tool.name === "queryTelemetry");
+      expect(queryTelemetry?.description).toMatch(/usage\.nextPageCursor/);
+      const getTrace = tools.find((tool) => tool.name === "getTrace");
+      expect(getTrace?.description).toMatch(/Returns null/);
+    } finally {
+      await Promise.all([server.stop(), rm(directory, { recursive: true, force: true })]);
+    }
+  });
+
+  it("rejects /mcp requests with a disallowed Origin (DNS-rebinding guard)", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "lensflare-local-server-"));
+    const port = await getAvailablePort();
+
+    const server = await startLocalServer({
+      mode: "server",
+      host: "127.0.0.1",
+      port,
+      sqliteDatabaseFile: join(directory, "lensflare.sqlite"),
+      duckdbDatabaseFile: join(directory, "lensflare.duckdb"),
+      otel: otelDisabled,
+    });
+
+    try {
+      const forbidden = await fetch(`${server.origin}/mcp`, {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+          origin: "https://evil.example",
+        },
+        body: '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}',
+      });
+      expect(forbidden.status).toBe(403);
+
+      const allowedAbsent = await fetch(`${server.origin}/mcp`, {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+        },
+        body: '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"lensflare-test","version":"0.1.0"}}}',
+      });
+      // Native MCP clients send no Origin header; those must still be
+      // accepted — that's the entire reason this guard short-circuits on
+      // an absent header instead of failing closed.
+      expect(allowedAbsent.status).toBe(200);
+
+      const allowedLoopback = await fetch(`${server.origin}/mcp`, {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+          origin: server.origin,
+        },
+        body: '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"lensflare-test","version":"0.1.0"}}}',
+      });
+      expect(allowedLoopback.status).toBe(200);
     } finally {
       await Promise.all([server.stop(), rm(directory, { recursive: true, force: true })]);
     }
@@ -453,6 +518,7 @@ describe("startLocalServer", () => {
       expect(descriptor.serverInstanceId).toBe(server.serverInstanceId);
       expect(descriptor.port).toBe(port);
       expect(descriptor.mode).toBe("server");
+      expect(descriptor.mcpUrl).toBe(`${server.origin}/mcp`);
     } finally {
       await server.stop();
       await rm(directory, { recursive: true, force: true });

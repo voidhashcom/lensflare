@@ -1,0 +1,17 @@
+{
+  "name": "lensflare",
+  "displayName": "Lensflare",
+  "description": "Local-first observability — query logs, spans, and traces from your IDE.",
+  "owner": {
+    "name": "Lensflare",
+    "url": "https://lensflare.dev"
+  },
+  "plugins": [
+    {
+      "name": "lensflare-desktop",
+      "source": "./plugins/lensflare-desktop",
+      "version": "0.1.0",
+      "description": "Talk to your local Lensflare desktop app from Codex — search logs, query spans, and inspect traces with no cloud round-trip."
+    }
+  ]
+}

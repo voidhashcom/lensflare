@@ -192,6 +192,28 @@ function encodeBootstrapForPreload(bootstrap: DesktopEnvironmentBootstrap): stri
   return `--lensflare-bootstrap=${Buffer.from(JSON.stringify(bootstrap), "utf8").toString("base64")}`;
 }
 
+/**
+ * Match `node:http`'s `EADDRINUSE` error so we can surface a friendlier
+ * dialog instead of the raw stack. The error can arrive either as a Node
+ * `Error` with `code === "EADDRINUSE"` or as a wrapped Effect failure
+ * whose message contains the same code, so check both.
+ */
+function isAddressInUseError(error: unknown): boolean {
+  if (error === null || error === undefined) {
+    return false;
+  }
+  if (typeof error === "object" && "code" in error) {
+    const code = (error as { code?: unknown }).code;
+    if (code === "EADDRINUSE") {
+      return true;
+    }
+  }
+  if (error instanceof Error && error.message.includes("EADDRINUSE")) {
+    return true;
+  }
+  return false;
+}
+
 function deriveBootstrap(handle: LocalServerHandle): DesktopEnvironmentBootstrap {
   return {
     label: `${APP_NAME} ${APP_VERSION}`,
@@ -760,11 +782,20 @@ async function main(): Promise<void> {
   }
 
   function transitionFailed(error: unknown): void {
-    const message =
-      error instanceof Error && error.message.length > 0
+    const portInUse = isAddressInUseError(error);
+    const message = portInUse
+      ? `Port ${localServerOptions.port} is already in use. Quit the other process or set LENSFLARE_SERVER_PORT, then relaunch ${APP_NAME}.`
+      : error instanceof Error && error.message.length > 0
         ? error.message
         : "Local server failed to start.";
     broadcastState({ status: "failed", message });
+
+    if (portInUse) {
+      // Synchronous, system-modal — guarantees the user sees the actionable
+      // copy even when the renderer hasn't loaded yet (the failure can fire
+      // before the first window is created).
+      dialog.showErrorBox(`${APP_NAME} could not start`, message);
+    }
   }
 
   async function waitForServerReady(handle: LocalServerHandle): Promise<void> {

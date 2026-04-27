@@ -1,0 +1,161 @@
+---
+/**
+ * Public docs page that the plugin manifests, the in-app MCP tab, and every
+ * harness's install instructions point to. The per-client guide content
+ * comes from `@lensflare/shared/mcp-clients` so this page and the in-app
+ * `McpTab` cannot drift.
+ */
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import Header from "../../components/Header.astro";
+import { Footer } from "../../components/Footer";
+import CodeBlock from "../../components/mcp/CodeBlock.astro";
+import {
+  DEFAULT_MCP_CLIENT_GUIDES,
+  DEFAULT_MCP_URL,
+  PLUGIN_MARKETPLACE_REPO,
+} from "@lensflare/shared/mcp-clients";
+
+const guides = DEFAULT_MCP_CLIENT_GUIDES;
+const title = "Lensflare MCP — Connect Claude Code, Cursor, Codex, and more";
+const description =
+  "Install instructions for connecting AI agents to your local Lensflare desktop app over the Model Context Protocol.";
+---
+
+<BaseLayout title={title} description={description}>
+  <Header />
+  <main class="w-full">
+    <section class="w-full border-b border-border">
+      <div
+        class="mx-auto flex w-full max-w-[1152px] flex-col gap-6 border-x border-border px-8 py-16"
+      >
+        <p
+          class="font-[family-name:var(--font-geist)] text-[11px] uppercase tracking-[0.08em] text-muted-foreground"
+        >
+          Docs / MCP
+        </p>
+        <h1
+          class="max-w-3xl text-[44px] leading-[1.05] tracking-[-0.03em] text-foreground"
+        >
+          Connect your agent to Lensflare
+        </h1>
+        <p class="max-w-2xl text-[16px] leading-[1.6] text-muted-foreground">
+          Lensflare ships a local Model Context Protocol server with the
+          desktop app at <code class="rounded bg-[#fafafa] px-1.5 py-0.5 text-[14px]"
+            >{DEFAULT_MCP_URL}</code
+          >. Once Lensflare is running, point your agent at it and ask
+          questions about your real telemetry — logs, spans, and traces.
+        </p>
+      </div>
+    </section>
+
+    <section class="w-full border-b border-border">
+      <div
+        class="mx-auto flex w-full max-w-[1152px] flex-col gap-4 border-x border-border px-8 py-12"
+      >
+        <h2
+          class="text-[18px] leading-[1.3] tracking-[-0.02em] text-foreground"
+        >
+          Before you start
+        </h2>
+        <ol
+          class="flex list-decimal flex-col gap-2 pl-5 text-[15px] leading-[1.6] text-muted-foreground"
+        >
+          <li>
+            <a class="text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground" href="/download"
+              >Install the Lensflare desktop app</a
+            > and open it. The MCP server starts automatically and binds
+            loopback-only at the URL above.
+          </li>
+          <li>
+            Pick your agent harness below and copy the install snippet into
+            your config. Most harnesses also let you add an MCP server from
+            their UI — the snippet shows the equivalent JSON.
+          </li>
+          <li>
+            Verify the connection by asking your agent: <em
+              >&ldquo;What datasets do I have in Lensflare?&rdquo;</em
+            > It should call the <code class="rounded bg-[#fafafa] px-1.5 py-0.5 text-[14px]">lensflare:listDatasets</code> tool.
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    {
+      guides.map((guide) => (
+        <section class="w-full border-b border-border" id={guide.id}>
+          <div class="mx-auto flex w-full max-w-[1152px] flex-col gap-6 border-x border-border px-8 py-12">
+            <header class="flex flex-col gap-2">
+              <p class="font-[family-name:var(--font-geist)] text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+                {guide.installMethod === "marketplace"
+                  ? "Marketplace install"
+                  : "Manual config"}
+              </p>
+              <h2 class="text-[24px] leading-[1.2] tracking-[-0.02em] text-foreground">
+                {guide.label}
+              </h2>
+              <p class="max-w-2xl text-[15px] leading-[1.6] text-muted-foreground">
+                {guide.summary}
+              </p>
+            </header>
+
+            <ol class="flex list-decimal flex-col gap-5 pl-5">
+              {guide.steps.map((step) => (
+                <li class="flex flex-col gap-3 text-[15px] leading-[1.6] text-foreground">
+                  {step.body ? <p>{step.body}</p> : null}
+                  {step.snippet ? (
+                    <CodeBlock
+                      code={step.snippet.code}
+                      filename={step.snippet.filename}
+                      language={step.snippet.kind}
+                    />
+                  ) : null}
+                </li>
+              ))}
+            </ol>
+
+            <div class="flex flex-col gap-2 border-t border-border pt-4">
+              <p class="text-[14px] leading-[1.6] text-muted-foreground">
+                <strong class="font-medium text-foreground">Verify:</strong>{" "}
+                {guide.verification}
+              </p>
+              {guide.docsUrl ? (
+                <p class="text-[13px] leading-[1.6] text-muted-foreground">
+                  See also:{" "}
+                  <a
+                    class="text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground"
+                    href={guide.docsUrl}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                  >
+                    {guide.label} MCP docs
+                  </a>
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </section>
+      ))
+    }
+
+    <section class="w-full border-b border-border">
+      <div
+        class="mx-auto flex w-full max-w-[1152px] flex-col gap-4 border-x border-border px-8 py-12"
+      >
+        <h2 class="text-[18px] leading-[1.3] tracking-[-0.02em] text-foreground">
+          Source
+        </h2>
+        <p class="max-w-2xl text-[15px] leading-[1.6] text-muted-foreground">
+          The plugin manifests live in
+          <a
+            class="text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground"
+            href={`https://github.com/${PLUGIN_MARKETPLACE_REPO}`}
+            target="_blank"
+            rel="noreferrer noopener">{PLUGIN_MARKETPLACE_REPO}</a
+          >. File issues there if a harness is missing or an install snippet
+          breaks.
+        </p>
+      </div>
+    </section>
+  </main>
+  <Footer />
+</BaseLayout>

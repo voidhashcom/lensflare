@@ -59,6 +59,7 @@ describe("@lensflare/contracts", () => {
       port: 43110,
       httpBaseUrl: "http://127.0.0.1:43110",
       wsBaseUrl: "ws://127.0.0.1:43110",
+      mcpUrl: "http://127.0.0.1:43110/mcp",
       serverInstanceId: "abc123",
       startedAt: "2026-04-21T10:00:00.000Z",
     });
@@ -66,6 +67,7 @@ describe("@lensflare/contracts", () => {
     expect(descriptor.serverInstanceId).toBe("abc123");
     expect(descriptor.mode).toBe("desktop");
     expect(descriptor.wsBaseUrl).toBe("ws://127.0.0.1:43110");
+    expect(descriptor.mcpUrl).toBe("http://127.0.0.1:43110/mcp");
   });
 
   it("decodes unified telemetry records", () => {

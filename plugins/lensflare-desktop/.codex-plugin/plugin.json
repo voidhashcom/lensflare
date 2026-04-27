@@ -1,0 +1,40 @@
+{
+  "name": "lensflare-desktop",
+  "version": "0.1.0",
+  "description": "Local development observability for Codex.",
+  "author": {
+    "name": "Lensflare",
+    "email": "team@lensflare.dev",
+    "url": "https://lensflare.dev"
+  },
+  "homepage": "https://lensflare.dev/docs/mcp",
+  "repository": "https://github.com/voidhashcom/lensflare.git",
+  "license": "MIT",
+  "keywords": ["lensflare", "observability", "logs", "traces", "telemetry", "otel", "mcp"],
+  "skills": "./skills/",
+  "mcpServers": "./mcp.json",
+  "interface": {
+    "displayName": "Lensflare",
+    "shortDescription": "See what actually happened at runtime.",
+    "longDescription": "Lensflare is a local-first observability workspace. With this plugin, Codex can query the logs, spans, and traces collected by the Lensflare desktop app on 127.0.0.1:43110 — no cloud, no auth, no data egress. Ask 'what errors are in my dev dataset?' or paste a trace id and Codex will pull the full span tree, error summary, and timings.",
+    "developerName": "Lensflare",
+    "category": "Developer Tools",
+    "capabilities": ["Read"],
+    "websiteURL": "https://lensflare.dev",
+    "privacyPolicyURL": "https://lensflare.dev/privacy",
+    "brandColor": "#FF7A2D",
+    "composerIcon": "./assets/logo.svg",
+    "logo": "./assets/logo.svg",
+    "defaultPrompt": [
+      "What errors happened in my dev dataset in the last hour?",
+      "Show me the slowest spans where serviceName = \"api\" in Lensflare.",
+      "Pull trace 7c1e... from Lensflare and tell me where it failed.",
+      "List my Lensflare datasets."
+    ],
+    "screenshots": [
+      "./assets/screenshot-traces.png",
+      "./assets/screenshot-query.png",
+      "./assets/screenshot-trace-detail.png"
+    ]
+  }
+}

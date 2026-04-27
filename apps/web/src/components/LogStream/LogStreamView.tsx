@@ -5,7 +5,11 @@ import { readBackendTarget } from "~/data/backendTarget";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
 
 import { DatasetTabsTitlebar } from "./DatasetTabsTitlebar";
-import { getDatasetTabState, type DatasetTab } from "./datasetTabs";
+import {
+  DEFAULT_TELEMETRY_DATASET_TAB_ID,
+  getDatasetTabState,
+  type DatasetTab,
+} from "./datasetTabs";
 import { useDatasetTabsSnapshot } from "./datasetTabsStore";
 import { EmptyDatasetGuide } from "./EmptyDatasetGuide";
 import { LogDetailsPanel } from "./LogDetailsPanel";
@@ -59,10 +63,24 @@ interface LogStreamViewProps {
 }
 
 /**
- * Full-height live log stream view shown when a dataset is selected.
- * The live data lifecycle is owned by `logStreamStore`, not this route
- * component, so dataset/settings navigation does not tear down loaded rows
- * or websocket subscriptions for recently visited datasets.
+ * Full-height view shown when a dataset is selected.
+ *
+ * Two surfaces share this route:
+ *
+ *   • **Empty state** — while the dataset has not yet received any
+ *     telemetry, render the {@link EmptyDatasetGuide} (Connect + MCP
+ *     tabs, no `+` button). The Telemetry tab strip is intentionally
+ *     hidden so the user has only one obvious next action.
+ *   • **Populated state** — once data is flowing, render the original
+ *     `DatasetTabsTitlebar` + telemetry/trace panels. Users can
+ *     re-access Connect / MCP via the book icon in
+ *     {@link LogStreamHeader}, which opens the same guide as a sheet.
+ *
+ * The live data lifecycle is owned by `logStreamStore`, not this route,
+ * so dataset/settings navigation does not tear down loaded rows or
+ * websocket subscriptions for recently visited datasets. The primary
+ * telemetry stream is subscribed at this level so we can detect the
+ * empty → populated transition and fade the guide out cleanly.
  */
 export function LogStreamView({
   projectId,
@@ -104,37 +122,115 @@ export function LogStreamView({
     return target.httpBaseUrl.replace(/\/$/, "");
   }, []);
 
+  // Subscribe to the *primary* telemetry stream so we can detect when
+  // the dataset transitions from empty to populated, even while the user
+  // is on the Connect / MCP tabs. The session is reference-counted so
+  // this extra subscription is cheap — it shares state with whatever
+  // the active TelemetryTabPanel is reading.
+  const primaryStream = useDatasetStreamSnapshot(
+    projectId,
+    datasetId,
+    DEFAULT_TELEMETRY_DATASET_TAB_ID,
+    streamMetadata,
+  );
+
+  const [hasEverReceivedLog, setHasEverReceivedLog] = useState(
+    () => primaryStream.rowIds.length > 0,
+  );
+  const [isGuideExiting, setIsGuideExiting] = useState(false);
+  const [showGuide, setShowGuide] = useState(() => primaryStream.rowIds.length === 0);
+  const guideExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!hasEverReceivedLog && primaryStream.rowIds.length > 0) {
+      setHasEverReceivedLog(true);
+      setIsGuideExiting(true);
+      if (guideExitTimerRef.current !== null) {
+        clearTimeout(guideExitTimerRef.current);
+      }
+      guideExitTimerRef.current = setTimeout(() => {
+        setShowGuide(false);
+        setIsGuideExiting(false);
+        guideExitTimerRef.current = null;
+      }, EMPTY_GUIDE_EXIT_MS);
+    }
+  }, [hasEverReceivedLog, primaryStream.rowIds.length]);
+
+  useEffect(() => {
+    return () => {
+      if (guideExitTimerRef.current !== null) {
+        clearTimeout(guideExitTimerRef.current);
+      }
+    };
+  }, []);
+
+  // The empty-state guide is only meaningful when:
+  //   - we have never seen a log on this mount (sticky latch),
+  //   - the underlying stream has zero rows AND finished its initial
+  //     fetch (so we don't flash the guide while the first page is
+  //     still in flight),
+  //   - there is no error to surface, and
+  //   - both slugs are available — otherwise the snippet templates
+  //     render `{{slug}}` placeholders to the user.
+  const datasetIsEmpty =
+    showGuide &&
+    !hasEverReceivedLog &&
+    primaryStream.rowIds.length === 0 &&
+    !primaryStream.isInitialLoading &&
+    primaryStream.errorMessage === null &&
+    projectSlug !== undefined &&
+    datasetSlug !== undefined;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-background/40">
-      {!hasDesktopTitleTabs ? (
-        <div className="shrink-0 border-b border-border/70 bg-background">
-          <DatasetTabsTitlebar />
+      {datasetIsEmpty ? (
+        <div
+          aria-live="polite"
+          className="flex min-h-0 min-w-0 flex-1 flex-col transition-opacity duration-200 data-[state=exiting]:opacity-0"
+          data-state={isGuideExiting ? "exiting" : "idle"}
+        >
+          <EmptyDatasetGuide
+            datasetSlug={datasetSlug}
+            projectSlug={projectSlug}
+            serverOrigin={serverOrigin}
+            variant="overlay"
+          />
         </div>
-      ) : null}
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-        {tabState.tabs.map((tab) =>
-          tab.kind === "trace" ? (
-            <TraceTabPanel
-              active={tab.id === tabState.activeTabId}
-              datasetId={datasetId}
-              key={tab.id}
-              projectId={projectId}
-              tab={tab}
-            />
-          ) : (
-            <TelemetryTabPanel
-              active={tab.id === tabState.activeTabId}
-              datasetId={datasetId}
-              key={tab.id}
-              projectId={projectId}
-              serverOrigin={serverOrigin}
-              shouldUseDetailsSheet={shouldUseDetailsSheet}
-              streamMetadata={streamMetadata}
-              tab={tab}
-            />
-          ),
-        )}
-      </div>
+      ) : (
+        <>
+          {!hasDesktopTitleTabs ? (
+            <div className="shrink-0 border-b border-border/70 bg-background">
+              <DatasetTabsTitlebar />
+            </div>
+          ) : null}
+          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+            {tabState.tabs.map((tab) =>
+              tab.kind === "trace" ? (
+                <TraceTabPanel
+                  active={tab.id === tabState.activeTabId}
+                  datasetId={datasetId}
+                  key={tab.id}
+                  projectId={projectId}
+                  tab={tab}
+                />
+              ) : (
+                <TelemetryTabPanel
+                  active={tab.id === tabState.activeTabId}
+                  datasetId={datasetId}
+                  datasetSlug={datasetSlug}
+                  key={tab.id}
+                  projectId={projectId}
+                  projectSlug={projectSlug}
+                  serverOrigin={serverOrigin}
+                  shouldUseDetailsSheet={shouldUseDetailsSheet}
+                  streamMetadata={streamMetadata}
+                  tab={tab}
+                />
+              ),
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -147,6 +243,8 @@ interface TelemetryTabPanelProps {
   shouldUseDetailsSheet: boolean;
   streamMetadata: DatasetStreamMetadata;
   tab: Extract<DatasetTab, { kind: "telemetry" }>;
+  projectSlug: string | undefined;
+  datasetSlug: string | undefined;
 }
 
 function TelemetryTabPanel({
@@ -157,6 +255,8 @@ function TelemetryTabPanel({
   shouldUseDetailsSheet,
   streamMetadata,
   tab,
+  projectSlug,
+  datasetSlug,
 }: TelemetryTabPanelProps) {
   // Activity keeps tab state and DOM around while letting React suspend hidden
   // tab effects, which matches the tab-strip lifecycle without manual hiding.
@@ -189,55 +289,6 @@ function TelemetryTabPanel({
     (id: string) => resolveTelemetryEntry(projectId, datasetId, id),
     [datasetId, projectId],
   );
-
-  // "First event" latch. Once we've observed a single log we never
-  // re-render the overlay for this mount — the user can always get back
-  // to the guide via the header icon button. We also drive a short fade
-  // exit via `isGuideExiting` before removing the overlay from the DOM
-  // so the transition is visible rather than a hard cut.
-  const [hasEverReceivedLog, setHasEverReceivedLog] = useState(() => stream.rowIds.length > 0);
-  const [isGuideExiting, setIsGuideExiting] = useState(false);
-  const [showGuideOverlay, setShowGuideOverlay] = useState(() => stream.rowIds.length === 0);
-  const guideExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (!hasEverReceivedLog && stream.rowIds.length > 0) {
-      setHasEverReceivedLog(true);
-      setIsGuideExiting(true);
-      if (guideExitTimerRef.current !== null) {
-        clearTimeout(guideExitTimerRef.current);
-      }
-      guideExitTimerRef.current = setTimeout(() => {
-        setShowGuideOverlay(false);
-        setIsGuideExiting(false);
-        guideExitTimerRef.current = null;
-      }, EMPTY_GUIDE_EXIT_MS);
-    }
-  }, [hasEverReceivedLog, stream.rowIds.length]);
-
-  useEffect(() => {
-    return () => {
-      if (guideExitTimerRef.current !== null) {
-        clearTimeout(guideExitTimerRef.current);
-      }
-    };
-  }, []);
-
-  // The guide is only shown for the initial empty state: no logs, no
-  // active filter (an active filter that returns zero rows is not the
-  // same as "the dataset is empty"), no error, and the initial fetch
-  // has completed. Slugs are required — without them the snippets would
-  // render with placeholder braces and confuse the user, so we fall back
-  // to the plain waiting-for-logs table until the collections hydrate.
-  const shouldShowGuide =
-    showGuideOverlay &&
-    !hasEverReceivedLog &&
-    stream.rowIds.length === 0 &&
-    !stream.isInitialLoading &&
-    stream.errorMessage === null &&
-    stream.filter === null &&
-    stream.metadata.projectSlug !== undefined &&
-    stream.metadata.datasetSlug !== undefined;
 
   const clearSheetCloseTimer = useCallback(() => {
     if (sheetCloseTimerRef.current === null) {
@@ -290,11 +341,11 @@ function TelemetryTabPanel({
             <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
               <LogStreamHeader
                 datasetId={datasetId}
-                datasetSlug={stream.metadata.datasetSlug}
+                datasetSlug={datasetSlug}
                 filter={stream.filter}
                 filterSource={stream.filterSource}
                 projectId={projectId}
-                projectSlug={stream.metadata.projectSlug}
+                projectSlug={projectSlug}
                 serverOrigin={serverOrigin}
                 viewId={tab.id}
               />
@@ -306,6 +357,7 @@ function TelemetryTabPanel({
               <LogTable
                 hasPreviousPage={stream.pageInfo?.hasPreviousPage ?? false}
                 isLoadingPrevious={stream.isLoadingOlder}
+                liveTailKey={`${projectId}:${datasetId}:${tab.id}`}
                 mode={stream.mode}
                 onJumpToEnd={handleJumpToEnd}
                 onLeaveLiveMode={handleLeaveLiveMode}
@@ -319,20 +371,6 @@ function TelemetryTabPanel({
                 selectedLogId={stream.selectedEntryId}
                 waiting={stream.mode === "live" && stream.errorMessage === null}
               />
-              {shouldShowGuide && stream.metadata.projectSlug && stream.metadata.datasetSlug ? (
-                <div
-                  aria-live="polite"
-                  className="pointer-events-auto absolute inset-0 z-10 flex flex-col overflow-hidden bg-background/95 backdrop-blur-sm transition-opacity duration-200 data-[state=exiting]:opacity-0"
-                  data-state={isGuideExiting ? "exiting" : "idle"}
-                >
-                  <EmptyDatasetGuide
-                    datasetSlug={stream.metadata.datasetSlug}
-                    projectSlug={stream.metadata.projectSlug}
-                    serverOrigin={serverOrigin}
-                    variant="overlay"
-                  />
-                </div>
-              ) : null}
             </div>
             {showInlineDetails ? (
               <LogDetailsPanel

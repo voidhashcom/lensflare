@@ -34,7 +34,9 @@ export type ServerSnapshot = Schema.Schema.Type<typeof ServerSnapshotSchema>;
  * it never has to infer transport targets from `window.location` or Vite
  * proxy shims. `serverInstanceId` changes on every successful
  * {@link startLocalServer} so clients can detect a fresh process across
- * restarts.
+ * restarts. `mcpUrl` is the canonical MCP HTTP endpoint — surfaced here so
+ * external tools (plugin manifests, the in-app MCP tab) can scrape one
+ * place to discover where to connect their agent harness.
  */
 export const LensflareEnvironmentDescriptorSchema = Schema.Struct({
   appName: Schema.String,
@@ -45,6 +47,7 @@ export const LensflareEnvironmentDescriptorSchema = Schema.Struct({
   port: Schema.Number,
   httpBaseUrl: Schema.String,
   wsBaseUrl: Schema.String,
+  mcpUrl: Schema.String,
   serverInstanceId: Schema.String,
   startedAt: Schema.String,
 });

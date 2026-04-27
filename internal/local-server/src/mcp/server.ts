@@ -51,7 +51,7 @@ const ListDatasets = readOnlyLocalTool(
 
 const QueryTelemetry = readOnlyLocalTool(
   Tool.make("queryTelemetry", {
-    description: `Search logs, spans, and span events in one dataset using a single query string.\n\n${TELEMETRY_QUERY_LANGUAGE}`,
+    description: `Search logs, spans, and span events in one dataset using a single query string.\n\nTo page through results, pass the \`usage.nextPageCursor\` from a previous response back as \`cursor\`.\n\n${TELEMETRY_QUERY_LANGUAGE}`,
     parameters: Schema.Struct({
       datasetId: DatasetId,
       query: Schema.optional(
@@ -76,7 +76,7 @@ const QueryTelemetry = readOnlyLocalTool(
 const GetTrace = readOnlyLocalTool(
   Tool.make("getTrace", {
     description:
-      "Get a trace by trace id, including ordered spans, events, timings, and errored span summary.",
+      'Get a trace by trace id, including ordered spans, events, timings, and errored span summary. Returns null if the trace is not in this dataset; use queryTelemetry with `traceId = "<id>"` to confirm before reporting back.',
     parameters: Schema.Struct({
       datasetId: DatasetId,
       traceId: Schema.String.annotate({ description: "OTEL trace id." }),

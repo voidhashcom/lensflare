@@ -21,6 +21,7 @@ describe("resolveBackendTarget", () => {
       source: "desktop-managed",
       httpBaseUrl: "http://127.0.0.1:43110/",
       wsBaseUrl: "ws://127.0.0.1:43110/",
+      mcpUrl: "http://127.0.0.1:43110/mcp",
       serverInstanceId: "server-1",
     });
   });
@@ -53,6 +54,7 @@ describe("resolveBackendTarget", () => {
       source: "configured",
       httpBaseUrl: "http://127.0.0.1:43110/",
       wsBaseUrl: "ws://127.0.0.1:43110/",
+      mcpUrl: "http://127.0.0.1:43110/mcp",
     });
   });
 
@@ -68,6 +70,7 @@ describe("resolveBackendTarget", () => {
       source: "configured",
       httpBaseUrl: "https://example.com/rpc",
       wsBaseUrl: "wss://example.com/rpc",
+      mcpUrl: "https://example.com/mcp",
     });
   });
 
@@ -94,6 +97,7 @@ describe("resolveBackendTarget", () => {
       source: "window-origin",
       httpBaseUrl: "https://lensflare.example.com/",
       wsBaseUrl: "wss://lensflare.example.com/",
+      mcpUrl: "https://lensflare.example.com/mcp",
     });
   });
 });

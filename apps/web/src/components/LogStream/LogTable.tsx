@@ -11,6 +11,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -27,6 +28,9 @@ import type { TelemetryEntry } from "./types";
 
 const END_REACHED_TRESHOLD = 48;
 const JUMP_TO_END_SCROLL_GUARD_MS = 500;
+const LIVE_TAIL_SCROLL_ATTEMPTS = 4;
+
+type LiveTailState = "at-bottom" | "away";
 
 interface LogTableProps {
   rowIds: ReadonlyArray<string>;
@@ -45,6 +49,7 @@ interface LogTableProps {
   /** Shows the "Waiting for logs…" footer. When false the table renders
    *  without a pending indicator (useful for the static empty state). */
   waiting?: boolean;
+  liveTailKey?: string;
   className?: string;
 }
 
@@ -95,6 +100,7 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
     onSelectLog,
     selectedLogId = null,
     waiting = true,
+    liveTailKey,
     className,
   },
   ref,
@@ -104,9 +110,25 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
   const loadingPreviousRef = useRef(false);
   const jumpToEndScrollGuardRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previousModeRef = useRef(mode);
-  const [showJumpToEnd, setShowJumpToEnd] = useState(false);
-  const shouldShowJumpToEnd = mode === "history" || showJumpToEnd;
-  const shouldShowBottomAction = shouldShowJumpToEnd || waiting;
+  const previousLiveTailKeyRef = useRef(liveTailKey);
+  const [liveTailState, setLiveTailState] = useState<LiveTailState>(
+    rowIds.length === 0 ? "at-bottom" : "away",
+  );
+  const isMeasuredNearBottom = liveTailState === "at-bottom";
+  const shouldShowJumpToEnd =
+    mode === "history" || (!isMeasuredNearBottom && rowIds.length > 0);
+  const shouldShowWaiting = waiting && mode === "live" && isMeasuredNearBottom;
+  const shouldShowBottomAction = shouldShowJumpToEnd || shouldShowWaiting;
+
+  const isCurrentStreamAtBottom = useCallback(() => {
+    if (rowIds.length === 0) {
+      return true;
+    }
+
+    const lastRowId = rowIds[rowIds.length - 1];
+    const lastRow = lastRowId === undefined ? null : rowElementsRef.current.get(lastRowId);
+    return isNearBottom(listRef.current) && isRowVisible(lastRow, listRef.current);
+  }, [rowIds]);
 
   const clearJumpToEndScrollGuard = useCallback(() => {
     if (jumpToEndScrollGuardRef.current === null) {
@@ -123,12 +145,33 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
     }, JUMP_TO_END_SCROLL_GUARD_MS);
   }, [clearJumpToEndScrollGuard]);
 
+  const tailLiveStream = useCallback(() => {
+    guardJumpToEndScroll();
+    let attempts = 0;
+
+    const scrollToEndUntilSettled = () => {
+      void listRef.current?.scrollToEnd({ animated: false });
+      window.requestAnimationFrame(() => {
+        const nearBottom = isCurrentStreamAtBottom();
+        if (nearBottom) {
+          setLiveTailState("at-bottom");
+        }
+
+        if (!nearBottom && attempts < LIVE_TAIL_SCROLL_ATTEMPTS) {
+          attempts += 1;
+          scrollToEndUntilSettled();
+        }
+      });
+    };
+
+    window.requestAnimationFrame(scrollToEndUntilSettled);
+  }, [guardJumpToEndScroll, isCurrentStreamAtBottom]);
+
   const handleJumpToEnd = useCallback(() => {
-    setShowJumpToEnd(false);
     guardJumpToEndScroll();
     onJumpToEnd?.();
-    void listRef.current?.scrollToEnd({ animated: false });
-  }, [guardJumpToEndScroll, onJumpToEnd]);
+    tailLiveStream();
+  }, [guardJumpToEndScroll, onJumpToEnd, tailLiveStream]);
 
   if (!isLoadingPrevious) {
     loadingPreviousRef.current = false;
@@ -155,11 +198,36 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
     }
 
     previousModeRef.current = mode;
-    guardJumpToEndScroll();
-    window.requestAnimationFrame(() => {
-      void listRef.current?.scrollToEnd({ animated: false });
-    });
-  }, [guardJumpToEndScroll, mode]);
+    tailLiveStream();
+  }, [mode, tailLiveStream]);
+
+  useLayoutEffect(() => {
+    const liveTailKeyChanged = previousLiveTailKeyRef.current !== liveTailKey;
+    previousLiveTailKeyRef.current = liveTailKey;
+
+    if (liveTailKeyChanged) {
+      setLiveTailState(rowIds.length === 0 ? "at-bottom" : "away");
+
+      if (mode === "live" && waiting) {
+        tailLiveStream();
+      }
+
+      return;
+    }
+
+    if (mode !== "live" || !waiting) {
+      return;
+    }
+
+    const nearBottom = isCurrentStreamAtBottom();
+    if (nearBottom) {
+      setLiveTailState("at-bottom");
+    }
+
+    if (!nearBottom) {
+      tailLiveStream();
+    }
+  }, [isCurrentStreamAtBottom, liveTailKey, mode, rowIds.length, tailLiveStream, waiting]);
 
   useEffect(
     () => () => {
@@ -199,16 +267,18 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
   };
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const nearBottom = isNearBottomEvent(event);
+    const nearBottom = isNearBottomEvent(event) && isCurrentStreamAtBottom();
     if (jumpToEndScrollGuardRef.current !== null) {
-      setShowJumpToEnd(false);
+      if (nearBottom) {
+        setLiveTailState("at-bottom");
+      }
       if (nearBottom) {
         clearJumpToEndScrollGuard();
       }
       return;
     }
 
-    setShowJumpToEnd(!nearBottom);
+    setLiveTailState(nearBottom ? "at-bottom" : "away");
     if (!nearBottom && mode === "live" && rowIds.length > 0) {
       onLeaveLiveMode?.();
     }
@@ -322,6 +392,7 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-auto overflow-y-hidden">
         <Header />
         <LegendList
+          key={liveTailKey}
           // `min-w-[75rem]` matches the row grid's natural width so the list's
           // internal scroll container is as wide as the rows it renders,
           // avoiding a second (inner) horizontal scrollbar.
@@ -363,7 +434,7 @@ export const LogTable = forwardRef<LogTableHandle, LogTableProps>(function LogTa
             {shouldShowJumpToEnd ? (
               <ArrowDownIcon className="size-3.5" />
             ) : (
-              <span className="inline-flex size-1.5 animate-pulse rounded-full bg-muted-foreground/60" />
+              <span className="inline-flex size-1.5 rounded-full bg-muted-foreground/60" />
             )}
             <span>{shouldShowJumpToEnd ? "Back to live" : "Waiting for telemetry"}</span>
             {shouldShowJumpToEnd ? (
@@ -575,6 +646,20 @@ function keepRowVisible(row: HTMLButtonElement, list: LegendListRef | null): voi
   } else if (rowRect.bottom > containerRect.bottom) {
     scrollContainer.scrollTop += rowRect.bottom - containerRect.bottom;
   }
+}
+
+function isRowVisible(
+  row: HTMLButtonElement | null | undefined,
+  list: LegendListRef | null,
+): boolean {
+  const scrollContainer = list?.getScrollableNode() as HTMLElement | null | undefined;
+  if (!row || !scrollContainer) {
+    return false;
+  }
+
+  const rowRect = row.getBoundingClientRect();
+  const containerRect = scrollContainer.getBoundingClientRect();
+  return rowRect.bottom <= containerRect.bottom && rowRect.top >= containerRect.top;
 }
 
 function isNearBottom(list: LegendListRef | null): boolean {

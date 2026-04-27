@@ -47,6 +47,7 @@ import { ProjectsRepository } from "./repositories/projectsRepository.ts";
 import { datasetRpcLayer } from "./rpc/datasetRpc.ts";
 import { projectRpcLayer } from "./rpc/projectRpc.ts";
 import { telemetryLogRpcLayer } from "./rpc/telemetryLogRpc.ts";
+import { mcpOriginGuardLayer, readExtraAllowedOriginsFromEnv } from "./http/originGuard.ts";
 import { makeHttpRoutesLayer } from "./http/routes.ts";
 import { LensflareMcpToolsLayer } from "./mcp/server.ts";
 import { DatasetService } from "./services/datasetService.ts";
@@ -267,6 +268,9 @@ export async function startLocalServer(
     port,
     httpBaseUrl: origin,
     wsBaseUrl,
+    // Canonical MCP endpoint. Stays in lockstep with the McpServer.layerHttp
+    // mount path below — keep both in sync if the path ever changes.
+    mcpUrl: `${origin}/mcp`,
     serverInstanceId,
     startedAt: startedAt.toISOString(),
   };
@@ -357,6 +361,16 @@ export async function startLocalServer(
       })
     : Layer.empty;
 
+  // Defence-in-depth against DNS-rebinding attacks targeting the
+  // unauthenticated MCP endpoint: every browser-issued request to `/mcp`
+  // is checked against an explicit allow list. Real MCP clients (Claude
+  // Code, Cursor, Codex) send no `Origin` header and are unaffected.
+  const mcpGuardLayer = mcpOriginGuardLayer({
+    serverOrigin: origin,
+    devClientUrl: options.devClientUrl,
+    extraAllowedOrigins: readExtraAllowedOriginsFromEnv(process.env),
+  });
+
   const routesLayer = Layer.mergeAll(
     makeHttpRoutesLayer({
       origin,
@@ -384,6 +398,7 @@ export async function startLocalServer(
       protocol: "websocket",
     }).pipe(Layer.provide(rpcHandlersLayer)),
     corsLayer,
+    mcpGuardLayer,
   );
 
   const platformLayer = Layer.mergeAll(

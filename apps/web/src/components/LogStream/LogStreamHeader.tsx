@@ -17,10 +17,10 @@ interface LogStreamHeaderProps {
   filterSource: string;
   filter: DatasetStreamSnapshot["filter"];
   /**
-   * Project slug used to template ingest URLs in the re-entry setup guide.
-   * Optional — the parent route reads it from a TanStack DB live query that
-   * may not be hydrated on first paint. While undefined we hide the button
-   * rather than render a sheet with placeholder slugs.
+   * Project slug used to template ingest URLs in the re-entry setup
+   * guide. Optional — the parent route reads it from a TanStack DB live
+   * query that may not be hydrated on first paint. While undefined we
+   * hide the button rather than render a sheet with placeholder slugs.
    */
   projectSlug: string | undefined;
   /** Dataset slug used to template ingest URLs. Same caveat as `projectSlug`. */
@@ -31,14 +31,10 @@ interface LogStreamHeaderProps {
 
 /**
  * Top action bar for the log stream. Hosts the live-filter `QueryBuilder`
- * and the "View setup guide" affordance: clicking the trailing icon button
- * opens the `EmptyDatasetGuide` in a right-side `Sheet`, so users with
- * data already flowing can still jump back to the integration snippets.
- *
- * The button is hidden while `projectSlug` or `datasetSlug` are still
- * hydrating — the guide needs both to produce usable URLs, and a flash of
- * enabled → disabled feels worse than letting the button appear a tick
- * later when the collections resolve.
+ * and a re-entry book icon that pops the `EmptyDatasetGuide` (the Connect
+ * + MCP tabs) in a right-side sheet — useful for populated datasets that
+ * already have telemetry but want to wire another agent or copy the
+ * ingestion snippet again.
  */
 export function LogStreamHeader({
   projectId,
@@ -99,51 +95,6 @@ export function LogStreamHeader({
           </SheetPopup>
         </Sheet>
       ) : null}
-      {/*
-        Reference stub for later:
-
-        <HeaderPill onClick={onDatasetClick}>
-          <SourceBadge flat icon={datasetIcon} name={datasetName} />
-          <ChevronDownIcon className="ml-1 size-3 text-muted-foreground/60" />
-        </HeaderPill>
-
-        <HeaderPill onClick={onDateRangeClick}>
-          <span className="text-xs text-foreground/80">{dateRange}</span>
-          <ChevronDownIcon className="size-3 text-muted-foreground/60" />
-        </HeaderPill>
-
-        <button
-          aria-label="Run search"
-          className="inline-flex size-8  items-center justify-center rounded-md border border-input bg-background/60 text-foreground hover:bg-accent/50"
-          onClick={onRunQuery}
-          type="button"
-        >
-          <SearchIcon className="size-3.5" />
-        </button>
-
-        <HeaderPill onClick={onScrollClick}>
-          <ClockIcon className="size-3.5 text-muted-foreground/80" />
-          <span className="text-xs text-foreground/80">Scroll to</span>
-          <ChevronDownIcon className="size-3 text-muted-foreground/60" />
-        </HeaderPill>
-
-        <button
-          aria-label="Column layout"
-          className="inline-flex size-8  items-center justify-center rounded-md border border-input bg-background/60 text-muted-foreground/80 hover:bg-accent/50 hover:text-foreground"
-          type="button"
-        >
-          <ColumnsIcon className="size-3.5" />
-        </button>
-
-        <button
-          aria-label="Settings"
-          className="inline-flex size-8  items-center justify-center rounded-md text-muted-foreground/80 hover:bg-accent/50 hover:text-foreground"
-          onClick={onSettingsClick}
-          type="button"
-        >
-          <SettingsIcon className="size-3.5" />
-        </button>
-      */}
     </div>
   );
 }

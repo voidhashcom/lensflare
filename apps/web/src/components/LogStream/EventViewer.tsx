@@ -143,7 +143,7 @@ function EventViewerHeader({
         <Button
           aria-label="Back to span details"
           className="desktop-no-drag shrink-0"
-          onClick={onClose}
+          onMouseDown={onClose}
           size="icon"
           variant="ghost"
         >
@@ -162,7 +162,7 @@ function EventViewerHeader({
             aria-label="Previous event"
             className="desktop-no-drag shrink-0"
             disabled={!canGoPrev}
-            onClick={onPrev}
+            onMouseDown={onPrev}
             size="icon"
             variant="ghost"
           >
@@ -174,7 +174,7 @@ function EventViewerHeader({
             aria-label="Next event"
             className="desktop-no-drag shrink-0"
             disabled={!canGoNext}
-            onClick={onNext}
+            onMouseDown={onNext}
             size="icon"
             variant="ghost"
           >
@@ -209,9 +209,9 @@ export function EventsButton({ count, onClick }: EventsButtonProps) {
   };
   return (
     <Button
-      onClick={handleClick}
+      onMouseDown={handleClick}
       size="xs"
-      className="hover:bg-accent font-normal"
+      className="hover:bg-accent/60! font-normal group &:hover>.events-chevron-icon:text-foreground"
       type="button"
       variant="secondary"
     >

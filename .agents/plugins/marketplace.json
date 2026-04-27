@@ -1,0 +1,20 @@
+{
+  "name": "lensflare",
+  "interface": {
+    "displayName": "Lensflare"
+  },
+  "plugins": [
+    {
+      "name": "lensflare-desktop",
+      "source": {
+        "source": "local",
+        "path": "./plugins/lensflare-desktop"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

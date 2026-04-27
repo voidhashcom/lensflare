@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
+  DEFAULT_HOST,
   DEFAULT_POSTHOG_API_KEY,
   DEFAULT_POSTHOG_HOST,
   DEFAULT_SERVER_PORT,
@@ -14,6 +15,14 @@ import {
 } from "./browser.ts";
 
 describe("@lensflare/shared/browser", () => {
+  // The MCP plugin marketplace and the `/docs/mcp` install snippets all
+  // hardcode `http://127.0.0.1:43110/mcp`. If either constant ever drifts
+  // every published copy-paste config breaks silently, so pin them here.
+  it("pins host and port for MCP distribution", () => {
+    expect(DEFAULT_HOST).toBe("127.0.0.1");
+    expect(DEFAULT_SERVER_PORT).toBe(43110);
+  });
+
   it("falls back to default ports", () => {
     const config = readRuntimeConfigFromEnv({});
 

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@astrojs/react": "^4.2.0",
+    "@lensflare/shared": "workspace:*",
     "@paper-design/shaders-react": "^0.0.76",
     "astro": "^5.14.0",
     "clsx": "catalog:",
