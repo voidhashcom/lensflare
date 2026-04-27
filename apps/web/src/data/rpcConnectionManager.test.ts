@@ -51,9 +51,11 @@ describe("rpcConnectionManager", () => {
 
     const { getConnectionState, reportRpcConnectionFailure } = await importManager();
 
-    reportRpcConnectionFailure(new Error("Collection sync failed", {
-      cause: new Error("SocketOpenError: timeout waiting for open"),
-    }));
+    reportRpcConnectionFailure(
+      new Error("Collection sync failed", {
+        cause: new Error("SocketOpenError: timeout waiting for open"),
+      }),
+    );
 
     expect(getConnectionState()).toMatchObject({
       autoRetrying: true,

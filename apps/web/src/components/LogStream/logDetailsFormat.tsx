@@ -85,9 +85,7 @@ export function buildSpanDetailEntries(
   span: TraceSpan,
   trace: TraceContext,
 ): ReadonlyArray<LogDetailEntry> {
-  const startTime = new Date(
-    trace.startTime.getTime() + span.startOffsetUs / 1_000,
-  ).toISOString();
+  const startTime = new Date(trace.startTime.getTime() + span.startOffsetUs / 1_000).toISOString();
   return [
     { field: "kind", value: "span" },
     { field: "timestamp", value: startTime },
@@ -154,9 +152,7 @@ export function buildEventDetailEntries(
   ];
 }
 
-export function buildEventAttributeEntries(
-  event: SpanEventSummary,
-): ReadonlyArray<LogDetailEntry> {
+export function buildEventAttributeEntries(event: SpanEventSummary): ReadonlyArray<LogDetailEntry> {
   return Object.entries(event.attributes).map(([field, value]) => ({ field, value }));
 }
 
