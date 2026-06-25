@@ -4,8 +4,9 @@ on:
   push:
     tags:
       - "v*.*.*"
-  schedule:
-    - cron: "17 3 * * *"
+  # Temporarily disabled — re-enable when nightly builds should resume.
+  # schedule:
+  #   - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
       channel:
